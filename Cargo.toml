@@ -1,5 +1,5 @@
 [package]
-name = "nva"
+name = "fnva"
 version = "0.0.2"
 edition = "2021"
 authors = ["protagonistss"]

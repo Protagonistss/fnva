@@ -1,5 +1,5 @@
 @echo off
-REM nva - 跨平台环境切换工具 Windows 启动脚本
+REM fnva - 跨平台环境切换工具 Windows 启动脚本
 REM 根据当前平台和架构选择对应的二进制文件并执行
 
 setlocal enabledelayedexpansion
@@ -21,7 +21,7 @@ if /i "%ARCH%"=="AMD64" (
 
 REM 构建二进制文件路径
 set PLATFORM_DIR=win32-%CPU%
-set BINARY_PATH=%PROJECT_ROOT%platforms\%PLATFORM_DIR%\nva.exe
+set BINARY_PATH=%PROJECT_ROOT%platforms\%PLATFORM_DIR%\fnva.exe
 
 REM 检查二进制文件是否存在
 if not exist "%BINARY_PATH%" (

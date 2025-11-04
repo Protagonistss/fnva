@@ -1,5 +1,5 @@
 # 环境切换工具配置文件示例
-# 复制此文件到 ~/.nva/config.toml (Linux/macOS) 或 %USERPROFILE%\.nva\config.toml (Windows)
+# 复制此文件到 ~/.fnva/config.toml (Linux/macOS) 或 %USERPROFILE%\.fnva\config.toml (Windows)
 
 # Java 环境配置
 [[java_environments]]

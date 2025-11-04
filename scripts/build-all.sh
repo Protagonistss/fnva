@@ -56,9 +56,9 @@ build_target() {
     
     # 确定二进制文件名
     if [[ "$target" == *"windows"* ]]; then
-        local binary_name="nva.exe"
+        local binary_name="fnva.exe"
     else
-        local binary_name="nva"
+        local binary_name="fnva"
     fi
     
     # 复制二进制文件

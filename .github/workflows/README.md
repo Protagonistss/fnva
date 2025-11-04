@@ -56,6 +56,6 @@ npm run build
 
 # 测试本地安装
 npm pack
-npm install -g nva-*.tgz
+npm install -g fnva-*.tgz
 ```
 

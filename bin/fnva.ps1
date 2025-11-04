@@ -1,4 +1,4 @@
-# nva - Windows PowerShell 启动脚本
+# fnva - Windows PowerShell 启动脚本
 
 param(
     [Parameter(ValueFromRemainingArguments=$true)]
@@ -12,7 +12,7 @@ $arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "x64" }
 # 构建二进制文件路径
 $platformDir = "$os-$arch"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$binaryPath = Join-Path $scriptDir ".." "platforms" $platformDir "nva.exe"
+$binaryPath = Join-Path $scriptDir ".." "platforms" $platformDir "fnva.exe"
 
 # 检查二进制文件是否存在
 if (-not (Test-Path $binaryPath)) {
@@ -27,4 +27,3 @@ if (-not (Test-Path $binaryPath)) {
 if ($LASTEXITCODE) {
     exit $LASTEXITCODE
 }
-

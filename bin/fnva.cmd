@@ -1,5 +1,5 @@
 @echo off
-REM nva - Windows CMD 启动脚本
+REM fnva - Windows CMD 启动脚本
 
 setlocal
 
@@ -15,7 +15,7 @@ if "%PROCESSOR_ARCHITECTURE%"=="AMD64" (
 
 REM 构建二进制文件路径
 set PLATFORM_DIR=%OS%-%ARCH%
-set BINARY_PATH=%~dp0..\platforms\%PLATFORM_DIR%\nva.exe
+set BINARY_PATH=%~dp0..\platforms\%PLATFORM_DIR%\fnva.exe
 
 REM 检查二进制文件是否存在
 if not exist "%BINARY_PATH%" (
@@ -28,4 +28,3 @@ REM 执行二进制文件
 "%BINARY_PATH%" %*
 
 endlocal
-

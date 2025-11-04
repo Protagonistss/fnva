@@ -5,9 +5,9 @@
   "author": "protagonistss",
   "license": "MIT",
   "bin": {
-    "nva": "./bin/nva",
-    "nva.cmd": "./bin/nva.bat",
-    "nva.exe": "./bin/nva.bat"
+    "fnva": "./bin/fnva",
+    "fnva.cmd": "./bin/fnva.cmd",
+    "fnva.exe": "./bin/fnva.bat"
   },
   "scripts": {
     "prepublishOnly": "scripts/prepare-publish.sh",
@@ -35,7 +35,7 @@
     "llm",
     "cli",
     "tool",
-    "nva"
+    "fnva"
   ],
   "repository": {
     "type": "git",

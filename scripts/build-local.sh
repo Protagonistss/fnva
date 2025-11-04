@@ -28,7 +28,7 @@ case "$OS" in
       TARGET="x86_64-apple-darwin"
       PLATFORM="darwin-x64"
     fi
-    BINARY_NAME="nva"
+    BINARY_NAME="fnva"
     ;;
   linux)
     if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
@@ -38,7 +38,7 @@ case "$OS" in
       TARGET="x86_64-unknown-linux-gnu"
       PLATFORM="linux-x64"
     fi
-    BINARY_NAME="nva"
+    BINARY_NAME="fnva"
     ;;
   *)
     echo "错误: 不支持的操作系统: $OS"

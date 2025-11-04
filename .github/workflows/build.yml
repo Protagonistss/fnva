@@ -127,9 +127,9 @@ jobs:
         shell: bash
         run: |
           if [[ "${{ runner.os }}" == "macOS"* ]]; then
-            strip target/release/nva || true
+            strip target/release/fnva || true
           else
-            strip target/${{ matrix.target }}/release/nva || true
+            strip target/${{ matrix.target }}/release/fnva || true
           fi
 
       - name: Prepare binary directory
@@ -137,11 +137,11 @@ jobs:
         run: |
           mkdir -p platforms/${{ matrix.platform }}
           if [ "${{ runner.os }}" = "Windows" ]; then
-            cp target/${{ matrix.target }}/release/nva.exe platforms/${{ matrix.platform }}/nva.exe
+            cp target/${{ matrix.target }}/release/fnva.exe platforms/${{ matrix.platform }}/fnva.exe
           elif [[ "${{ runner.os }}" == "macOS"* ]]; then
-            cp target/release/nva platforms/${{ matrix.platform }}/nva
+            cp target/release/fnva platforms/${{ matrix.platform }}/fnva
           else
-            cp target/${{ matrix.target }}/release/nva platforms/${{ matrix.platform }}/nva
+            cp target/${{ matrix.target }}/release/fnva platforms/${{ matrix.platform }}/fnva
           fi
 
       - name: Upload artifact
@@ -255,19 +255,19 @@ jobs:
           npm pack
 
           echo "Created package files:"
-          ls -la nva-*.tgz
+          ls -la fnva-*.tgz
 
       - name: Upload npm package
         uses: actions/upload-artifact@v4
         with:
           name: npm-package
-          path: nva-*.tgz
+          path: fnva-*.tgz
           retention-days: 7
 
       - name: Verify package before publishing
         run: |
           echo "Verifying package before NPM publish..."
-          PACKAGE_FILE=$(ls nva-*.tgz | head -n 1)
+          PACKAGE_FILE=$(ls fnva-*.tgz | head -n 1)
           echo "Package file: $PACKAGE_FILE"
 
           # Check package size and basic info

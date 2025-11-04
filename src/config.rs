@@ -152,7 +152,7 @@ pub fn get_config_path() -> Result<PathBuf, String> {
     let home_dir = dirs::home_dir()
         .ok_or_else(|| "无法获取用户主目录".to_string())?;
     
-    let config_file = home_dir.join(".nva").join("config.toml");
+    let config_file = home_dir.join(".fnva").join("config.toml");
     Ok(config_file)
 }
 
@@ -161,7 +161,7 @@ pub fn get_config_dir() -> Result<PathBuf, String> {
     let home_dir = dirs::home_dir()
         .ok_or_else(|| "无法获取用户主目录".to_string())?;
     
-    Ok(home_dir.join(".nva"))
+    Ok(home_dir.join(".fnva"))
 }
 
 #[cfg(test)]

@@ -1,12 +1,12 @@
 use clap::{Parser, Subcommand};
-use nva::config::Config;
-use nva::java::JavaManager;
-use nva::llm::LlmManager;
-use nva::platform::ShellType;
+use fnva::config::Config;
+use fnva::java::JavaManager;
+use fnva::llm::LlmManager;
+use fnva::platform::ShellType;
 use std::process;
 
 #[derive(Parser)]
-#[command(name = "nva")]
+#[command(name = "fnva")]
 #[command(about = "跨平台环境切换工具，支持 Java 和 LLM 环境配置", long_about = None)]
 struct Cli {
     #[command(subcommand)]
@@ -141,8 +141,8 @@ fn handle_java_command(action: JavaCommands) -> Result<(), String> {
             
             if envs.is_empty() {
                 println!("没有配置的 Java 环境");
-                println!("\n使用 'nva java scan' 扫描系统中的 Java 安装");
-                println!("或使用 'nva java add' 手动添加");
+                println!("\n使用 'fnva java scan' 扫描系统中的 Java 安装");
+                println!("或使用 'fnva java add' 手动添加");
             } else {
                 println!("已配置的 Java 环境:");
                 for env in envs {
@@ -177,7 +177,7 @@ fn handle_java_command(action: JavaCommands) -> Result<(), String> {
                     println!("     JAVA_HOME: {}", install.java_home);
                 }
                 println!("\n使用以下命令添加环境:");
-                println!("  nva java add --name <名称> --home <JAVA_HOME路径>");
+                println!("  fnva java add --name <名称> --home <JAVA_HOME路径>");
             }
             Ok(())
         }
@@ -209,7 +209,7 @@ fn handle_llm_command(action: LlmCommands) -> Result<(), String> {
             
             if envs.is_empty() {
                 println!("没有配置的 LLM 环境");
-                println!("\n使用 'nva llm add' 添加 LLM 环境");
+                println!("\n使用 'fnva llm add' 添加 LLM 环境");
             } else {
                 println!("已配置的 LLM 环境:");
                 for env in envs {

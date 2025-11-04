@@ -1,4 +1,4 @@
-# 环境切换工具 (nva)
+# 环境切换工具 (fnva)
 
 跨平台环境切换工具，支持 Java 和 LLM 环境配置管理。
 
@@ -17,16 +17,16 @@
 
 ```bash
 # 全局安装
-npm install -g nva
+npm install -g fnva
 
 # 或使用 yarn
-yarn global add nva
+yarn global add fnva
 
 # 或使用 pnpm
-pnpm add -g nva
+pnpm add -g fnva
 ```
 
-安装完成后，可以直接使用 `nva` 命令。
+安装完成后，可以直接使用 `fnva` 命令。
 
 ### 从源码构建
 
@@ -38,7 +38,7 @@ cd cool-utils
 npm run build
 ```
 
-编译后的二进制文件位于 `platforms/<platform>/nva`。
+编译后的二进制文件位于 `platforms/<platform>/fnva`。
 
 #### 构建所有平台
 
@@ -62,7 +62,7 @@ npm run build:all
 
 ```bash
 # Linux/macOS
-sudo ln -s $(pwd)/target/release/nva /usr/local/bin/nva
+sudo ln -s $(pwd)/target/release/fnva /usr/local/bin/fnva
 
 # 或添加到 ~/.bashrc 或 ~/.zshrc
 export PATH="$PATH:$(pwd)/target/release"
@@ -75,35 +75,35 @@ export PATH="$PATH:$(pwd)/target/release"
 #### 列出所有 Java 环境
 
 ```bash
-nva java list
+fnva java list
 ```
 
 #### 扫描系统中的 Java 安装
 
 ```bash
-nva java scan
+fnva java scan
 ```
 
 #### 添加 Java 环境
 
 ```bash
-nva java add --name jdk-17 --home /usr/lib/jvm/java-17-openjdk --description "OpenJDK 17"
+fnva java add --name jdk-17 --home /usr/lib/jvm/java-17-openjdk --description "OpenJDK 17"
 ```
 
 #### 切换到 Java 环境
 
 ```bash
 # 自动检测 shell
-eval "$(nva java use jdk-17)"
+eval "$(fnva java use jdk-17)"
 
 # 指定 shell
-eval "$(nva java use jdk-17 --shell bash)"
+eval "$(fnva java use jdk-17 --shell bash)"
 ```
 
 #### 删除 Java 环境
 
 ```bash
-nva java remove jdk-17
+fnva java remove jdk-17
 ```
 
 ### LLM 环境管理
@@ -111,13 +111,13 @@ nva java remove jdk-17
 #### 列出所有 LLM 环境
 
 ```bash
-nva llm list
+fnva llm list
 ```
 
 #### 查看支持的提供商
 
 ```bash
-nva llm providers
+fnva llm providers
 ```
 
 支持的提供商：
@@ -133,7 +133,7 @@ nva llm providers
 
 ```bash
 # OpenAI
-nva llm add \
+fnva llm add \
   --name openai-dev \
   --provider openai \
   --api-key "${OPENAI_API_KEY}" \
@@ -141,14 +141,14 @@ nva llm add \
   --temperature 0.7
 
 # Anthropic
-nva llm add \
+fnva llm add \
   --name anthropic-prod \
   --provider anthropic \
   --api-key "${ANTHROPIC_API_KEY}" \
   --model claude-3-opus-20240229
 
 # Ollama (本地)
-nva llm add \
+fnva llm add \
   --name ollama-local \
   --provider ollama \
   --base-url http://localhost:11434 \
@@ -159,23 +159,23 @@ nva llm add \
 
 ```bash
 # 自动检测 shell
-eval "$(nva llm use openai-dev)"
+eval "$(fnva llm use openai-dev)"
 
 # 指定 shell (PowerShell)
-nva llm use openai-dev --shell powershell | Invoke-Expression
+fnva llm use openai-dev --shell powershell | Invoke-Expression
 ```
 
 #### 删除 LLM 环境
 
 ```bash
-nva llm remove openai-dev
+fnva llm remove openai-dev
 ```
 
 ## 配置文件
 
 配置文件位置：
-- **Linux/macOS**: `~/.nva/config.toml`
-- **Windows**: `%USERPROFILE%\.nva\config.toml`
+- **Linux/macOS**: `~/.fnva/config.toml`
+- **Windows**: `%USERPROFILE%\.fnva\config.toml`
 
 首次运行时会自动创建配置文件。
 
@@ -217,12 +217,12 @@ api_key = "${OPENAI_API_KEY}"  # 从系统环境变量读取
 
 ```bash
 # 快速切换 Java 环境
-alias java17='eval "$(nva java use jdk-17)"'
-alias java11='eval "$(nva java use jdk-11)"'
+alias java17='eval "$(fnva java use jdk-17)"'
+alias java11='eval "$(fnva java use jdk-11)"'
 
 # 快速切换 LLM 环境
-alias llm-openai='eval "$(nva llm use openai-dev)"'
-alias llm-anthropic='eval "$(nva llm use anthropic-prod)"'
+alias llm-openai='eval "$(fnva llm use openai-dev)"'
+alias llm-anthropic='eval "$(fnva llm use anthropic-prod)"'
 ```
 
 ### Fish
@@ -231,11 +231,11 @@ alias llm-anthropic='eval "$(nva llm use anthropic-prod)"'
 
 ```fish
 function java17
-    nva java use jdk-17 | source
+    fnva java use jdk-17 | source
 end
 
 function llm-openai
-    nva llm use openai-dev | source
+    fnva llm use openai-dev | source
 end
 ```
 
@@ -246,12 +246,12 @@ end
 ```powershell
 function Switch-Java {
     param([string]$Name)
-    nva java use $Name | Invoke-Expression
+    fnva java use $Name | Invoke-Expression
 }
 
 function Switch-Llm {
     param([string]$Name)
-    nva llm use $Name | Invoke-Expression
+    fnva llm use $Name | Invoke-Expression
 }
 ```
 
