@@ -49,18 +49,35 @@ jobs:
       - name: Install Rust
         shell: bash
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-          source "$HOME/.cargo/env"
-          rustup target add ${{ matrix.target }}
+          if [[ "${{ runner.os }}" == "macOS"* ]]; then
+            # macOS specific installation
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+            echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+            source "$HOME/.cargo/env"
+            rustup target add ${{ matrix.target }}
+          else
+            # Linux and others
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+            echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+            source "$HOME/.cargo/env"
+            rustup target add ${{ matrix.target }}
+          fi
 
       - name: Verify Rust installation
         shell: bash
         run: |
-          source "$HOME/.cargo/env"
-          which cargo
-          cargo --version
-          rustc --version
+          if [[ "${{ runner.os }}" == "macOS"* ]]; then
+            source "$HOME/.cargo/env"
+            export PATH="$HOME/.cargo/bin:$PATH"
+            which cargo
+            cargo --version
+            rustc --version
+          else
+            source "$HOME/.cargo/env"
+            which cargo
+            cargo --version
+            rustc --version
+          fi
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -75,24 +92,28 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-${{ matrix.target }}-
 
-      - name: Install cross (non-Windows)
-        if: runner.os != 'Windows'
+      - name: Install cross (Linux only)
+        if: runner.os == 'Linux'
         shell: bash
         run: |
           source "$HOME/.cargo/env"
+          export PATH="$HOME/.cargo/bin:$PATH"
           cargo install cross --git https://github.com/cross-rs/cross --force
 
       - name: Build binary
         shell: bash
         run: |
-          source "$HOME/.cargo/env"
           if [ "${{ runner.os }}" = "Windows" ]; then
             cargo build --release --target ${{ matrix.target }}
           elif [[ "${{ runner.os }}" == "macOS"* ]]; then
             # macOS 不需要交叉编译，直接构建
+            source "$HOME/.cargo/env"
+            export PATH="$HOME/.cargo/bin:$PATH"
             cargo build --release
           else
             # Linux 使用 cross 进行交叉编译
+            source "$HOME/.cargo/env"
+            export PATH="$HOME/.cargo/bin:$PATH"
             cross build --release --target ${{ matrix.target }} --verbose
           fi
 
