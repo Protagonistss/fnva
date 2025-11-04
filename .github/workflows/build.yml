@@ -280,6 +280,25 @@ jobs:
             exit 1
           fi
 
+      - name: Verify NPM token configuration
+        run: |
+          echo "Checking NPM configuration..."
+          echo "Registry: $(npm config get registry)"
+
+          # Check if token exists and is accessible
+          if [ -n "$NODE_AUTH_TOKEN" ]; then
+            echo "NODE_AUTH_TOKEN is set (length: ${#NODE_AUTH_TOKEN})"
+            # Test token validity without publishing
+            echo "Testing token access..."
+            npm whoami || echo "Token authentication test failed"
+          else
+            echo "Error: NODE_AUTH_TOKEN is not set"
+            echo "Please ensure NPM_TOKEN secret exists and contains an Automation token"
+            exit 1
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Publish to NPM
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
@@ -288,7 +307,15 @@ jobs:
           echo "Package name: $(node -p "require('./package.json').name")"
           echo "Package version: $(node -p "require('./package.json').version")"
 
+          # Verify token is set
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "Error: NODE_AUTH_TOKEN is not set"
+            echo "Please ensure NPM_TOKEN secret is set to an Automation token"
+            exit 1
+          fi
+
           # Use automation token for publishing (no OTP required)
+          echo "Using automation token for NPM publishing..."
           npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
