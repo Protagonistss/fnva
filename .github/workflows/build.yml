@@ -31,10 +31,12 @@ jobs:
             arch: x86_64
             target: x86_64-apple-darwin
             platform: darwin-x64
-          - os: macos-latest
+            native_target: x86_64-apple-darwin
+          - os: macos-13
             arch: aarch64
             target: aarch64-apple-darwin
             platform: darwin-arm64
+            native_target: aarch64-apple-darwin
           - os: windows-latest
             arch: x86_64
             target: x86_64-pc-windows-msvc
@@ -62,6 +64,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-${{ matrix.target }}-
 
+      - name: Clean cargo cache
+        run: cargo clean
+
       - name: Install cross (non-Windows)
         if: runner.os != 'Windows'
         run: cargo install cross --git https://github.com/cross-rs/cross
@@ -71,7 +76,11 @@ jobs:
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
             cargo build --release --target ${{ matrix.target }}
+          elif [[ "${{ runner.os }}" == "macOS"* ]]; then
+            # macOS 不需要交叉编译，直接构建
+            cargo build --release
           else
+            # Linux 使用 cross 进行交叉编译
             cross build --release --target ${{ matrix.target }}
           fi
 
@@ -79,7 +88,11 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          strip target/${{ matrix.target }}/release/nva || true
+          if [[ "${{ runner.os }}" == "macOS"* ]]; then
+            strip target/release/nva || true
+          else
+            strip target/${{ matrix.target }}/release/nva || true
+          fi
 
       - name: Prepare binary directory
         shell: bash
@@ -87,6 +100,8 @@ jobs:
           mkdir -p platforms/${{ matrix.platform }}
           if [ "${{ runner.os }}" = "Windows" ]; then
             cp target/${{ matrix.target }}/release/nva.exe platforms/${{ matrix.platform }}/nva.exe
+          elif [[ "${{ runner.os }}" == "macOS"* ]]; then
+            cp target/release/nva platforms/${{ matrix.platform }}/nva
           else
             cp target/${{ matrix.target }}/release/nva platforms/${{ matrix.platform }}/nva
           fi
