@@ -56,10 +56,33 @@ jobs:
         run: |
           echo "Current PATH: $PATH"
           echo "CARGO_HOME: $CARGO_HOME"
+          echo "HOME: $HOME"
+
+          # Search for cargo in common locations
+          echo "Searching for cargo..."
+          find /usr -name cargo 2>/dev/null || echo "cargo not found in /usr"
+          find /opt -name cargo 2>/dev/null || echo "cargo not found in /opt"
+          find $HOME -name cargo 2>/dev/null || echo "cargo not found in $HOME"
+
+          # Check if cargo is in PATH
           which cargo || echo "cargo not found in PATH"
-          ls -la $HOME/.cargo/bin/ || echo "cargo bin directory not found"
-          export PATH="$HOME/.cargo/bin:$PATH"
-          which cargo && cargo --version && rustc --version
+
+          # Check common cargo directories
+          ls -la $HOME/.cargo/bin/ 2>/dev/null || echo "cargo bin directory not found at ~/.cargo/bin"
+          ls -la /usr/local/cargo/bin/ 2>/dev/null || echo "cargo bin directory not found at /usr/local/cargo/bin"
+          ls -la /opt/homebrew/bin/ 2>/dev/null | grep cargo || echo "cargo not found in homebrew"
+
+          # Try to find rustc and add its directory to PATH
+          RUSTC_PATH=$(which rustc 2>/dev/null)
+          if [ -n "$RUSTC_PATH" ]; then
+            RUSTC_DIR=$(dirname $RUSTC_PATH)
+            echo "Found rustc at: $RUSTC_PATH"
+            echo "Adding $RUSTC_DIR to PATH"
+            export PATH="$RUSTC_DIR:$PATH"
+            which cargo && cargo --version && rustc --version
+          else
+            echo "rustc not found either"
+          fi
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -86,7 +109,23 @@ jobs:
       - name: Build binary
         shell: bash
         run: |
-          export PATH="$HOME/.cargo/bin:$PATH"
+          # Try multiple possible cargo locations
+          CARGO_PATHS=(
+            "$HOME/.cargo/bin"
+            "/usr/local/cargo/bin"
+            "/opt/homebrew/bin"
+            "/usr/bin"
+            "/usr/local/bin"
+          )
+
+          for cargo_path in "${CARGO_PATHS[@]}"; do
+            if [ -f "$cargo_path/cargo" ]; then
+              echo "Found cargo at: $cargo_path/cargo"
+              export PATH="$cargo_path:$PATH"
+              break
+            fi
+          done
+
           echo "PATH before build: $PATH"
           which cargo && cargo --version
 
