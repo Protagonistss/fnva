@@ -219,11 +219,43 @@ jobs:
 
       - name: Update package.json version
         run: |
-          npm version ${{ steps.version.outputs.version }} --no-git-tag-version
+          echo "Updating package.json version to: ${{ steps.version.outputs.version }}"
+          echo "Current version:"
+          node -p "require('./package.json').version"
+
+          # Update version using npm pkg set (more reliable than npm version)
+          npm pkg set version="${{ steps.version.outputs.version }}"
+
+          # Verify update was successful
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          echo "Updated version: $NEW_VERSION"
+
+          if [ "$NEW_VERSION" != "${{ steps.version.outputs.version }}" ]; then
+            echo "Error: Version update failed"
+            echo "Expected: ${{ steps.version.outputs.version }}"
+            echo "Actual: $NEW_VERSION"
+            exit 1
+          fi
+
+          echo "Version update successful!"
 
       - name: Prepare npm package
         run: |
+          echo "Preparing NPM package..."
+          echo "Package structure:"
+          ls -la
+
+          echo "Platforms directory:"
+          ls -la platforms/ || echo "Platforms directory not found"
+
+          echo "Package content verification:"
+          npm pack --dry-run
+
+          echo "Creating NPM package..."
           npm pack
+
+          echo "Created package files:"
+          ls -la nva-*.tgz
 
       - name: Upload npm package
         uses: actions/upload-artifact@v4
@@ -232,9 +264,31 @@ jobs:
           path: nva-*.tgz
           retention-days: 7
 
+      - name: Verify package before publishing
+        run: |
+          echo "Verifying package before NPM publish..."
+          PACKAGE_FILE=$(ls nva-*.tgz | head -n 1)
+          echo "Package file: $PACKAGE_FILE"
+
+          # Check package size and basic info
+          if [ -f "$PACKAGE_FILE" ]; then
+            echo "Package size: $(du -h "$PACKAGE_FILE")"
+            echo "Package info:"
+            npm info --json . || echo "Could not get package info"
+          else
+            echo "Error: Package file not found"
+            exit 1
+          fi
+
       - name: Publish to NPM
         if: startsWith(github.ref, 'refs/tags/v')
-        run: npm publish
+        run: |
+          echo "Publishing to NPM..."
+          echo "Registry: $(npm config get registry)"
+          echo "Package name: $(node -p "require('./package.json').name")"
+          echo "Package version: $(node -p "require('./package.json').version")"
+
+          npm publish --verbose
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
