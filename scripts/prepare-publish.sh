@@ -20,27 +20,31 @@ for file in "${REQUIRED_FILES[@]}"; do
     fi
 done
 
-# 检查是否有平台二进制文件
-if [ ! -d "platforms" ] || [ -z "$(ls -A platforms 2>/dev/null)" ]; then
-    echo "警告: platforms 目录为空，运行构建脚本..."
-    npm run build || {
-        echo "错误: 构建失败，请先运行 'npm run build'"
-        exit 1
-    }
-fi
-
-# 检查版本号是否已更新（简单检查）
+# 检查版本号
 echo "检查版本号..."
 VERSION=$(node -p "require('./package.json').version")
 echo "当前版本: $VERSION"
 
-# 提示用户确认
-read -p "确认发布版本 $VERSION? (y/N) " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "已取消发布"
-    exit 1
+# 在 CI/CD 环境中跳过平台二进制文件检查和交互式确认
+if [ -n "$CI" ] || [ -n "$GITHUB_ACTIONS" ]; then
+    echo "CI/CD 环境: 跳过构建检查，自动确认发布版本 $VERSION"
+    echo "平台二进制文件将在发布时包含"
+else
+    # 本地环境: 检查平台二进制文件
+    if [ ! -d "platforms" ] || [ -z "$(ls -A platforms 2>/dev/null)" ]; then
+        echo "警告: platforms 目录为空或不存在"
+        echo "请先运行 'npm run build' 或 'npm run build:all' 构建二进制文件"
+        exit 1
+    fi
+
+    # 本地环境: 提示用户确认
+    read -p "确认发布版本 $VERSION? (y/N) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "已取消发布"
+        exit 1
+    fi
 fi
 
-echo "准备完成，可以运行 'npm publish' 发布"
+echo "准备完成，准备发布到 NPM"
 
