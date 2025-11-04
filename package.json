@@ -1,8 +1,8 @@
 {
-  "name": "nva",
+  "name": "fnva",
   "version": "0.1.0",
   "description": "跨平台环境切换工具，支持 Java 和 LLM 环境配置",
-  "author": "cool-utils",
+  "author": "protagonistss",
   "license": "MIT",
   "bin": {
     "nva": "./bin/nva"
