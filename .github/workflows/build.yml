@@ -314,9 +314,17 @@ jobs:
             exit 1
           fi
 
-          # Use automation token for publishing (no OTP required)
-          echo "Using automation token for NPM publishing..."
-          npm publish --access public
+          # Try publishing with automation token first
+          echo "Attempting to publish with automation token..."
+          if npm publish --access public; then
+            echo "Successfully published to NPM!"
+          else
+            echo "Automation token failed, this indicates you need to create a proper Automation token"
+            echo "Please visit: https://www.npmjs.com/settings/your-username/tokens"
+            echo "Generate a new AUTOMATION token (not Classic/Granular)"
+            echo "Update your NPM_TOKEN secret with the new automation token"
+            exit 1
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
