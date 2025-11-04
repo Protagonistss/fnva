@@ -1,0 +1,58 @@
+# 源代码文件（不发布 Rust 源代码）
+src/
+Cargo.toml
+Cargo.lock
+
+# 构建产物和临时文件
+target/
+*.rs.bk
+*.pdb
+
+# 测试和开发文件
+tests/
+*.test.js
+*.spec.js
+
+# 配置文件（用户个人配置）
+.nva/
+config.toml
+config/config.toml.example
+
+# IDE 和编辑器
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git 相关
+.git/
+.gitignore
+.gitattributes
+
+# 构建脚本（保留在包中，但可以排除某些）
+scripts/build-all.sh
+scripts/prepare-publish.sh
+
+# 文档和开发文件
+CONTRIBUTING.md
+CHANGELOG.md
+.travis.yml
+.github/
+
+# 日志和临时文件
+*.log
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# 环境变量文件
+.env
+.env.local
+
+# 其他
+coverage/
+node_modules/
+

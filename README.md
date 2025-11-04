@@ -13,15 +13,48 @@
 
 ## 安装
 
+### 通过 npm 安装（推荐）
+
+```bash
+# 全局安装
+npm install -g nva
+
+# 或使用 yarn
+yarn global add nva
+
+# 或使用 pnpm
+pnpm add -g nva
+```
+
+安装完成后，可以直接使用 `nva` 命令。
+
 ### 从源码构建
+
+#### 本地构建（当前平台）
 
 ```bash
 git clone <repository-url>
 cd cool-utils
-cargo build --release
+npm run build
 ```
 
-编译后的二进制文件位于 `target/release/nva`。
+编译后的二进制文件位于 `platforms/<platform>/nva`。
+
+#### 构建所有平台
+
+项目使用 GitHub Actions 自动构建所有平台的二进制文件。当创建版本标签时，会自动构建并发布到 npm。
+
+**手动触发构建：**
+1. 在 GitHub 上创建新的 Release 标签（例如 `v0.1.0`）
+2. GitHub Actions 会自动构建所有平台
+3. 构建完成后自动发布到 npm
+
+**本地构建所有平台（需要交叉编译工具）：**
+```bash
+npm run build:all
+```
+
+注意：需要安装 `cross` 工具：`cargo install cross`
 
 ### 添加到 PATH
 

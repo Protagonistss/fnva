@@ -1,0 +1,46 @@
+{
+  "name": "nva",
+  "version": "0.1.0",
+  "description": "跨平台环境切换工具，支持 Java 和 LLM 环境配置",
+  "author": "cool-utils",
+  "license": "MIT",
+  "bin": {
+    "nva": "./bin/nva"
+  },
+  "scripts": {
+    "prepublishOnly": "scripts/prepare-publish.sh",
+    "build": "scripts/build-local.sh",
+    "build:all": "scripts/build-all.sh"
+  },
+  "files": [
+    "bin/",
+    "platforms/",
+    "README.md",
+    "LICENSE"
+  ],
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "keywords": [
+    "environment",
+    "java",
+    "llm",
+    "cli",
+    "tool",
+    "nva"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Protagonistss/cool-utils.git"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
+
