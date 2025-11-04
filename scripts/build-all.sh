@@ -27,7 +27,6 @@ TARGETS=(
     "x86_64-unknown-linux-gnu|linux-x64"
     "aarch64-unknown-linux-gnu|linux-arm64"
     "x86_64-pc-windows-msvc|win32-x64"
-    "aarch64-pc-windows-msvc|win32-arm64"
 )
 
 # 构建函数
@@ -41,8 +40,10 @@ build_target() {
     echo "平台名称: $platform_name"
     echo "=========================================="
     
-    # 使用 cross 交叉编译
-    if command -v cross &> /dev/null; then
+    # 使用 cross 交叉编译，Windows 使用原生 cargo
+    if [[ "$target" == *"windows"* ]]; then
+        cargo build --release --target "$target"
+    elif command -v cross &> /dev/null; then
         cross build --release --target "$target"
     else
         # 如果没有 cross，尝试直接使用 cargo（仅适用于当前平台）
