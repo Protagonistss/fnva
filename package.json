@@ -5,7 +5,9 @@
   "author": "protagonistss",
   "license": "MIT",
   "bin": {
-    "nva": "./bin/nva"
+    "nva": "./bin/nva",
+    "nva.cmd": "./bin/nva.bat",
+    "nva.exe": "./bin/nva.bat"
   },
   "scripts": {
     "prepublishOnly": "scripts/prepare-publish.sh",
@@ -37,7 +39,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/Protagonistss/cool-utils.git"
+    "url": "https://github.com/Protagonistss/fnva.git"
   },
   "engines": {
     "node": ">=14.0.0"

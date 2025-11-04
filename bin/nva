@@ -46,7 +46,15 @@ BINARY_PATH="$PROJECT_ROOT/platforms/$PLATFORM_DIR/nva"
 # 检查二进制文件是否存在
 if [ ! -f "$BINARY_PATH" ]; then
   echo "错误: 未找到二进制文件: $BINARY_PATH" >&2
-  echo "请运行 'npm run build' 构建二进制文件" >&2
+  echo "" >&2
+  echo "请尝试以下解决方案:" >&2
+  echo "1. 运行 'npm run build' 构建当前平台二进制文件" >&2
+  echo "2. 运行 'npm run build:all' 构建所有平台二进制文件" >&2
+  echo "3. 或者从 GitHub Releases 下载预编译的二进制文件" >&2
+  echo "" >&2
+  echo "如果问题仍然存在，请确保:" >&2
+  echo "- 已安装 Rust 工具链" >&2
+  echo "- 平台目录结构正确: platforms/$PLATFORM_DIR/" >&2
   exit 1
 fi
 

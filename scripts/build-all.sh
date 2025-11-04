@@ -22,12 +22,12 @@ fi
 
 # 定义目标平台
 TARGETS=(
-    "x86_64-apple-darwin"      # macOS Intel
-    "aarch64-apple-darwin"     # macOS Apple Silicon
-    "x86_64-unknown-linux-gnu" # Linux x64
-    "aarch64-unknown-linux-gnu" # Linux ARM64
-    "x86_64-pc-windows-msvc"   # Windows x64
-    "aarch64-pc-windows-msvc"  # Windows ARM64
+    "x86_64-apple-darwin|darwin-x64"
+    "aarch64-apple-darwin|darwin-arm64"
+    "x86_64-unknown-linux-gnu|linux-x64"
+    "aarch64-unknown-linux-gnu|linux-arm64"
+    "x86_64-pc-windows-msvc|win32-x64"
+    "aarch64-pc-windows-msvc|win32-arm64"
 )
 
 # 构建函数
@@ -81,52 +81,7 @@ build_target() {
 # 构建所有目标
 for target_info in "${TARGETS[@]}"; do
     IFS='|' read -r target platform <<< "$target_info"
-    if [ -z "$platform" ]; then
-        # 如果没有指定平台名称，从 target 中提取
-        platform=$(echo "$target" | sed 's/.*-//' | sed 's/gnu$/linux/' | sed 's/msvc$/win32/')
-        if [[ "$target" == *"apple-darwin"* ]]; then
-            if [[ "$target" == *"aarch64"* ]]; then
-                platform="darwin-arm64"
-            else
-                platform="darwin-x64"
-            fi
-        elif [[ "$target" == *"linux"* ]]; then
-            if [[ "$target" == *"aarch64"* ]]; then
-                platform="linux-arm64"
-            else
-                platform="linux-x64"
-            fi
-        elif [[ "$target" == *"windows"* ]]; then
-            if [[ "$target" == *"aarch64"* ]]; then
-                platform="win32-arm64"
-            else
-                platform="win32-x64"
-            fi
-        fi
-    fi
-    
-    # 简化平台名称映射
-    case "$target" in
-        "x86_64-apple-darwin")
-            platform="darwin-x64"
-            ;;
-        "aarch64-apple-darwin")
-            platform="darwin-arm64"
-            ;;
-        "x86_64-unknown-linux-gnu")
-            platform="linux-x64"
-            ;;
-        "aarch64-unknown-linux-gnu")
-            platform="linux-arm64"
-            ;;
-        "x86_64-pc-windows-msvc")
-            platform="win32-x64"
-            ;;
-        "aarch64-pc-windows-msvc")
-            platform="win32-arm64"
-            ;;
-    esac
-    
+
     build_target "$target" "$platform" || echo "跳过 $target（构建失败或平台不支持）"
 done
 
