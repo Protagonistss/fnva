@@ -1,0 +1,55 @@
+# Rust 编译输出
+/target/
+**/*.rs.bk
+*.pdb
+
+# Cargo
+Cargo.lock
+
+# 配置文件（用户个人配置）
+.nva/
+config.toml
+
+# IDE 和编辑器
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# 操作系统文件
+Thumbs.db
+.DS_Store
+*.orig
+
+# 日志文件
+*.log
+
+# 临时文件
+*.tmp
+*.temp
+
+# 备份文件
+*.bak
+*.backup
+
+# 测试覆盖率
+coverage/
+*.gcda
+*.gcno
+*.profdata
+
+# 环境变量文件
+.env
+.env.local
+
+# 构建产物
+*.exe
+*.dll
+*.so
+*.dylib
+
+# 调试文件
+*.dSYM/
+

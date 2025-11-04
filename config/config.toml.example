@@ -1,0 +1,50 @@
+# 环境切换工具配置文件示例
+# 复制此文件到 ~/.nva/config.toml (Linux/macOS) 或 %USERPROFILE%\.nva\config.toml (Windows)
+
+# Java 环境配置
+[[java_environments]]
+name = "jdk-17"
+java_home = "/usr/lib/jvm/java-17-openjdk"
+description = "OpenJDK 17"
+
+[[java_environments]]
+name = "jdk-11"
+java_home = "/usr/lib/jvm/java-11-openjdk"
+description = "OpenJDK 11"
+
+# LLM 环境配置
+[[llm_environments]]
+name = "openai-dev"
+provider = "openai"
+api_key = "${OPENAI_API_KEY}"  # 支持环境变量引用
+base_url = "https://api.openai.com/v1"
+model = "gpt-4"
+temperature = 0.7
+max_tokens = 2000
+description = "OpenAI 开发环境"
+
+[[llm_environments]]
+name = "anthropic-prod"
+provider = "anthropic"
+api_key = "${ANTHROPIC_API_KEY}"
+base_url = "https://api.anthropic.com"
+model = "claude-3-opus-20240229"
+temperature = 0.8
+max_tokens = 4096
+description = "Anthropic 生产环境"
+
+[[llm_environments]]
+name = "azure-openai"
+provider = "azure-openai"
+api_key = "${AZURE_OPENAI_API_KEY}"
+base_url = "https://your-resource.openai.azure.com"
+model = "gpt-4"
+description = "Azure OpenAI"
+
+[[llm_environments]]
+name = "ollama-local"
+provider = "ollama"
+base_url = "http://localhost:11434"
+model = "llama2"
+description = "本地 Ollama 服务"
+
