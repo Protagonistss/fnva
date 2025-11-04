@@ -288,7 +288,8 @@ jobs:
           echo "Package name: $(node -p "require('./package.json').name")"
           echo "Package version: $(node -p "require('./package.json').version")"
 
-          npm publish --verbose
+          # Use automation token for publishing (no OTP required)
+          npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
