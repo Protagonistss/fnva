@@ -85,9 +85,10 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-${{ matrix.arch }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-${{ matrix.target }}-
+            ${{ runner.os }}-${{ matrix.arch }}-cargo-
+            ${{ runner.os }}-cargo-
 
       - name: Install cross (Linux only)
         if: runner.os == 'Linux'
@@ -97,6 +98,14 @@ jobs:
           echo "PATH before cross install: $PATH"
           which cargo && cargo --version
           cargo install cross --git https://github.com/cross-rs/cross --force
+
+      - name: Download dependencies (Linux cross)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
+          echo "Fetching dependencies for cross compilation..."
+          cross fetch --target ${{ matrix.target }} || cargo fetch --target ${{ matrix.target }}
 
       - name: Build binary
         shell: bash
@@ -108,7 +117,9 @@ jobs:
             cargo build --release
           else
             # Linux 使用 cross 进行交叉编译
-            cross build --release --target ${{ matrix.target }} --verbose
+            export PATH="$HOME/.cargo/bin:$PATH"
+            echo "Building with cross..."
+            cross build --release --target ${{ matrix.target }}
           fi
 
       - name: Strip binary (Unix)
