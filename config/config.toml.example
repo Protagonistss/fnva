@@ -48,3 +48,20 @@ base_url = "http://localhost:11434"
 model = "llama2"
 description = "本地 Ollama 服务"
 
+# 仓库配置
+[repositories]
+# Java 版本查询仓库（默认使用阿里云镜像源）
+java = [
+    "https://mirrors.aliyun.com/eclipse/temurin-compliance/temurin",  # 阿里云镜像源（推荐）
+    "https://api.adoptium.net/v3",  # 官方 Adoptium API（备用）
+    # "https://api.adoptopenjdk.net/v3",  # 备用地址
+]
+
+# Maven 仓库（用于查询依赖版本）
+maven = [
+    "https://maven.aliyun.com/repository/public",  # 阿里云 Maven 仓库（推荐）
+    "https://search.maven.org/solrsearch/select",  # Maven Central 搜索 API
+    "https://repo1.maven.org/maven2",  # Maven Central 仓库
+    # "https://packages.jetbrains.team/maven/p/ij/intellij-dependency-releases",  # JetBrains 仓库
+]
+

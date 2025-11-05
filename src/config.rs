@@ -10,6 +10,32 @@ pub struct Config {
     pub java_environments: Vec<JavaEnvironment>,
     #[serde(default)]
     pub llm_environments: Vec<LlmEnvironment>,
+    #[serde(default)]
+    pub repositories: Repositories,
+}
+
+/// 仓库配置
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct Repositories {
+    #[serde(default = "default_java_repositories")]
+    pub java: Vec<String>,
+    #[serde(default = "default_maven_repositories")]
+    pub maven: Vec<String>,
+}
+
+fn default_java_repositories() -> Vec<String> {
+    vec![
+        "https://api.adoptium.net/v3".to_string(),
+        "https://api.adoptopenjdk.net/v3".to_string(),
+    ]
+}
+
+fn default_maven_repositories() -> Vec<String> {
+    vec![
+        "https://maven.aliyun.com/repository/public".to_string(),
+        "https://search.maven.org/solrsearch/select".to_string(),
+        "https://repo1.maven.org/maven2".to_string(),
+    ]
 }
 
 /// Java 环境配置
@@ -46,6 +72,10 @@ impl Config {
         Config {
             java_environments: Vec::new(),
             llm_environments: Vec::new(),
+            repositories: Repositories {
+                java: default_java_repositories(),
+                maven: default_maven_repositories(),
+            },
         }
     }
 
