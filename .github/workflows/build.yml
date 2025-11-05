@@ -165,23 +165,51 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: platforms/
+          merge-multiple: true
 
       - name: Prepare platforms directory
         run: |
-          mkdir -p platforms
-          for dir in platforms/*/; do
-            if [ -d "$dir" ]; then
-              platform=$(basename "$dir")
-              echo "Prepared platform: $platform"
-              ls -la "$dir"
-            fi
-          done
+          echo "Preparing release assets..."
+          echo "Current directory structure:"
+          find platforms/ -type f -name "*" || echo "No files found in platforms/"
+
+          # Flatten the directory structure to avoid nested directories
+          mkdir -p release-assets
+
+          # Find and copy all binary files with proper naming
+          if [ -d "platforms" ]; then
+            echo "Processing platform directories..."
+            for platform_dir in platforms/*/; do
+              if [ -d "$platform_dir" ]; then
+                platform_name=$(basename "$platform_dir")
+                echo "Found platform: $platform_name"
+                ls -la "$platform_dir"
+
+                # Copy binary files with platform-specific naming
+                if [ -f "$platform_dir/fnva" ]; then
+                  cp "$platform_dir/fnva" "release-assets/fnva-$platform_name"
+                  echo "Copied fnva-$platform_name"
+                fi
+                if [ -f "$platform_dir/fnva.exe" ]; then
+                  cp "$platform_dir/fnva.exe" "release-assets/fnva-$platform_name.exe"
+                  echo "Copied fnva-$platform_name.exe"
+                fi
+              fi
+            done
+          fi
+
+          echo "Release assets directory:"
+          ls -la release-assets/ || echo "No release assets found"
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          files: platforms/**/*
+          files: release-assets/*
           generate_release_notes: true
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -199,6 +227,18 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: platforms/
+          merge-multiple: true
+
+      - name: Verify platforms for NPM
+        run: |
+          echo "Verifying platforms directory for NPM package..."
+          echo "Platforms structure:"
+          find platforms/ -type f -name "*" | head -10 || echo "No files found"
+
+          if [ ! -d "platforms" ]; then
+            echo "Warning: platforms directory not found"
+            mkdir -p platforms
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
