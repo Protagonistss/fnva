@@ -1,5 +1,49 @@
 use reqwest;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+
+/// Java 版本信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JavaVersionInfo {
+    pub version: String,
+    pub major: Option<u32>,
+    pub minor: Option<u32>,
+    pub patch: Option<u32>,
+    pub release_name: String,
+    pub download_url: Option<String>,
+}
+
+impl JavaVersionInfo {
+    pub fn new(version: &str, major: u32, minor: u32, patch: u32, release_name: &str, download_url: Option<String>) -> Self {
+        Self {
+            version: version.to_string(),
+            major: Some(major),
+            minor: Some(minor),
+            patch: Some(patch),
+            release_name: release_name.to_string(),
+            download_url,
+        }
+    }
+}
+
+/// Maven 版本信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MavenVersionInfo {
+    pub version: String,
+    pub packaging: String,
+    pub group_id: Option<String>,
+    pub artifact_id: Option<String>,
+    pub timestamp: Option<String>,
+}
+
+/// Maven 工件信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MavenArtifactInfo {
+    pub group_id: String,
+    pub artifact_id: String,
+    pub latest_version: String,
+    pub packaging: String,
+    pub description: Option<String>,
+}
 
 /// 远程查询管理器
 pub struct RemoteManager;
@@ -101,18 +145,18 @@ impl RemoteManager {
             // 查询特定主要版本
             match major_version {
                 8 => {
-                    versions.push(JavaVersionInfo {
-                        version: "8.0.392".to_string(),
-                        major: 8,
-                        minor: 0,
-                        release_name: "jdk-8u392".to_string(),
-                        download_url: Some(format!("{}/8/jdk8u392-b08/{}",
+                    versions.push(JavaVersionInfo::new(
+                        "8.0.392",
+                        8, 0, 392,
+                        "jdk-8u392",
+                        Some(format!("{}/8/jdk8u392-b08/{}",
                             mirror_base, Self::get_download_filename(8, "8.0.392", "x64_windows"))),
-                    });
+                    ));
                     versions.push(JavaVersionInfo {
                         version: "8.0.382".to_string(),
-                        major: 8,
-                        minor: 0,
+                        major: Some(8),
+                        minor: Some(0),
+                        patch: Some(382),
                         release_name: "jdk-8u382".to_string(),
                         download_url: Some(format!("{}/8/jdk8u382-b05/{}",
                             mirror_base, Self::get_download_filename(8, "8.0.382", "x64_windows"))),
@@ -121,16 +165,18 @@ impl RemoteManager {
                 11 => {
                     versions.push(JavaVersionInfo {
                         version: "11.0.23".to_string(),
-                        major: 11,
-                        minor: 0,
+                        major: Some(11),
+                        minor: Some(0),
+                        patch: Some(23),
                         release_name: "jdk-11.0.23+9".to_string(),
                         download_url: Some(format!("{}/11/jdk-11.0.23+9/{}",
                             mirror_base, Self::get_download_filename(11, "11.0.23", "x64_windows"))),
                     });
                     versions.push(JavaVersionInfo {
                         version: "11.0.22".to_string(),
-                        major: 11,
-                        minor: 0,
+                        major: Some(11),
+                        minor: Some(0),
+                        patch: Some(22),
                         release_name: "jdk-11.0.22+7".to_string(),
                         download_url: Some(format!("{}/11/jdk-11.0.22+7/{}",
                             mirror_base, Self::get_download_filename(11, "11.0.22", "x64_windows"))),
@@ -139,38 +185,38 @@ impl RemoteManager {
                 17 => {
                     versions.push(JavaVersionInfo {
                         version: "17.0.12".to_string(),
-                        major: 17,
-                        minor: 0,
+                        major: Some(17),
+                        minor: Some(0),
+                        patch: Some(12),
                         release_name: "jdk-17.0.12+7".to_string(),
                         download_url: Some(format!("{}/17/jdk-17.0.12+7/{}",
                             mirror_base, Self::get_download_filename(17, "17.0.12", "x64_windows"))),
                     });
                     versions.push(JavaVersionInfo {
                         version: "17.0.11".to_string(),
-                        major: 17,
-                        minor: 0,
+                        major: Some(17),
+                        minor: Some(0),
+                        patch: Some(11),
                         release_name: "jdk-17.0.11+9".to_string(),
                         download_url: Some(format!("{}/17/jdk-17.0.11+9/{}",
                             mirror_base, Self::get_download_filename(17, "17.0.11", "x64_windows"))),
                     });
                 }
                 21 => {
-                    versions.push(JavaVersionInfo {
-                        version: "21.0.4".to_string(),
-                        major: 21,
-                        minor: 0,
-                        release_name: "jdk-21.0.4+7".to_string(),
-                        download_url: Some(format!("{}/21/jdk-21.0.4+7/{}",
+                    versions.push(JavaVersionInfo::new(
+                        "21.0.4",
+                        21, 0, 4,
+                        "jdk-21.0.4+7",
+                        Some(format!("{}/21/jdk-21.0.4+7/{}",
                             mirror_base, Self::get_download_filename(21, "21.0.4", "x64_windows"))),
-                    });
-                    versions.push(JavaVersionInfo {
-                        version: "21.0.3".to_string(),
-                        major: 21,
-                        minor: 0,
-                        release_name: "jdk-21.0.3+9".to_string(),
-                        download_url: Some(format!("{}/21/jdk-21.0.3+9/{}",
+                    ));
+                    versions.push(JavaVersionInfo::new(
+                        "21.0.3",
+                        21, 0, 3,
+                        "jdk-21.0.3+9",
+                        Some(format!("{}/21/jdk-21.0.3+9/{}",
                             mirror_base, Self::get_download_filename(21, "21.0.3", "x64_windows"))),
-                    });
+                    ));
                 }
                 _ => {
                     return Err(format!("不支持的 Java 版本: {}. 支持的版本: 8, 11, 17, 21", major_version));
@@ -178,34 +224,32 @@ impl RemoteManager {
             }
         } else {
             // 查询所有可用的 LTS 版本
-            versions.push(JavaVersionInfo {
-                version: "21.0.4".to_string(),
-                major: 21,
-                minor: 0,
-                release_name: "OpenJDK 21 (Latest LTS)".to_string(),
-                download_url: Some(format!("{}/21/jdk-21.0.4+7/{}",
+            versions.push(JavaVersionInfo::new(
+                "21.0.4",
+                21, 0, 4,
+                "OpenJDK 21 (Latest LTS)",
+                Some(format!("{}/21/jdk-21.0.4+7/{}",
                     mirror_base, Self::get_download_filename(21, "21.0.4", "x64_windows"))),
-            });
-            versions.push(JavaVersionInfo {
-                version: "17.0.12".to_string(),
-                major: 17,
-                minor: 0,
-                release_name: "OpenJDK 17 (LTS)".to_string(),
-                download_url: Some(format!("{}/17/jdk-17.0.12+7/{}",
+            ));
+            versions.push(JavaVersionInfo::new(
+                "17.0.12",
+                17, 0, 12,
+                "OpenJDK 17 (LTS)",
+                Some(format!("{}/17/jdk-17.0.12+7/{}",
                     mirror_base, Self::get_download_filename(17, "17.0.12", "x64_windows"))),
-            });
-            versions.push(JavaVersionInfo {
-                version: "11.0.23".to_string(),
-                major: 11,
-                minor: 0,
-                release_name: "OpenJDK 11 (LTS)".to_string(),
-                download_url: Some(format!("{}/11/jdk-11.0.23+9/{}",
+            ));
+            versions.push(JavaVersionInfo::new(
+                "11.0.23",
+                11, 0, 23,
+                "OpenJDK 11 (LTS)",
+                Some(format!("{}/11/jdk-11.0.23+9/{}",
                     mirror_base, Self::get_download_filename(11, "11.0.23", "x64_windows"))),
-            });
+            ));
             versions.push(JavaVersionInfo {
                 version: "8.0.392".to_string(),
-                major: 8,
-                minor: 0,
+                major: Some(8),
+                minor: Some(0),
+                patch: Some(392),
                 release_name: "OpenJDK 8 (LTS)".to_string(),
                 download_url: Some(format!("{}/8/jdk8u392-b08/{}",
                     mirror_base, Self::get_download_filename(8, "8.0.392", "x64_windows"))),
@@ -233,8 +277,9 @@ impl RemoteManager {
                 8 => {
                     versions.push(JavaVersionInfo {
                         version: "8.0.422".to_string(),
-                        major: 8,
-                        minor: 0,
+                        major: Some(8),
+                        minor: Some(0),
+                        patch: Some(422),
                         release_name: "OpenJDK 8.0.422".to_string(),
                         download_url: Some(format!("https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u422-b05/OpenJDK8U-jdk_{}_{}_hotspot_8u422b05.{}",
                             arch, os, if cfg!(target_os = "windows") { "zip" } else { "tar.gz" })),
@@ -243,8 +288,9 @@ impl RemoteManager {
                 11 => {
                     versions.push(JavaVersionInfo {
                         version: "11.0.24".to_string(),
-                        major: 11,
-                        minor: 0,
+                        major: Some(11),
+                        minor: Some(0),
+                        patch: Some(24),
                         release_name: "OpenJDK 11.0.24".to_string(),
                         download_url: Some(format!("https://github.com/adoptium/temurin11-binaries/releases/download/jdk-11.0.24%2B8/OpenJDK11U-jdk_{}_{}_hotspot_11.0.24_8.{}",
                             arch, os, if cfg!(target_os = "windows") { "zip" } else { "tar.gz" })),
@@ -253,8 +299,9 @@ impl RemoteManager {
                 17 => {
                     versions.push(JavaVersionInfo {
                         version: "17.0.12".to_string(),
-                        major: 17,
-                        minor: 0,
+                        major: Some(17),
+                        minor: Some(0),
+                        patch: Some(12),
                         release_name: "OpenJDK 17.0.12".to_string(),
                         download_url: Some(format!("https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.12%2B7/OpenJDK17U-jdk_{}_{}_hotspot_17.0.12_7.{}",
                             arch, os, if cfg!(target_os = "windows") { "zip" } else { "tar.gz" })),
@@ -263,8 +310,9 @@ impl RemoteManager {
                 21 => {
                     versions.push(JavaVersionInfo {
                         version: "21.0.4".to_string(),
-                        major: 21,
-                        minor: 0,
+                        major: Some(21),
+                        minor: Some(0),
+                        patch: Some(4),
                         release_name: "OpenJDK 21.0.4".to_string(),
                         download_url: Some(format!("https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.4%2B7/OpenJDK21U-jdk_{}_{}_hotspot_21.0.4_7.{}",
                             arch, os, if cfg!(target_os = "windows") { "zip" } else { "tar.gz" })),
@@ -278,32 +326,36 @@ impl RemoteManager {
             // 查询所有可用的 LTS 版本
             versions.push(JavaVersionInfo {
                 version: "21.0.4".to_string(),
-                major: 21,
-                minor: 0,
+                major: Some(21),
+                minor: Some(0),
+                patch: Some(4),
                 release_name: "OpenJDK 21 (Latest LTS)".to_string(),
                 download_url: Some(format!("https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.4%2B7/OpenJDK21U-jdk_{}_{}_hotspot_21.0.4_7.{}",
                     arch, os, if cfg!(target_os = "windows") { "zip" } else { "tar.gz" })),
             });
             versions.push(JavaVersionInfo {
                 version: "17.0.12".to_string(),
-                major: 17,
-                minor: 0,
+                major: Some(17),
+                minor: Some(0),
+                patch: Some(12),
                 release_name: "OpenJDK 17 (LTS)".to_string(),
                 download_url: Some(format!("https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.12%2B7/OpenJDK17U-jdk_{}_{}_hotspot_17.0.12_7.{}",
                     arch, os, if cfg!(target_os = "windows") { "zip" } else { "tar.gz" })),
             });
             versions.push(JavaVersionInfo {
                 version: "11.0.24".to_string(),
-                major: 11,
-                minor: 0,
+                major: Some(11),
+                minor: Some(0),
+                patch: Some(24),
                 release_name: "OpenJDK 11 (LTS)".to_string(),
                 download_url: Some(format!("https://github.com/adoptium/temurin11-binaries/releases/download/jdk-11.0.24%2B8/OpenJDK11U-jdk_{}_{}_hotspot_11.0.24_8.{}",
                     arch, os, if cfg!(target_os = "windows") { "zip" } else { "tar.gz" })),
             });
             versions.push(JavaVersionInfo {
                 version: "8.0.422".to_string(),
-                major: 8,
-                minor: 0,
+                major: Some(8),
+                minor: Some(0),
+                patch: Some(422),
                 release_name: "OpenJDK 8 (LTS)".to_string(),
                 download_url: Some(format!("https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u422-b05/OpenJDK8U-jdk_{}_{}_hotspot_8u422b05.{}",
                     arch, os, if cfg!(target_os = "windows") { "zip" } else { "tar.gz" })),
@@ -456,11 +508,11 @@ impl RemoteManager {
 
         for artifact in search_result.response.docs {
             versions.push(MavenVersionInfo {
-                group_id: artifact.g,
-                artifact_id: artifact.a,
+                group_id: Some(artifact.g),
+                artifact_id: Some(artifact.a),
                 version: artifact.latest_version,
                 packaging: artifact.p,
-                timestamp: artifact.timestamp,
+                timestamp: artifact.timestamp.map(|ts| ts.to_string()),
             });
         }
 
@@ -515,7 +567,7 @@ impl RemoteManager {
                 artifact_id,
                 latest_version: artifact.latest_version,
                 packaging: artifact.p,
-                description,
+                description: Some(description),
             });
         }
 
@@ -523,35 +575,6 @@ impl RemoteManager {
     }
 }
 
-/// Java 版本信息
-#[derive(Debug, Clone)]
-pub struct JavaVersionInfo {
-    pub version: String,
-    pub major: u32,
-    pub minor: u32,
-    pub release_name: String,
-    pub download_url: Option<String>,
-}
-
-/// Maven 版本信息
-#[derive(Debug, Clone)]
-pub struct MavenVersionInfo {
-    pub group_id: String,
-    pub artifact_id: String,
-    pub version: String,
-    pub packaging: String,
-    pub timestamp: Option<u64>,
-}
-
-/// Maven 工件信息
-#[derive(Debug, Clone)]
-pub struct MavenArtifactInfo {
-    pub group_id: String,
-    pub artifact_id: String,
-    pub latest_version: String,
-    pub packaging: String,
-    pub description: String,
-}
 
 // 添加 urlencoding 依赖
 use urlencoding;
@@ -574,7 +597,7 @@ mod tests {
         assert!(!versions.is_empty());
 
         for version in versions.iter().take(5) {
-            println!("Java {}: {}", version.major, version.version);
+            println!("Java {}: {}", version.major.unwrap_or(0), version.version);
         }
     }
 
@@ -591,7 +614,10 @@ mod tests {
         assert!(!versions.is_empty());
 
         for version in versions.iter().take(5) {
-            println!("{}:{}:{}", version.group_id, version.artifact_id, version.version);
+            println!("{}:{}:{}",
+                version.group_id.as_deref().unwrap_or("unknown"),
+                version.artifact_id.as_deref().unwrap_or("unknown"),
+                version.version);
         }
     }
 }

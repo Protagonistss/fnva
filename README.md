@@ -254,6 +254,38 @@ end
 fnva env --use-on-cd | Out-String | Invoke-Expression
 ```
 
+```
+function fnva {
+    param(
+        [Parameter(ValueFromRemainingArguments=$true)]
+        [string[]]$Args
+    )
+
+    if ($Args.Count -ge 3 -and $Args[0] -eq "java" -and $Args[1] -eq "use") {
+        $envName = $Args[2]
+        $output = fnva.exe java use $envName --shell powershell 2>$null
+        if ($output -is [array]) {
+            $script = $output -join "`r`n"
+        } else {
+            $script = $output
+        }
+
+        if ($LASTEXITCODE -eq 0 -and $script -match "JAVA_HOME") {
+            try {
+                Invoke-Expression $script
+                Write-Host "Switched to Java: $envName" -ForegroundColor Green
+            } catch {
+                Write-Error "Failed to execute switch script: $($_.Exception.Message)"
+            }
+        } else {
+            Write-Output $output
+        }
+    } else {
+        fnva.exe $Args
+    }
+}
+```
+
 重启 PowerShell 后即可享受自动 Java 环境切换！
 
 #### 手动集成

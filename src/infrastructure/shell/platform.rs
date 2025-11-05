@@ -31,7 +31,38 @@ pub fn get_os_type() -> OsType {
 
 /// 检测当前使用的 shell
 pub fn detect_shell() -> ShellType {
-    // 从环境变量检测 shell
+    // Windows 平台优先检测 Windows shell
+    if cfg!(target_os = "windows") {
+        // Windows PowerShell 检测
+        if let Ok(ps_module_path) = env::var("PSModulePath") {
+            if !ps_module_path.is_empty() {
+                // 检查是否在 PowerShell 中
+                if let Ok(pwsh) = env::var("POWERSHELL_PROCESS") {
+                    if !pwsh.is_empty() {
+                        return ShellType::PowerShell;
+                    }
+                }
+                // 另一种检测方式：检查 TERM_PROGRAM
+                if env::var("TERM_PROGRAM").is_ok() {
+                    // 可能是 PowerShell，但需要进一步确认
+                    return ShellType::PowerShell;
+                }
+            }
+        }
+
+        // Windows CMD 检测
+        if env::var("COMSPEC").is_ok() {
+            // 检查是否在 CMD 中（通常 PowerShell 会有额外的环境变量）
+            if env::var("PSModulePath").is_err() {
+                return ShellType::Cmd;
+            }
+            // 如果 PSModulePath 存在，但 SHELL 变量也表明是 Unix shell，
+            // 优先认为是 PowerShell（因为在 Windows 上运行）
+            return ShellType::PowerShell;
+        }
+    }
+
+    // 从环境变量检测 Unix shell
     if let Ok(shell) = env::var("SHELL") {
         if shell.contains("fish") {
             return ShellType::Fish;
@@ -39,32 +70,6 @@ pub fn detect_shell() -> ShellType {
             return ShellType::Zsh;
         } else if shell.contains("bash") {
             return ShellType::Bash;
-        }
-    }
-
-    // Windows PowerShell 检测
-    if let Ok(ps_module_path) = env::var("PSModulePath") {
-        if !ps_module_path.is_empty() {
-            // 检查是否在 PowerShell 中
-            if let Ok(pwsh) = env::var("POWERSHELL_PROCESS") {
-                if !pwsh.is_empty() {
-                    return ShellType::PowerShell;
-                }
-            }
-            // 另一种检测方式：检查 TERM_PROGRAM
-            if env::var("TERM_PROGRAM").is_ok() {
-                // 可能是 PowerShell，但需要进一步确认
-            }
-        }
-    }
-
-    // Windows CMD 检测
-    if cfg!(target_os = "windows") {
-        if env::var("COMSPEC").is_ok() {
-            // 检查是否在 CMD 中（通常 PowerShell 会有额外的环境变量）
-            if env::var("PSModulePath").is_err() {
-                return ShellType::Cmd;
-            }
         }
     }
 
