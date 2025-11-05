@@ -251,7 +251,7 @@ end
 在你的 PowerShell profile (`C:\Users\Administrator\Documents\PowerShell\Microsoft.PowerShell_profile.ps1`) 中添加以下一行：
 
 ```powershell
-fnva env --use-on-cd | Out-String | Invoke-Expression
+fnva env env | Out-String | Invoke-Expression
 ```
 
 ```

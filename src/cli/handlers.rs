@@ -152,15 +152,58 @@ impl CommandHandler {
     /// 处理环境管理命令
     async fn handle_env_command(&mut self, action: EnvCommands) -> Result<(), String> {
         match action {
-            EnvCommands::UseOnCd { shell } => {
+            EnvCommands::GenerateEnv { shell, use_on_cd } => {
                 let shell_type = match shell {
-            Some(s) => Some(parse_shell_type(&s)?),
-            None => Some(detect_shell()),
-        };
-                let output = self.switcher.generate_shell_integration(shell_type.unwrap()).await?;
-                print!("{}", output);
+                    Some(s) => Some(parse_shell_type(&s)?),
+                    None => Some(detect_shell()),
+                };
+
+                // 生成类似 fnm env 的环境变量设置脚本
+                let script = match shell_type.unwrap() {
+                    crate::infrastructure::shell::ShellType::PowerShell => {
+                        r#"
+# fnva environment setup
+$env:FNVA_SHELL_INTEGRATION = $true
+
+function fnva {
+    param(
+        [Parameter(ValueFromRemainingArguments=$true)]
+        [string[]]$Args
+    )
+
+    if ($Args.Count -ge 3 -and $Args[0] -eq "java" -and $Args[1] -eq "use") {
+        $envName = $Args[2]
+        $output = & fnva.exe java use $envName --shell powershell 2>$null
+        if ($output -is [array]) {
+            $script = $output -join "`r`n"
+        } else {
+            $script = $output
+        }
+
+        if ($LASTEXITCODE -eq 0 -and $script -match "JAVA_HOME") {
+            try {
+                Invoke-Expression $script
+                Write-Host "Switched to Java: $envName" -ForegroundColor Green
+            } catch {
+                Write-Error "Failed to execute switch script: $($_.Exception.Message)"
             }
-            EnvCommands::Switch { env_type, name, shell, reason, json } => {
+        } else {
+            Write-Output $output
+        }
+    } else {
+        fnva.exe $Args
+    }
+}
+"#.to_string()
+                    }
+                    _ => {
+                        "# fnva environment setup for other shells\nexport FNVA_SHELL_INTEGRATION=true\n".to_string()
+                    }
+                };
+
+                print!("{}", script);
+            }
+                        EnvCommands::Switch { env_type, name, shell, reason, json } => {
                 let env_type = parse_environment_type(&env_type)?;
                 let shell_type = match shell {
             Some(s) => Some(parse_shell_type(&s)?),

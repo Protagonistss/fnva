@@ -208,8 +208,12 @@ pub enum LlmCommands {
 /// 环境管理命令
 #[derive(Subcommand)]
 pub enum EnvCommands {
-    /// 自动环境切换集成
-    UseOnCd {
+    /// 生成环境切换脚本（类似 fnm env）
+    #[command(name = "env")]
+    GenerateEnv {
+        /// 自动环境切换集成（类似 fnm env --use-on-cd）
+        #[arg(long)]
+        use_on_cd: bool,
         /// Shell 类型
         #[arg(short, long)]
         shell: Option<String>,
