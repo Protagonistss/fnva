@@ -12,6 +12,9 @@ pub struct Config {
     pub llm_environments: Vec<LlmEnvironment>,
     #[serde(default)]
     pub repositories: Repositories,
+    /// 当前激活的 Java 环境名称
+    #[serde(default)]
+    pub current_java_env: Option<String>,
 }
 
 /// 仓库配置
@@ -76,6 +79,7 @@ impl Config {
                 java: default_java_repositories(),
                 maven: default_maven_repositories(),
             },
+            current_java_env: None,
         }
     }
 
@@ -139,6 +143,30 @@ impl Config {
     /// 获取 Java 环境
     pub fn get_java_env(&self, name: &str) -> Option<&JavaEnvironment> {
         self.java_environments.iter().find(|e| e.name == name)
+    }
+
+    /// 设置当前激活的 Java 环境
+    pub fn set_current_java_env(&mut self, name: String) -> Result<(), String> {
+        // 验证环境是否存在
+        if !self.java_environments.iter().any(|e| e.name == name) {
+            return Err(format!("Java 环境 '{}' 不存在", name));
+        }
+        self.current_java_env = Some(name);
+        Ok(())
+    }
+
+    /// 获取当前激活的 Java 环境
+    pub fn get_current_java_env(&self) -> Option<&JavaEnvironment> {
+        if let Some(ref name) = self.current_java_env {
+            self.get_java_env(name)
+        } else {
+            None
+        }
+    }
+
+    /// 清除当前激活的 Java 环境
+    pub fn clear_current_java_env(&mut self) {
+        self.current_java_env = None;
     }
 
     /// 添加 LLM 环境

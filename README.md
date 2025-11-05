@@ -16,13 +16,10 @@
 ### 通过 npm 安装（推荐）
 
 ```bash
-# 全局安装
 npm install -g fnva
 
-# 或使用 yarn
 yarn global add fnva
 
-# 或使用 pnpm
 pnpm add -g fnva
 ```
 
@@ -93,12 +90,20 @@ fnva java add --name jdk-17 --home /usr/lib/jvm/java-17-openjdk --description "O
 #### 切换到 Java 环境
 
 ```bash
-# 自动检测 shell
+# Bash / Zsh
 eval "$(fnva java use jdk-17)"
 
-# 指定 shell
-eval "$(fnva java use jdk-17 --shell bash)"
+# Fish
+fnva java use jdk-17 --shell fish | source
+
+# PowerShell
+fnva java use jdk-17 --shell powershell | Invoke-Expression
+
+# CMD
+fnva java use jdk-17 --shell cmd > %TEMP%\fnva_use.cmd && call %TEMP%\fnva_use.cmd
 ```
+`fnva java use <name>` prints shell commands for the target shell. Pipe/eval this output or wrap it in your profile for an fnm-style experience.
+
 
 #### 删除 Java 环境
 
@@ -241,7 +246,19 @@ end
 
 ### PowerShell
 
-在 `$PROFILE` 中添加：
+#### 自动集成（推荐）
+
+在你的 PowerShell profile (`C:\Users\Administrator\Documents\PowerShell\Microsoft.PowerShell_profile.ps1`) 中添加以下一行：
+
+```powershell
+fnva env --use-on-cd | Out-String | Invoke-Expression
+```
+
+重启 PowerShell 后即可享受自动 Java 环境切换！
+
+#### 手动集成
+
+在 `$PROFILE` 中添加函数：
 
 ```powershell
 function Switch-Java {
@@ -254,6 +271,50 @@ function Switch-Llm {
     fnva llm use $Name | Invoke-Expression
 }
 ```
+
+### Windows 自动切换功能
+
+`fnva` 现在支持类似 `fnm` 的自动环境切换功能！
+
+#### 快速开始
+
+1. **添加到 PowerShell Profile**：
+   ```powershell
+   fnva env --use-on-cd | Out-String | Invoke-Expression
+   ```
+
+2. **重启 PowerShell**
+
+3. **开始使用**：
+   ```powershell
+   # 设置 Java 环境
+   fnva java use jdk21
+
+   # 环境会自动保持激活状态
+   # 重启 PowerShell 后自动恢复
+
+   # 切换版本
+   fnva java use jdk17
+   ```
+
+#### 新增功能
+
+- **JSON 输出支持**：
+  ```powershell
+  fnva java current --json
+  ```
+
+- **自动环境切换**：环境状态持久化，重启后自动恢复
+- **智能 PATH 管理**：自动清理旧的 Java 路径
+- **增强错误处理**：包含回滚和验证机制
+
+#### 工作原理
+
+PowerShell Hook 会在每次显示提示符时：
+1. 检查当前环境状态
+2. 使用 `fnva java current --json` 获取环境信息
+3. 智能切换环境（如需要）
+4. 清理 PATH 并设置环境变量
 
 ## 许可证
 

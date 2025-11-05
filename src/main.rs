@@ -5,9 +5,10 @@ use fnva::java::JavaManager;
 use fnva::llm::LlmManager;
 use fnva::network_test::NetworkTester;
 use fnva::package_manager::JavaPackageManager;
-use fnva::platform::ShellType;
+use fnva::platform::{detect_shell, ShellType};
 use fnva::remote::RemoteManager;
-use fnva::utils;
+use fnva::shell_hook::ShellHook;
+use fnva::shell_integration::ShellIntegration;
 use std::process;
 
 #[derive(Parser)]
@@ -32,6 +33,15 @@ enum Commands {
     },
     /// 网络连接诊断
     NetworkTest,
+    /// Shell �������ű�
+    Env {
+        /// ��ÿ�θı�Ŀ¼ʱ�Զ���ȡ��ǰ����
+        #[arg(long = "use-on-cd")]
+        use_on_cd: bool,
+        /// ָ�� shell ���� (bash, zsh, fish, powershell, cmd)
+        #[arg(short, long)]
+        shell: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -107,6 +117,18 @@ enum JavaCommands {
         /// Java 环境名称
         name: String,
     },
+    /// 显示当前激活的 Java 环境
+    Current {
+        /// 以 JSON 格式输出
+        #[arg(long)]
+        json: bool,
+    },
+    /// 安装 Shell 集成
+    ShellInstall,
+    /// 安装 Shell Hook（实现当前 shell 立即生效）
+    InstallHook,
+    /// 卸载 Shell Hook
+    UninstallHook,
     /// 列出可安装的 Java 版本
     ListInstallable,
 }
@@ -171,12 +193,19 @@ fn parse_shell(shell_str: Option<String>) -> Option<ShellType> {
 }
 
 fn main() {
+    // 自动激活当前环境
+    if let Err(e) = auto_activate_current_environment() {
+        // 静默失败，不影响主要功能
+        eprintln!("警告: 自动激活环境失败: {}", e);
+    }
+
     let cli = Cli::parse();
 
     let result = match cli.command {
         Commands::Java { action } => handle_java_command(action),
         Commands::Llm { action } => handle_llm_command(action),
         Commands::NetworkTest => handle_network_test(),
+        Commands::Env { use_on_cd, shell } => handle_env_command(use_on_cd, shell),
     };
 
     if let Err(e) = result {
@@ -185,12 +214,23 @@ fn main() {
     }
 }
 
+fn handle_env_command(use_on_cd: bool, shell: Option<String>) -> Result<(), String> {
+    if !use_on_cd {
+        return Err("Only --use-on-cd is supported at the moment".to_string());
+    }
+
+    let shell_type = parse_shell(shell).unwrap_or_else(detect_shell);
+    let script = ShellHook::generate_use_on_cd_script(shell_type)?;
+    println!("{}", script);
+    Ok(())
+}
+
 fn handle_java_command(action: JavaCommands) -> Result<(), String> {
     match action {
         JavaCommands::List => {
             let config = Config::load()?;
             let envs = JavaManager::list(&config);
-            
+
             if envs.is_empty() {
                 println!("没有配置的 Java 环境");
                 println!("\n使用 'fnva java scan' 扫描系统中的 Java 安装");
@@ -207,68 +247,16 @@ fn handle_java_command(action: JavaCommands) -> Result<(), String> {
             Ok(())
         }
         JavaCommands::Use { name, shell } => {
-            let config = Config::load()?;
-            let env = config.get_java_env(&name)
-                .ok_or_else(|| format!("Java 环境 '{}' 不存在", name))?;
+            let mut config = Config::load()?;
+            let shell_type = parse_shell(shell);
+            let switch_commands =
+                JavaManager::generate_switch_command(&config, &name, shell_type)?;
 
-            // 验证 Java Home 路径
-            if !crate::utils::validate_java_home(&env.java_home) {
-                return Err(format!("无效的 JAVA_HOME 路径: {}", env.java_home));
-            }
+            config.set_current_java_env(name.clone())?;
+            config.save()?;
+            ShellHook::set_current_environment(&name)?;
 
-            // 设置当前会话的环境变量
-            std::env::set_var("JAVA_HOME", &env.java_home);
-
-            let bin_path = if cfg!(target_os = "windows") {
-                format!("{}\\bin", env.java_home)
-            } else {
-                format!("{}/bin", env.java_home)
-            };
-
-            // 更新 PATH
-            let current_path = std::env::var("PATH").unwrap_or_default();
-            let new_path = format!("{};{}", bin_path, current_path);
-            std::env::set_var("PATH", &new_path);
-
-            println!("✅ 已切换到 Java: {} ({})", name, env.description);
-            println!("📍 JAVA_HOME: {}", env.java_home);
-            println!("📁 BIN 目录: {}", bin_path);
-
-            // 验证切换结果
-            let java_exe = if cfg!(target_os = "windows") {
-                format!("{}\\java.exe", bin_path)
-            } else {
-                format!("{}/java", bin_path)
-            };
-
-            if std::path::Path::new(&java_exe).exists() {
-                println!("🔍 验证版本:");
-                let version_output = std::process::Command::new(&java_exe)
-                    .arg("--version")
-                    .output();
-
-                match version_output {
-                    Ok(output) => {
-                        let version_str = String::from_utf8_lossy(&output.stdout);
-                        if !version_str.trim().is_empty() {
-                            println!("   {}", version_str.lines().next().unwrap_or("无法获取版本信息"));
-                        }
-                    }
-                    Err(_) => {
-                        println!("   ⚠️  无法获取版本信息");
-                    }
-                }
-            } else {
-                println!("   ⚠️  警告: Java 可执行文件不存在");
-            }
-
-            println!("\n💡 注意: 环境变量仅在当前会话中生效");
-            println!("🔄 如需永久生效，请将以下命令添加到系统环境变量:");
-            println!("   JAVA_HOME={}", env.java_home);
-            println!("   PATH=%JAVA_HOME%\\bin;%PATH%");
-            println!("\n🔧 或者直接使用 fnva 执行 Java 命令:");
-            println!("   fnva java run {} --version", name);
-
+            println!("{}", switch_commands);
             Ok(())
         }
         JavaCommands::Run { name, args } => {
@@ -279,7 +267,7 @@ fn handle_java_command(action: JavaCommands) -> Result<(), String> {
         JavaCommands::Scan => {
             println!("正在扫描系统中的 Java 安装...");
             let installations = JavaManager::scan_system();
-            
+
             if installations.is_empty() {
                 println!("未找到 Java 安装");
             } else {
@@ -329,23 +317,31 @@ fn handle_java_command(action: JavaCommands) -> Result<(), String> {
             rt.block_on(async {
                 match query_type.as_str() {
                     "java" => {
-                        let repo_url = repository.or_else(|| {
-                            config.repositories.java.first().cloned()
-                        }).unwrap_or_else(|| "https://api.adoptium.net/v3".to_string());
+                        let repo_url = repository
+                            .or_else(|| config.repositories.java.first().cloned())
+                            .unwrap_or_else(|| "https://api.adoptium.net/v3".to_string());
 
                         match RemoteManager::list_java_versions(
                             &repo_url,
                             java_version,
                             None,
                             None,
-                        ).await {
+                        )
+                        .await
+                        {
                             Ok(versions) => {
                                 if versions.is_empty() {
                                     println!("未找到可用的 Java 版本");
                                 } else {
-                                    println!("可用的 Java 版本 (显示前 {} 个):", std::cmp::min(limit, versions.len() as u32));
-                                    for (i, version) in versions.iter().take(limit as usize).enumerate() {
-                                        println!("  {}. Java {} ({})",
+                                    println!(
+                                        "可用的 Java 版本 (显示前 {} 个):",
+                                        std::cmp::min(limit, versions.len() as u32)
+                                    );
+                                    for (i, version) in
+                                        versions.iter().take(limit as usize).enumerate()
+                                    {
+                                        println!(
+                                            "  {}. Java {} ({})",
                                             i + 1,
                                             version.version,
                                             version.release_name
@@ -362,24 +358,28 @@ fn handle_java_command(action: JavaCommands) -> Result<(), String> {
                         }
                     }
                     "maven" => {
-                        let repo_url = repository.or_else(|| {
-                            config.repositories.maven.first().cloned()
-                        }).unwrap_or_else(|| "https://search.maven.org/solrsearch/select".to_string());
+                        let repo_url = repository
+                            .or_else(|| config.repositories.maven.first().cloned())
+                            .unwrap_or_else(|| {
+                                "https://search.maven.org/solrsearch/select".to_string()
+                            });
 
                         if let Some(search_query) = search {
-                            // 搜索 Maven 工件
                             match RemoteManager::search_maven_artifacts(
                                 &repo_url,
                                 &search_query,
                                 Some(limit),
-                            ).await {
+                            )
+                            .await
+                            {
                                 Ok(artifacts) => {
                                     if artifacts.is_empty() {
                                         println!("未找到匹配的 Maven 工件");
                                     } else {
-                                        println!("搜索结果 (显示前 {} 个):", artifacts.len());
+                                        println!("搜索结果 (共 {} 条):", artifacts.len());
                                         for (i, artifact) in artifacts.iter().enumerate() {
-                                            println!("  {}. {}:{}",
+                                            println!(
+                                                "  {}. {}:{}",
                                                 i + 1,
                                                 artifact.group_id,
                                                 artifact.artifact_id
@@ -394,7 +394,6 @@ fn handle_java_command(action: JavaCommands) -> Result<(), String> {
                                 }
                             }
                         } else if let Some(artifact) = maven_artifact {
-                            // 查询特定 Maven 依赖的版本
                             let parts: Vec<&str> = artifact.split(':').collect();
                             if parts.len() != 2 {
                                 return Err("Maven 工件格式应为 'groupId:artifactId'".to_string());
@@ -407,18 +406,24 @@ fn handle_java_command(action: JavaCommands) -> Result<(), String> {
                                 &repo_url,
                                 group_id,
                                 artifact_id,
-                            ).await {
+                            )
+                            .await
+                            {
                                 Ok(versions) => {
                                     if versions.is_empty() {
                                         println!("未找到该依赖的可用版本");
                                     } else {
-                                        println!("{}:{} 的可用版本 (显示前 {} 个):",
+                                        println!(
+                                            "{}:{} 的可用版本 (显示前 {} 个):",
                                             group_id,
                                             artifact_id,
                                             std::cmp::min(limit, versions.len() as u32)
                                         );
-                                        for (i, version) in versions.iter().take(limit as usize).enumerate() {
-                                            println!("  {}. {} ({})",
+                                        for (i, version) in
+                                            versions.iter().take(limit as usize).enumerate()
+                                        {
+                                            println!(
+                                                "  {}. {} ({})",
                                                 i + 1,
                                                 version.version,
                                                 version.packaging
@@ -431,7 +436,9 @@ fn handle_java_command(action: JavaCommands) -> Result<(), String> {
                                 }
                             }
                         } else {
-                            return Err("查询 Maven 版本需要指定 --maven-artifact 或 --search 参数".to_string());
+                            return Err(
+                                "查询 Maven 版本需要指定 --maven-artifact 或 --search 参数".to_string()
+                            );
                         }
                     }
                     _ => {
@@ -449,9 +456,11 @@ fn handle_java_command(action: JavaCommands) -> Result<(), String> {
             let rt = Runtime::new().map_err(|e| format!("创建异步运行时失败: {}", e))?;
 
             rt.block_on(async {
-                match JavaPackageManager::install_java_package(&version, &mut config, auto_switch).await {
+                match JavaPackageManager::install_java_package(&version, &mut config, auto_switch)
+                    .await
+                {
                     Ok(java_home) => {
-                        println!("🎉 Java {} 资源包安装完成!", version);
+                        println!("🎉 Java {} 资源包安装完成", version);
                         println!("📍 JAVA_HOME: {}", java_home);
                         println!("💡 使用 'fnva java use {}' 来切换到此版本", version);
                         println!("🌟 使用阿里云镜像源，下载更快更稳定！");
@@ -467,13 +476,68 @@ fn handle_java_command(action: JavaCommands) -> Result<(), String> {
         JavaCommands::Uninstall { name } => {
             let mut config = Config::load()?;
 
-            // 尝试卸载资源包
             if name.starts_with("jdk-pkg-") {
                 JavaPackageManager::uninstall_java_package(&name, &mut config)?;
             } else {
-                // 卸载传统安装版本
                 JavaInstaller::uninstall_java(&name, &mut config)?;
             }
+            Ok(())
+        }
+        JavaCommands::Current { json } => {
+            let config = Config::load()?;
+            if let Some(current) = &config.current_java_env {
+                if json {
+                    if let Some(env) = config.get_java_env(current) {
+                        let output = serde_json::json!({
+                            "name": current,
+                            "java_home": env.java_home,
+                            "description": env.description
+                        });
+                        println!("{}", serde_json::to_string_pretty(&output).unwrap());
+                    } else {
+                        let output = serde_json::json!({
+                            "name": current,
+                            "java_home": null,
+                            "description": ""
+                        });
+                        println!("{}", serde_json::to_string_pretty(&output).unwrap());
+                    }
+                } else {
+                    println!("当前 Java 环境: {}", current);
+                    if let Some(env) = config.get_java_env(current) {
+                        println!("  JAVA_HOME: {}", env.java_home);
+                        if !env.description.is_empty() {
+                            println!("  描述: {}", env.description);
+                        }
+                    }
+                }
+            } else {
+                if json {
+                    let output = serde_json::json!({
+                        "name": null,
+                        "java_home": null,
+                        "description": null
+                    });
+                    println!("{}", serde_json::to_string_pretty(&output).unwrap());
+                } else {
+                    println!("当前没有已激活的 Java 环境");
+                }
+            }
+            Ok(())
+        }
+        JavaCommands::ShellInstall => {
+            let integration_info = ShellIntegration::generate_shell_integration()?;
+            println!("{}", integration_info);
+            Ok(())
+        }
+        JavaCommands::InstallHook => {
+            let hook_info = ShellHook::generate_hook_installation()?;
+            println!("{}", hook_info);
+            Ok(())
+        }
+        JavaCommands::UninstallHook => {
+            let uninstall_info = ShellHook::generate_hook_uninstallation()?;
+            println!("{}", uninstall_info);
             Ok(())
         }
         JavaCommands::ListInstallable => {
@@ -492,7 +556,7 @@ fn handle_java_command(action: JavaCommands) -> Result<(), String> {
                                 println!("  {}", package);
                             }
                             println!("\n💡 使用 'fnva java install v21' 来安装资源包版本");
-                            println!("🌟 资源包模式特点:");
+                            println!("🌟 资源包模式特色:");
                             println!("   ✅ 使用阿里云镜像源，下载更快");
                             println!("   ✅ 无需管理员权限");
                             println!("   ✅ 下载便携式版本");
@@ -624,4 +688,10 @@ fn handle_network_test() -> Result<(), String> {
             }
         }
     })
+}
+
+/// 自动激活当前配置的 Java 环境（使用 Hook 机制）
+fn auto_activate_current_environment() -> Result<(), String> {
+    // 使用 Shell Hook 机制检查并应用当前环境
+    ShellHook::check_and_apply_current()
 }
