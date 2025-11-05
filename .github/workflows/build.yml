@@ -163,9 +163,6 @@ jobs:
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
-        with:
-          path: platforms/
-          merge-multiple: true
 
       - name: Prepare platforms directory
         run: |
@@ -177,39 +174,46 @@ jobs:
           mkdir -p release-assets
           echo "Created release-assets directory"
 
-          # Check what's in platforms directory
-          echo "Platforms directory contents:"
-          if [ -d "platforms" ]; then
-            find platforms/ -type f -name "*" || echo "No files in platforms/"
+          # Check what's in current directory (artifacts are downloaded here)
+          echo "Looking for artifact directories..."
+          for artifact_dir in binary-*/; do
+            if [ -d "$artifact_dir" ]; then
+              echo "Processing artifact: $artifact_dir"
+              ls -la "$artifact_dir"
 
-            # List all directories in platforms
-            echo "Platform directories:"
-            ls -la platforms/ || echo "Cannot list platforms/"
+              # Get platform name from directory name (binary-linux-x64 -> linux-x64)
+              platform_name=$(basename "$artifact_dir" | sed 's/^binary-//')
+              echo "Platform name: $platform_name"
 
-            # Process binary-* directories (artifact names)
-            for artifact_dir in platforms/binary-*/; do
-              if [ -d "$artifact_dir" ]; then
-                echo "Processing artifact: $artifact_dir"
-                ls -la "$artifact_dir"
-
-                # Get platform name from directory name (binary-linux-x64 -> linux-x64)
-                platform_name=$(basename "$artifact_dir" | sed 's/^binary-//')
-                echo "Platform name: $platform_name"
-
-                # Copy binary files with platform-specific naming
-                if [ -f "$artifact_dir/fnva" ]; then
-                  cp "$artifact_dir/fnva" "release-assets/fnva-$platform_name"
-                  echo "Copied fnva-$platform_name"
-                fi
-                if [ -f "$artifact_dir/fnva.exe" ]; then
-                  cp "$artifact_dir/fnva.exe" "release-assets/fnva-$platform_name.exe"
-                  echo "Copied fnva-$platform_name.exe"
-                fi
+              # Copy binary files with platform-specific naming
+              if [ -f "$artifact_dir/fnva" ]; then
+                cp "$artifact_dir/fnva" "release-assets/fnva-$platform_name"
+                echo "Copied fnva-$platform_name"
+                chmod +x "release-assets/fnva-$platform_name"
               fi
-            done
-          else
-            echo "Error: platforms directory not found"
-            exit 1
+              if [ -f "$artifact_dir/fnva.exe" ]; then
+                cp "$artifact_dir/fnva.exe" "release-assets/fnva-$platform_name.exe"
+                echo "Copied fnva-$platform_name.exe"
+              fi
+            fi
+          done
+
+          # If no binary-* directories found, check if files are directly in current directory
+          if [ -z "$(ls -A release-assets/)" ]; then
+            echo "No binary-* directories found, checking for direct files..."
+
+            # Create platform-specific releases directly from available files
+            if [ -f "fnva" ]; then
+              # Try to determine platform from previous build job context or create generic
+              cp "fnva" "release-assets/fnva-unix"
+              chmod +x "release-assets/fnva-unix"
+              echo "Copied fnva-unix"
+            fi
+
+            if [ -f "fnva.exe" ]; then
+              cp "fnva.exe" "release-assets/fnva-windows.exe"
+              echo "Copied fnva-windows.exe"
+            fi
           fi
 
           echo "Final release assets directory:"
@@ -218,9 +222,12 @@ jobs:
           # Verify we have files to upload
           if [ -z "$(ls -A release-assets/)" ]; then
             echo "Error: No files found in release-assets directory"
-            echo "Attempting to find any binary files..."
+            echo "Searching for all fnva files..."
             find . -name "fnva*" -type f
             exit 1
+          else
+            echo "Successfully prepared release assets:"
+            ls -la release-assets/
           fi
 
       - name: Create Release
