@@ -1,10 +1,12 @@
-# 环境切换工具 (fnva)
+# fnva - Fast Node Version Manager for Java
 
-跨平台环境切换工具，支持 Java 和 LLM 环境配置管理。
+类似 fnm 的跨平台 Java 环境管理工具，支持默认环境设置和自动加载。
 
 ## 功能特性
 
 - ✅ **Java 环境管理**：快速切换不同版本的 JDK
+- ✅ **默认环境支持**：类似 fnm，支持设置默认 Java 环境
+- ✅ **自动加载**：新 Shell 会话自动加载默认环境
 - ✅ **LLM 环境管理**：支持多 LLM 提供商配置切换
 - ✅ **跨平台支持**：Windows、macOS、Linux
 - ✅ **多 Shell 支持**：bash、zsh、fish、PowerShell、CMD
@@ -13,57 +15,33 @@
 
 ## 安装
 
-### 通过 npm 安装（推荐）
-
-```bash
-npm install -g fnva
-
-yarn global add fnva
-
-pnpm add -g fnva
-```
-
-安装完成后，可以直接使用 `fnva` 命令。
-
-### 从源码构建
-
-#### 本地构建（当前平台）
+### 从源码构建（推荐）
 
 ```bash
 git clone <repository-url>
-cd cool-utils
-npm run build
+cd fnva
+cargo build --release
 ```
 
-编译后的二进制文件位于 `platforms/<platform>/fnva`。
+### 通过 Cargo 安装
 
-#### 构建所有平台
-
-项目使用 GitHub Actions 自动构建所有平台的二进制文件。当创建版本标签时，会自动构建并发布到 npm。
-
-**手动触发构建：**
-1. 在 GitHub 上创建新的 Release 标签（例如 `v0.1.0`）
-2. GitHub Actions 会自动构建所有平台
-3. 构建完成后自动发布到 npm
-
-**本地构建所有平台（需要交叉编译工具）：**
 ```bash
-npm run build:all
+cargo install --path .
 ```
-
-注意：需要安装 `cross` 工具：`cargo install cross`
 
 ### 添加到 PATH
 
-将二进制文件复制到系统 PATH 中，或创建符号链接：
+将二进制文件复制到系统 PATH 中：
 
 ```bash
 # Linux/macOS
-sudo ln -s $(pwd)/target/release/fnva /usr/local/bin/fnva
+sudo cp target/release/fnva /usr/local/bin/fnva
 
 # 或添加到 ~/.bashrc 或 ~/.zshrc
 export PATH="$PATH:$(pwd)/target/release"
 ```
+
+Windows 用户需要将 `target\release\fnva.exe` 添加到 PATH 环境变量中。
 
 ## 使用方法
 
@@ -102,8 +80,25 @@ fnva java use jdk-17 --shell powershell | Invoke-Expression
 # CMD
 fnva java use jdk-17 --shell cmd > %TEMP%\fnva_use.cmd && call %TEMP%\fnva_use.cmd
 ```
-`fnva java use <name>` prints shell commands for the target shell. Pipe/eval this output or wrap it in your profile for an fnm-style experience.
 
+#### 设置默认 Java 环境（类似 fnm）
+
+```bash
+# 设置默认环境
+fnva java default jdk-21
+
+# 查看当前默认环境
+fnva java default
+
+# 清除默认设置
+fnva java default --unset
+```
+
+#### 查看当前激活的环境
+
+```bash
+fnva java current
+```
 
 #### 删除 Java 环境
 
@@ -214,20 +209,51 @@ provider = "openai"
 api_key = "${OPENAI_API_KEY}"  # 从系统环境变量读取
 ```
 
-## Shell 集成
+## Shell 集成（fnm 风格）
+
+### PowerShell（推荐）
+
+在你的 PowerShell Profile 中添加以下内容以启用 fnm 风格的自动环境切换：
+
+```powershell
+# fnva 环境集成（类似 fnm env）
+fnva env env --shell powershell | Out-String | Invoke-Expression
+```
+
+#### 功能特性
+
+- **自动加载默认环境**：新 PowerShell 会话自动加载设置的默认 Java 环境
+- **环境持久化**：重启 PowerShell 后自动恢复上次的 Java 环境
+- **智能切换函数**：提供 `fnva java use` 交互式切换功能
+- **Shell 函数集成**：自动添加 PowerShell 函数用于环境切换
+
+#### 使用示例
+
+```powershell
+# 1. 设置默认环境
+fnva java default jdk21
+
+# 2. 重启 PowerShell 后会自动加载默认环境
+# 显示: "Loading default Java environment: jdk21"
+
+# 3. 交互式切换
+fnva java use jdk17
+
+# 4. 查看当前环境
+fnva java current
+```
 
 ### Bash/Zsh
 
 在 `~/.bashrc` 或 `~/.zshrc` 中添加：
 
 ```bash
-# 快速切换 Java 环境
+# fnva 环境集成
+eval "$(fnva env env --shell bash)"
+
+# 或使用别名快速切换
 alias java17='eval "$(fnva java use jdk-17)"'
 alias java11='eval "$(fnva java use jdk-11)"'
-
-# 快速切换 LLM 环境
-alias llm-openai='eval "$(fnva llm use openai-dev)"'
-alias llm-anthropic='eval "$(fnva llm use anthropic-prod)"'
 ```
 
 ### Fish
@@ -235,118 +261,50 @@ alias llm-anthropic='eval "$(fnva llm use anthropic-prod)"'
 在 `~/.config/fish/config.fish` 中添加：
 
 ```fish
+# fnva 环境集成
+fnva env env --shell fish | source
+
+# 或定义函数
 function java17
     fnva java use jdk-17 | source
 end
 
-function llm-openai
-    fnva llm use openai-dev | source
+function java11
+    fnva java use jdk-11 | source
 end
 ```
 
-### PowerShell
+## 工作原理
 
-#### 自动集成（推荐）
+### 默认环境管理
 
-在你的 PowerShell profile (`C:\Users\Administrator\Documents\PowerShell\Microsoft.PowerShell_profile.ps1`) 中添加以下一行：
+fnva 类似 fnm 的工作方式：
 
-```powershell
-fnva env env | Out-String | Invoke-Expression
-```
-
-```
-function fnva {
-    param(
-        [Parameter(ValueFromRemainingArguments=$true)]
-        [string[]]$Args
-    )
-
-    if ($Args.Count -ge 3 -and $Args[0] -eq "java" -and $Args[1] -eq "use") {
-        $envName = $Args[2]
-        $output = fnva.exe java use $envName --shell powershell 2>$null
-        if ($output -is [array]) {
-            $script = $output -join "`r`n"
-        } else {
-            $script = $output
-        }
-
-        if ($LASTEXITCODE -eq 0 -and $script -match "JAVA_HOME") {
-            try {
-                Invoke-Expression $script
-                Write-Host "Switched to Java: $envName" -ForegroundColor Green
-            } catch {
-                Write-Error "Failed to execute switch script: $($_.Exception.Message)"
-            }
-        } else {
-            Write-Output $output
-        }
-    } else {
-        fnva.exe $Args
-    }
-}
-```
-
-重启 PowerShell 后即可享受自动 Java 环境切换！
-
-#### 手动集成
-
-在 `$PROFILE` 中添加函数：
-
-```powershell
-function Switch-Java {
-    param([string]$Name)
-    fnva java use $Name | Invoke-Expression
-}
-
-function Switch-Llm {
-    param([string]$Name)
-    fnva llm use $Name | Invoke-Expression
-}
-```
-
-### Windows 自动切换功能
-
-`fnva` 现在支持类似 `fnm` 的自动环境切换功能！
-
-#### 快速开始
-
-1. **添加到 PowerShell Profile**：
-   ```powershell
-   fnva env --use-on-cd | Out-String | Invoke-Expression
+1. **设置默认环境**：
+   ```bash
+   fnva java default jdk21
    ```
 
-2. **重启 PowerShell**
+2. **Shell 集成**：在 Shell Profile 中添加环境切换脚本
 
-3. **开始使用**：
-   ```powershell
-   # 设置 Java 环境
-   fnva java use jdk21
+3. **自动加载**：新 Shell 会话自动检测并加载默认环境
 
-   # 环境会自动保持激活状态
-   # 重启 PowerShell 后自动恢复
+4. **环境持久化**：环境配置保存在 `~/.fnva/config.toml` 中
 
-   # 切换版本
-   fnva java use jdk17
-   ```
+### 配置文件位置
 
-#### 新增功能
+- **Linux/macOS**: `~/.fnva/config.toml`
+- **Windows**: `%USERPROFILE%\.fnva\config.toml`
 
-- **JSON 输出支持**：
-  ```powershell
-  fnva java current --json
-  ```
+默认环境配置示例：
+```toml
+default_java_env = "jdk21.0.6"
 
-- **自动环境切换**：环境状态持久化，重启后自动恢复
-- **智能 PATH 管理**：自动清理旧的 Java 路径
-- **增强错误处理**：包含回滚和验证机制
-
-#### 工作原理
-
-PowerShell Hook 会在每次显示提示符时：
-1. 检查当前环境状态
-2. 使用 `fnva java current --json` 获取环境信息
-3. 智能切换环境（如需要）
-4. 清理 PATH 并设置环境变量
+[[java_environments]]
+name = "jdk21.0.6"
+java_home = "E:\\env\\jdks\\jdk-21.0.6"
+description = "Java 21.0.6 LTS"
+```
 
 ## 许可证
 

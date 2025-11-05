@@ -149,6 +149,44 @@ impl SessionManager {
 
         Ok(())
     }
+
+    /// 获取有效的环境（当前环境或默认环境）
+    pub fn get_effective_environment<'a>(&'a self, config: &'a Config, env_type: EnvironmentType) -> Option<&'a str> {
+        // 首先尝试获取当前环境
+        if let Some(current) = self.get_current_environment(env_type) {
+            return Some(current);
+        }
+
+        // 如果没有当前环境，尝试获取默认环境（仅支持 Java）
+        if env_type == EnvironmentType::Java {
+            if let Some(ref default) = config.default_java_env {
+                return Some(default);
+            }
+        }
+
+        None
+    }
+
+    /// 检查环境是否是当前环境或默认环境
+    pub fn is_active_environment(&self, config: &Config, env_type: EnvironmentType, name: &str) -> bool {
+        // 检查是否是当前环境
+        if let Some(current) = self.get_current_environment(env_type) {
+            if current == name {
+                return true;
+            }
+        }
+
+        // 检查是否是默认环境（仅支持 Java）
+        if env_type == EnvironmentType::Java {
+            if let Some(ref default) = config.default_java_env {
+                if default == name {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
 }
 
 /// 环境切换历史

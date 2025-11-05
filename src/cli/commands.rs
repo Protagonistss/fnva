@@ -127,6 +127,20 @@ pub enum JavaCommands {
         /// Java 环境名称
         name: String,
     },
+    /// 设置或查看默认 Java 环境
+    Default {
+        /// Java 环境名称（不提供时显示当前默认环境）
+        name: Option<String>,
+        /// 清除默认设置
+        #[arg(long)]
+        unset: bool,
+        /// Shell 类型
+        #[arg(short, long)]
+        shell: Option<String>,
+        /// JSON 格式输出
+        #[arg(long)]
+        json: bool,
+    },
     /// 显示当前激活的 Java 环境
     Current {
         /// JSON 格式输出

@@ -43,7 +43,7 @@ impl CommandHandler {
     async fn handle_java_command(&mut self, action: JavaCommands) -> Result<(), String> {
         match action {
             JavaCommands::List { json } => {
-                let output = self.switcher.list_environments(
+                let output = self.switcher.list_environments_with_default(
                     EnvironmentType::Java,
                     if json { OutputFormat::Json } else { OutputFormat::Text }
                 ).await?;
@@ -99,6 +99,42 @@ impl CommandHandler {
             JavaCommands::Remove { name } => {
                 let output = self.switcher.remove_environment(EnvironmentType::Java, &name).await?;
                 print!("{}", output);
+            }
+            JavaCommands::Default { name, unset, shell, json } => {
+                if unset {
+                    // 清除默认环境
+                    let output = self.switcher.clear_default_environment(EnvironmentType::Java).await?;
+                    print!("{}", output);
+                } else if let Some(env_name) = name {
+                    // 设置默认环境
+                    let output = self.switcher.set_default_environment(EnvironmentType::Java, &env_name).await?;
+                    print!("{}", output);
+                } else {
+                    // 显示当前默认环境
+                    match self.switcher.get_default_environment(EnvironmentType::Java).await? {
+                        Some(env_name) => {
+                            if let Some(shell) = shell {
+                                match parse_shell_type(&shell) {
+                                    Ok(shell_type) => {
+                                        let result = self.switcher.switch_environment(
+                                            EnvironmentType::Java,
+                                            &env_name,
+                                            Some(shell_type),
+                                            Some("Switch to default environment".to_string())
+                                        ).await?;
+                                        let output = FORMATTER.format_switch_result(&result,
+                                            if json { OutputFormat::Json } else { OutputFormat::Text })?;
+                                        print!("{}", output);
+                                    }
+                                    Err(e) => return Err(e),
+                                }
+                            } else {
+                                println!("Default Java environment: {}", env_name);
+                            }
+                        }
+                        None => println!("No default Java environment set"),
+                    }
+                }
             }
             // 其他 Java 命令...
             _ => {
@@ -165,6 +201,25 @@ impl CommandHandler {
 # fnva environment setup
 $env:FNVA_SHELL_INTEGRATION = $true
 
+# Auto-load default Java environment (like fnm)
+try {
+    $defaultEnvRaw = & fnva.exe java default 2>$null
+    if ($LASTEXITCODE -eq 0 -and $defaultEnvRaw -and $defaultEnvRaw -notmatch "No default") {
+        # Extract environment name from output like "Default Java environment: jdk21.0.6"
+        $defaultEnv = ($defaultEnvRaw -split ':')[-1].Trim()
+        Write-Host "Loading default Java environment: $defaultEnv" -ForegroundColor Cyan
+        $switchScript = & fnva.exe java use $defaultEnv --shell powershell 2>$null
+        if ($LASTEXITCODE -eq 0 -and $switchScript) {
+            if ($switchScript -is [array]) {
+                $switchScript = $switchScript -join "`r`n"
+            }
+            Invoke-Expression $switchScript
+        }
+    }
+} catch {
+    # Ignore errors during default loading
+}
+
 function fnva {
     param(
         [Parameter(ValueFromRemainingArguments=$true)]
@@ -191,7 +246,7 @@ function fnva {
             Write-Output $output
         }
     } else {
-        fnva.exe $Args
+        & fnva.exe $Args
     }
 }
 "#.to_string()

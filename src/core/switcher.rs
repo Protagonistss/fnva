@@ -4,6 +4,7 @@ use crate::core::environment_manager::{EnvironmentManager, EnvironmentType, Swit
 use crate::core::session::{SessionManager, HistoryManager};
 use crate::infrastructure::shell::{ShellType, script_builder::ScriptBuilder};
 use crate::cli::output::OutputFormat;
+use crate::infrastructure::config::Config;
 
 /// 环境切换器
 pub struct EnvironmentSwitcher {
@@ -330,4 +331,135 @@ impl EnvironmentSwitcher {
         Ok(output)
     }
 
+    /// 设置默认环境
+    pub async fn set_default_environment(
+        &self,
+        env_type: EnvironmentType,
+        name: &str,
+    ) -> Result<String, String> {
+        if env_type != EnvironmentType::Java {
+            return Err("Default environment support is currently only available for Java".to_string());
+        }
+
+        // 直接设置默认环境（不验证）
+        let mut config = Config::load()?;
+        config.set_default_java_env(name.to_string())?;
+        config.save()?;
+
+        Ok(format!("Set default {} environment: {}", env_type, name))
     }
+
+    /// 清除默认环境
+    pub async fn clear_default_environment(
+        &self,
+        env_type: EnvironmentType,
+    ) -> Result<String, String> {
+        if env_type != EnvironmentType::Java {
+            return Err("Default environment support is currently only available for Java".to_string());
+        }
+
+        let mut config = Config::load()?;
+        config.clear_default_java_env();
+        config.save()?;
+
+        Ok(format!("Cleared default {} environment", env_type))
+    }
+
+    /// 获取默认环境
+    pub async fn get_default_environment(
+        &self,
+        env_type: EnvironmentType,
+    ) -> Result<Option<String>, String> {
+        if env_type != EnvironmentType::Java {
+            return Ok(None);
+        }
+
+        let config = Config::load()?;
+        Ok(config.default_java_env.clone())
+    }
+
+    /// 切换到默认环境
+    pub async fn switch_to_default_environment(
+        &self,
+        env_type: EnvironmentType,
+        shell_type: Option<ShellType>,
+    ) -> Result<SwitchResult, String> {
+        if env_type != EnvironmentType::Java {
+            return Err("Default environment support is currently only available for Java".to_string());
+        }
+
+        let config = Config::load()?;
+        if let Some(default_env) = config.default_java_env.clone() {
+            self.switch_environment(env_type, &default_env, shell_type, Some("Switch to default environment".to_string())).await
+        } else {
+            Ok(SwitchResult {
+                name: "default".to_string(),
+                env_type,
+                script: String::new(),
+                success: false,
+                error: Some("No default environment set".to_string()),
+            })
+        }
+    }
+
+    /// 列出环境时显示默认环境标记
+    pub async fn list_environments_with_default(
+        &self,
+        env_type: EnvironmentType,
+        output_format: OutputFormat,
+    ) -> Result<String, String> {
+        let manager = self.managers.get(&env_type)
+            .ok_or_else(|| format!("No manager registered for environment type: {:?}", env_type))?;
+
+        let manager = manager.lock().unwrap();
+        let environments = manager.list()?;
+
+        // 获取当前环境和默认环境
+        let config = Config::load()?;
+        let current_env = {
+            let session_manager = self.session_manager.lock().unwrap();
+            session_manager.get_current_environment(env_type).cloned()
+        };
+        let default_env = config.default_java_env.clone();
+
+        // 格式化输出
+        match output_format {
+            OutputFormat::Text => {
+                let mut output = String::new();
+                if environments.is_empty() {
+                    output.push_str(&format!("No {} environments found\n", env_type));
+                } else {
+                    output.push_str(&format!("Available {} environments:\n", env_type));
+                    for env in environments {
+                        let name = env.name.clone();
+                        let description = env.description.clone().unwrap_or_default();
+                        let is_current = current_env.as_ref().map_or(false, |curr| curr == &name);
+                        let is_default = default_env.as_ref().map_or(false, |def| def == &name);
+
+                        let mut markers = Vec::new();
+                        if is_current { markers.push("current"); }
+                        if is_default { markers.push("default"); }
+                        let marker_str = if markers.is_empty() {
+                            String::new()
+                        } else {
+                            format!(" ({})", markers.join(", "))
+                        };
+
+                        output.push_str(&format!("  {}{}: {}\n", name, marker_str, description));
+                    }
+                }
+                Ok(output)
+            }
+            OutputFormat::Json => {
+                use serde_json;
+                let json_output = serde_json::json!({
+                    "environment_type": env_type,
+                    "current": current_env,
+                    "default": default_env,
+                    "environments": environments
+                });
+                Ok(serde_json::to_string_pretty(&json_output).unwrap())
+            }
+        }
+    }
+}
