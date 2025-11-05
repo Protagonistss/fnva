@@ -171,45 +171,69 @@ jobs:
         run: |
           echo "Preparing release assets..."
           echo "Current directory structure:"
-          find platforms/ -type f -name "*" || echo "No files found in platforms/"
+          find . -type f -name "*" | head -20 || echo "No files found"
 
-          # Flatten the directory structure to avoid nested directories
+          # Create release-assets directory
           mkdir -p release-assets
+          echo "Created release-assets directory"
 
-          # Find and copy all binary files with proper naming
+          # Check what's in platforms directory
+          echo "Platforms directory contents:"
           if [ -d "platforms" ]; then
-            echo "Processing platform directories..."
-            for platform_dir in platforms/*/; do
-              if [ -d "$platform_dir" ]; then
-                platform_name=$(basename "$platform_dir")
-                echo "Found platform: $platform_name"
-                ls -la "$platform_dir"
+            find platforms/ -type f -name "*" || echo "No files in platforms/"
+
+            # List all directories in platforms
+            echo "Platform directories:"
+            ls -la platforms/ || echo "Cannot list platforms/"
+
+            # Process binary-* directories (artifact names)
+            for artifact_dir in platforms/binary-*/; do
+              if [ -d "$artifact_dir" ]; then
+                echo "Processing artifact: $artifact_dir"
+                ls -la "$artifact_dir"
+
+                # Get platform name from directory name (binary-linux-x64 -> linux-x64)
+                platform_name=$(basename "$artifact_dir" | sed 's/^binary-//')
+                echo "Platform name: $platform_name"
 
                 # Copy binary files with platform-specific naming
-                if [ -f "$platform_dir/fnva" ]; then
-                  cp "$platform_dir/fnva" "release-assets/fnva-$platform_name"
+                if [ -f "$artifact_dir/fnva" ]; then
+                  cp "$artifact_dir/fnva" "release-assets/fnva-$platform_name"
                   echo "Copied fnva-$platform_name"
                 fi
-                if [ -f "$platform_dir/fnva.exe" ]; then
-                  cp "$platform_dir/fnva.exe" "release-assets/fnva-$platform_name.exe"
+                if [ -f "$artifact_dir/fnva.exe" ]; then
+                  cp "$artifact_dir/fnva.exe" "release-assets/fnva-$platform_name.exe"
                   echo "Copied fnva-$platform_name.exe"
                 fi
               fi
             done
+          else
+            echo "Error: platforms directory not found"
+            exit 1
           fi
 
-          echo "Release assets directory:"
+          echo "Final release assets directory:"
           ls -la release-assets/ || echo "No release assets found"
+
+          # Verify we have files to upload
+          if [ -z "$(ls -A release-assets/)" ]; then
+            echo "Error: No files found in release-assets directory"
+            echo "Attempting to find any binary files..."
+            find . -name "fnva*" -type f
+            exit 1
+          fi
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: release-assets/*
+          files: |
+            release-assets/*
+            platforms/**/*
           generate_release_notes: true
           name: Release ${{ github.ref_name }}
           draft: false
           prerelease: false
-          fail_on_unmatched_files: true
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
