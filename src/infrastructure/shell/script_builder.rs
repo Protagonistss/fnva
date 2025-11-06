@@ -79,28 +79,78 @@ impl ScriptBuilder {
                 ));
                 script.push_str("Write-Host \"JAVA_HOME: $env:JAVA_HOME\" -ForegroundColor Yellow\r\n");
             }
-            EnvironmentType::Llm => {
-                let api_key = config.get("api_key")
-                    .and_then(|v| v.as_str())
-                    .ok_or("Missing api_key in config")?;
+            EnvironmentType::Llm | EnvironmentType::Cc => {
+                // Check if this is an Anthropic/GLM_CC environment
+                let is_anthropic = config.get("anthropic_auth_token").is_some();
 
-                script.push_str(&format!(
-                    "$env:OPENAI_API_KEY = \"{}\"\n",
-                    api_key
-                ));
+                if is_anthropic {
+                    // Anthropic/GLM_CC environment variables
+                    if let Some(auth_token) = config.get("anthropic_auth_token").and_then(|v| v.as_str()) {
+                        script.push_str(&format!(
+                            "$env:ANTHROPIC_AUTH_TOKEN = \"{}\"\n",
+                            auth_token
+                        ));
+                    }
 
-                if let Some(model) = config.get("model").and_then(|v| v.as_str()) {
+                    if let Some(base_url) = config.get("anthropic_base_url").and_then(|v| v.as_str()) {
+                        script.push_str(&format!(
+                            "$env:ANTHROPIC_BASE_URL = \"{}\"\n",
+                            base_url
+                        ));
+                    }
+
+                    if let Some(timeout) = config.get("api_timeout_ms").and_then(|v| v.as_str()) {
+                        script.push_str(&format!(
+                            "$env:API_TIMEOUT_MS = \"{}\"\n",
+                            timeout
+                        ));
+                    }
+
+                    if let Some(disable_traffic) = config.get("claude_code_disable_nonessential_traffic") {
+                        if disable_traffic.as_u64().unwrap_or(0) == 1 {
+                            script.push_str("$env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = 1\n");
+                        }
+                    }
+
+                    // Set default Sonnet model if specified
+                    if let Some(default_model) = config.get("anthropic_default_sonnet_model").and_then(|v| v.as_str()) {
+                        script.push_str(&format!(
+                            "$env:ANTHROPIC_DEFAULT_SONNET_MODEL = \"{}\"\n",
+                            default_model
+                        ));
+                    }
+
+                    // Also set OpenAI variables for compatibility if needed
+                    if let Some(api_key) = config.get("api_key").and_then(|v| v.as_str()) {
+                        script.push_str(&format!(
+                            "$env:OPENAI_API_KEY = \"{}\"\n",
+                            api_key
+                        ));
+                    }
+                } else {
+                    // OpenAI environment variables (original implementation)
+                    let api_key = config.get("api_key")
+                        .and_then(|v| v.as_str())
+                        .ok_or("Missing api_key in config")?;
+
                     script.push_str(&format!(
-                        "$env:OPENAI_MODEL = \"{}\"\n",
-                        model
+                        "$env:OPENAI_API_KEY = \"{}\"\n",
+                        api_key
                     ));
-                }
 
-                if let Some(base_url) = config.get("base_url").and_then(|v| v.as_str()) {
-                    script.push_str(&format!(
-                        "$env:OPENAI_BASE_URL = \"{}\"\n",
-                        base_url
-                    ));
+                    if let Some(model) = config.get("model").and_then(|v| v.as_str()) {
+                        script.push_str(&format!(
+                            "$env:OPENAI_MODEL = \"{}\"\n",
+                            model
+                        ));
+                    }
+
+                    if let Some(base_url) = config.get("base_url").and_then(|v| v.as_str()) {
+                        script.push_str(&format!(
+                            "$env:OPENAI_BASE_URL = \"{}\"\n",
+                            base_url
+                        ));
+                    }
                 }
             }
             _ => {
@@ -136,19 +186,54 @@ impl ScriptBuilder {
                 script.push_str(&format!("echo \"Switched to Java environment: {}\"\n", env_name));
                 script.push_str("echo \"JAVA_HOME: $JAVA_HOME\"\n");
             }
-            EnvironmentType::Llm => {
-                let api_key = config.get("api_key")
-                    .and_then(|v| v.as_str())
-                    .ok_or("Missing api_key in config")?;
+            EnvironmentType::Llm | EnvironmentType::Cc => {
+                // Check if this is an Anthropic/GLM_CC environment
+                let is_anthropic = config.get("anthropic_auth_token").is_some();
 
-                script.push_str(&format!("export OPENAI_API_KEY=\"{}\"\n", api_key));
+                if is_anthropic {
+                    // Anthropic/GLM_CC environment variables
+                    if let Some(auth_token) = config.get("anthropic_auth_token").and_then(|v| v.as_str()) {
+                        script.push_str(&format!("export ANTHROPIC_AUTH_TOKEN=\"{}\"\n", auth_token));
+                    }
 
-                if let Some(model) = config.get("model").and_then(|v| v.as_str()) {
-                    script.push_str(&format!("export OPENAI_MODEL=\"{}\"\n", model));
-                }
+                    if let Some(base_url) = config.get("anthropic_base_url").and_then(|v| v.as_str()) {
+                        script.push_str(&format!("export ANTHROPIC_BASE_URL=\"{}\"\n", base_url));
+                    }
 
-                if let Some(base_url) = config.get("base_url").and_then(|v| v.as_str()) {
-                    script.push_str(&format!("export OPENAI_BASE_URL=\"{}\"\n", base_url));
+                    if let Some(timeout) = config.get("api_timeout_ms").and_then(|v| v.as_str()) {
+                        script.push_str(&format!("export API_TIMEOUT_MS=\"{}\"\n", timeout));
+                    }
+
+                    if let Some(disable_traffic) = config.get("claude_code_disable_nonessential_traffic") {
+                        if disable_traffic.as_u64().unwrap_or(0) == 1 {
+                            script.push_str("export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1\n");
+                        }
+                    }
+
+                    // Set default Sonnet model if specified
+                    if let Some(default_model) = config.get("anthropic_default_sonnet_model").and_then(|v| v.as_str()) {
+                        script.push_str(&format!("export ANTHROPIC_DEFAULT_SONNET_MODEL=\"{}\"\n", default_model));
+                    }
+
+                    // Also set OpenAI variables for compatibility if needed
+                    if let Some(api_key) = config.get("api_key").and_then(|v| v.as_str()) {
+                        script.push_str(&format!("export OPENAI_API_KEY=\"{}\"\n", api_key));
+                    }
+                } else {
+                    // OpenAI environment variables (original implementation)
+                    let api_key = config.get("api_key")
+                        .and_then(|v| v.as_str())
+                        .ok_or("Missing api_key in config")?;
+
+                    script.push_str(&format!("export OPENAI_API_KEY=\"{}\"\n", api_key));
+
+                    if let Some(model) = config.get("model").and_then(|v| v.as_str()) {
+                        script.push_str(&format!("export OPENAI_MODEL=\"{}\"\n", model));
+                    }
+
+                    if let Some(base_url) = config.get("base_url").and_then(|v| v.as_str()) {
+                        script.push_str(&format!("export OPENAI_BASE_URL=\"{}\"\n", base_url));
+                    }
                 }
             }
             _ => {
@@ -184,7 +269,7 @@ impl ScriptBuilder {
                 script.push_str(&format!("echo \"Switched to Java environment: {}\"\n", env_name));
                 script.push_str("echo \"JAVA_HOME: $JAVA_HOME\"\n");
             }
-            EnvironmentType::Llm => {
+            EnvironmentType::Llm | EnvironmentType::Cc => {
                 let api_key = config.get("api_key")
                     .and_then(|v| v.as_str())
                     .ok_or("Missing api_key in config")?;
@@ -245,7 +330,7 @@ impl ScriptBuilder {
                 script.push_str(&format!("echo Switched to Java environment: {}\n", env_name));
                 script.push_str("echo JAVA_HOME: %JAVA_HOME%\n");
             }
-            EnvironmentType::Llm => {
+            EnvironmentType::Llm | EnvironmentType::Cc => {
                 let api_key = config.get("api_key")
                     .and_then(|v| v.as_str())
                     .ok_or("Missing api_key in config")?;

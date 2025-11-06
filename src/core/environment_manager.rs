@@ -6,6 +6,7 @@ use crate::infrastructure::shell::ShellType;
 pub enum EnvironmentType {
     Java,
     Llm,
+    Cc,
     Maven,
     Gradle,
     Python,
@@ -17,6 +18,7 @@ impl std::fmt::Display for EnvironmentType {
         match self {
             EnvironmentType::Java => write!(f, "java"),
             EnvironmentType::Llm => write!(f, "llm"),
+            EnvironmentType::Cc => write!(f, "cc"),
             EnvironmentType::Maven => write!(f, "maven"),
             EnvironmentType::Gradle => write!(f, "gradle"),
             EnvironmentType::Python => write!(f, "python"),
@@ -125,6 +127,9 @@ impl EnvironmentManagerFactory {
             }
             EnvironmentType::Llm => {
                 Ok(Box::new(crate::environments::llm::LlmEnvironmentManager::new()))
+            }
+            EnvironmentType::Cc => {
+                Ok(Box::new(crate::environments::cc::CcEnvironmentManager::new()))
             }
             EnvironmentType::Maven => {
                 Err("Maven environment manager not implemented yet".to_string())

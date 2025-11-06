@@ -3,55 +3,54 @@ use crate::core::environment_manager::{EnvironmentManager, EnvironmentType, DynE
 use crate::infrastructure::shell::ShellType;
 use crate::infrastructure::shell::script_builder::ScriptBuilder;
 use serde_json;
+use crate::infrastructure::config::CcEnvironment as ConfigCcEnvironment;
 
-/// LLM 环境管理器
-pub struct LlmEnvironmentManager {
-    environments: HashMap<String, LlmEnvironment>,
+/// CC (Claude Code) 环境管理器
+pub struct CcEnvironmentManager {
+    environments: HashMap<String, ConfigCcEnvironment>,
 }
 
-impl LlmEnvironmentManager {
-    /// 创建新的 LLM 环境管理器
+impl CcEnvironmentManager {
+    /// 创建新的 CC 环境管理器
     pub fn new() -> Self {
         let mut manager = Self {
             environments: HashMap::new(),
         };
 
-        // 从配置文件加载 LLM 环境
+        // 从配置文件加载 CC 环境
         if let Err(e) = manager.load_from_config() {
-            eprintln!("Warning: Failed to load LLM environments from config: {}", e);
+            eprintln!("Warning: Failed to load CC environments from config: {}", e);
         }
 
         manager
     }
 
-    /// 从配置文件加载 LLM 环境
+    /// 从配置文件加载 CC 环境
     fn load_from_config(&mut self) -> Result<(), String> {
         use crate::infrastructure::config::Config;
 
         let config = Config::load()?;
 
-        for env in &config.llm_environments {
-            let llm_env = LlmEnvironment {
+        for env in &config.cc_environments {
+            let cc_env = ConfigCcEnvironment {
                 name: env.name.clone(),
                 provider: env.provider.clone(),
                 api_key: env.api_key.clone(),
                 base_url: env.base_url.clone(),
                 model: env.model.clone(),
-                temperature: env.temperature,
-                max_tokens: env.max_tokens,
                 description: env.description.clone(),
             };
 
-            self.environments.insert(env.name.clone(), llm_env);
+            self.environments.insert(env.name.clone(), cc_env);
         }
 
         Ok(())
     }
 }
 
-impl EnvironmentManager for LlmEnvironmentManager {
+impl EnvironmentManager for CcEnvironmentManager {
     fn environment_type(&self) -> EnvironmentType {
-        EnvironmentType::Llm
+        EnvironmentType::Cc
     }
 
     fn list(&self) -> Result<Vec<DynEnvironment>, String> {
@@ -89,38 +88,36 @@ impl EnvironmentManager for LlmEnvironmentManager {
 
         let provider = config.get("provider")
             .and_then(|v| v.as_str())
-            .unwrap_or("openai");
+            .unwrap_or("anthropic");
 
         let api_key = config.get("api_key")
             .and_then(|v| v.as_str())
-            .ok_or("Missing api_key in config")?;
+            .unwrap_or("");
 
         let base_url = config.get("base_url")
             .and_then(|v| v.as_str())
-            .unwrap_or("https://api.openai.com/v1");
+            .ok_or("Missing base_url in config")?;
 
         let model = config.get("model")
             .and_then(|v| v.as_str())
-            .unwrap_or("gpt-3.5-turbo");
+            .unwrap_or("claude-3-sonnet-20240229");
 
-        let default_desc = format!("LLM: {} ({})", name, model);
+        let default_desc = format!("CC: {} ({})", name, model);
         let description = config.get("description")
             .and_then(|v| v.as_str())
             .unwrap_or(&default_desc);
 
-        // Create LLM environment
-        let llm_environment = LlmEnvironment {
+        // Create CC environment
+        let cc_environment = ConfigCcEnvironment {
             name: name.to_string(),
             provider: provider.to_string(),
             description: description.to_string(),
             api_key: api_key.to_string(),
             base_url: base_url.to_string(),
             model: model.to_string(),
-            temperature: None,
-            max_tokens: None,
         };
 
-        self.environments.insert(name.to_string(), llm_environment);
+        self.environments.insert(name.to_string(), cc_environment);
         Ok(())
     }
 
@@ -128,46 +125,62 @@ impl EnvironmentManager for LlmEnvironmentManager {
         if self.environments.remove(name).is_some() {
             Ok(())
         } else {
-            Err(format!("LLM environment '{}' not found", name))
+            Err(format!("CC environment '{}' not found", name))
         }
     }
 
     fn use_env(&mut self, name: &str, shell_type: Option<ShellType>) -> Result<String, String> {
-        let llm_env = self.environments.get(name)
-            .ok_or_else(|| format!("LLM environment '{}' not found", name))?;
+        let cc_env = self.environments.get(name)
+            .ok_or_else(|| format!("CC environment '{}' not found", name))?;
 
         let shell_type = shell_type.unwrap_or_else(crate::infrastructure::shell::platform::detect_shell);
 
         // Create config for script generation
         let mut config = serde_json::json!({
-            "api_key": llm_env.api_key,
-            "base_url": llm_env.base_url,
-            "model": llm_env.model,
+            "api_key": cc_env.api_key,
+            "base_url": cc_env.base_url,
+            "model": cc_env.model,
         });
 
-        // Add Anthropic-specific environment variables for GLM_CC
-        if llm_env.provider == "anthropic" {
-            // For Anthropic/GLM_CC, set specific environment variables
-            let auth_token = if llm_env.api_key.starts_with("${") {
-                llm_env.resolve_env_var(&llm_env.api_key)
+        // Add CC-specific environment variables
+        if cc_env.provider == "anthropic" {
+            // For CC environments, always use Anthropic variables
+            let auth_token = if cc_env.api_key.starts_with("${") {
+                cc_env.resolve_env_var(&cc_env.api_key)
             } else {
-                llm_env.api_key.clone()
+                cc_env.api_key.clone()
             };
 
-            let base_url = if llm_env.base_url.starts_with("${") {
-                llm_env.resolve_env_var(&llm_env.base_url)
+            let base_url = if cc_env.base_url.starts_with("${") {
+                cc_env.resolve_env_var(&cc_env.base_url)
             } else {
-                llm_env.base_url.clone()
+                cc_env.base_url.clone()
             };
 
             config["anthropic_auth_token"] = serde_json::Value::String(auth_token);
             config["anthropic_base_url"] = serde_json::Value::String(base_url);
             config["api_timeout_ms"] = serde_json::Value::String("3000000".to_string());
             config["claude_code_disable_nonessential_traffic"] = serde_json::Value::Number(serde_json::Number::from(1));
+
+            // Add environment-specific model configuration
+            match name {
+                "glmcc" => {
+                    config["anthropic_default_sonnet_model"] = serde_json::Value::String("glm-4.6".to_string());
+                }
+                "anycc" => {
+                    config["anthropic_default_sonnet_model"] = serde_json::Value::String("claude-sonnet-4-5".to_string());
+                }
+                _ => {
+                    // For other environments, use the model specified in config
+                    if !cc_env.model.is_empty() {
+                        config["anthropic_default_sonnet_model"] = serde_json::Value::String(cc_env.model.clone());
+                    }
+                }
+            }
         }
 
         ScriptBuilder::build_switch_script(
-            EnvironmentType::Llm,
+            EnvironmentType::Cc,
             name,
             &config,
             shell_type
@@ -175,14 +188,18 @@ impl EnvironmentManager for LlmEnvironmentManager {
     }
 
     fn get_current(&self) -> Result<Option<String>, String> {
-        // Check environment variables to determine current LLM
-        if let Ok(_api_key) = std::env::var("OPENAI_API_KEY") {
-            // Try to identify which environment based on other variables
-            for (name, llm_env) in &self.environments {
-                if let Ok(current_api_key) = std::env::var("OPENAI_API_KEY") {
-                    if current_api_key == llm_env.api_key {
-                        return Ok(Some(name.clone()));
-                    }
+        // Check environment variables to determine current CC
+        if let (Ok(auth_token), Ok(base_url)) = (
+            std::env::var("ANTHROPIC_AUTH_TOKEN"),
+            std::env::var("ANTHROPIC_BASE_URL")
+        ) {
+            // Try to identify which environment based on variables
+            for (name, cc_env) in &self.environments {
+                let env_token = cc_env.resolve_env_var(&cc_env.api_key);
+                let env_base_url = cc_env.resolve_env_var(&cc_env.base_url);
+
+                if auth_token == env_token && base_url == env_base_url {
+                    return Ok(Some(name.clone()));
                 }
             }
         }
@@ -192,34 +209,32 @@ impl EnvironmentManager for LlmEnvironmentManager {
     fn scan(&self) -> Result<Vec<DynEnvironment>, String> {
         let mut result = Vec::new();
 
-        // "Scan" for LLM environments by checking Anthropic environment variables
+        // "Scan" for CC environments by checking Anthropic environment variables
         if let (Ok(auth_token), Ok(base_url)) = (
             std::env::var("ANTHROPIC_AUTH_TOKEN"),
             std::env::var("ANTHROPIC_BASE_URL")
         ) {
-            let llm_env = LlmEnvironment {
-                name: "anthropic-detected".to_string(),
+            let cc_env = ConfigCcEnvironment {
+                name: "cc-detected".to_string(),
                 provider: "anthropic".to_string(),
-                description: "Detected Anthropic environment from system variables".to_string(),
+                description: "Detected CC environment from system variables".to_string(),
                 api_key: auth_token,
                 base_url: base_url,
                 model: std::env::var("ANTHROPIC_MODEL").unwrap_or_else(|_| "claude-3-sonnet-20240229".to_string()),
-                temperature: None,
-                max_tokens: None,
             };
             result.push(DynEnvironment {
-                name: llm_env.name.clone(),
-                path: llm_env.base_url.clone(),
-                version: Some(llm_env.model.clone()),
-                description: Some(llm_env.description.clone()),
-                is_active: llm_env.is_active(),
+                name: cc_env.name.clone(),
+                path: cc_env.base_url.clone(),
+                version: Some(cc_env.model.clone()),
+                description: Some(cc_env.description.clone()),
+                is_active: cc_env.is_active(),
             });
         }
 
         Ok(result)
     }
 
-    fn set_current(&mut self, name: &str) -> Result<(), String> {
+    fn set_current(&mut self, _name: &str) -> Result<(), String> {
         // This would set the current environment by updating environment variables
         // For now, this is a no-op - the actual switching is handled by use_env
         Ok(())
@@ -234,22 +249,10 @@ impl EnvironmentManager for LlmEnvironmentManager {
     }
 }
 
-/// LLM Environment representation
-#[derive(Debug, Clone)]
-struct LlmEnvironment {
-    name: String,
-    provider: String,
-    description: String,
-    api_key: String,
-    base_url: String,
-    model: String,
-    temperature: Option<f64>,
-    max_tokens: Option<u32>,
-}
-
-impl LlmEnvironment {
+// 为 ConfigCcEnvironment 添加扩展方法
+impl ConfigCcEnvironment {
     fn is_active(&self) -> bool {
-        // Check if this environment is currently active (focus on Anthropic)
+        // Check if this environment is currently active
         match self.provider.as_str() {
             "anthropic" => {
                 // For Anthropic, check ANTHROPIC_AUTH_TOKEN and ANTHROPIC_BASE_URL

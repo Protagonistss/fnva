@@ -11,6 +11,8 @@ pub struct Config {
     #[serde(default)]
     pub llm_environments: Vec<LlmEnvironment>,
     #[serde(default)]
+    pub cc_environments: Vec<CcEnvironment>,
+    #[serde(default)]
     pub repositories: Repositories,
     /// 当前激活的 Java 环境名称
     #[serde(default)]
@@ -96,12 +98,28 @@ pub struct LlmEnvironment {
     pub description: String,
 }
 
+/// CC (Claude Code) 环境配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CcEnvironment {
+    pub name: String,
+    pub provider: String,
+    #[serde(default)]
+    pub api_key: String,
+    #[serde(default)]
+    pub base_url: String,
+    #[serde(default)]
+    pub model: String,
+    #[serde(default)]
+    pub description: String,
+}
+
 impl Config {
     /// 创建默认配置
     pub fn new() -> Self {
         Config {
             java_environments: Vec::new(),
             llm_environments: Vec::new(),
+            cc_environments: Vec::new(),
             repositories: Repositories {
                 java: default_java_repositories(),
                 maven: default_maven_repositories(),

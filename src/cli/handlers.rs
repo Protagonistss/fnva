@@ -23,6 +23,10 @@ impl CommandHandler {
         let llm_manager = crate::environments::llm::LlmEnvironmentManager::new();
         switcher.register_manager(Arc::new(Mutex::new(llm_manager)));
 
+        // 注册 CC 环境管理器
+        let cc_manager = crate::environments::cc::CcEnvironmentManager::new();
+        switcher.register_manager(Arc::new(Mutex::new(cc_manager)));
+
         Ok(Self { switcher })
     }
 
@@ -31,6 +35,7 @@ impl CommandHandler {
         match command {
             Commands::Java { action } => self.handle_java_command(action).await,
             Commands::Llm { action } => self.handle_llm_command(action).await,
+            Commands::Cc { action } => self.handle_cc_command(action).await,
             Commands::Env { action } => self.handle_env_command(action).await,
             Commands::NetworkTest => self.handle_network_test().await,
             Commands::History { env_type, limit, json } => {
@@ -72,11 +77,11 @@ impl CommandHandler {
                         print!("{}", result.script);
                     } else {
                         // 如果没有脚本，显示成功消息
-                        println!("✅ Switched to Java environment: {}", name);
+                        println!("Switched to Java environment: {}", name);
                     }
                 } else {
                     // 如果切换失败，显示错误信息
-                    eprintln!("❌ Failed to switch Java environment: {}",
+                    eprintln!("Failed to switch Java environment: {}",
                         result.error.unwrap_or_else(|| "Unknown error".to_string()));
                     return Err("Environment switch failed".to_string());
                 }
@@ -188,6 +193,62 @@ impl CommandHandler {
         Ok(())
     }
 
+    /// 处理 CC 命令
+    async fn handle_cc_command(&mut self, action: CcCommands) -> Result<(), String> {
+        match action {
+            CcCommands::List { json } => {
+                let output = self.switcher.list_environments(
+                    EnvironmentType::Cc,
+                    if json { OutputFormat::Json } else { OutputFormat::Text }
+                ).await?;
+                print!("{}", output);
+            }
+            CcCommands::Use { name, shell, json } => {
+                let shell_type = match shell {
+                    Some(s) => Some(parse_shell_type(&s)?),
+                    None => Some(crate::infrastructure::shell::platform::detect_shell()),
+                };
+                let result = self.switcher.switch_environment(
+                    EnvironmentType::Cc,
+                    &name,
+                    shell_type,
+                    Some("Manual switch via command".to_string())
+                ).await?;
+
+                // 对于 JSON 输出，格式化显示结果
+                if json {
+                    let output = FORMATTER.format_switch_result(&result, OutputFormat::Json)?;
+                    print!("{}", output);
+                } else if result.success {
+                    // 对于非 JSON 输出，直接输出切换脚本（类似 fnm 的行为）
+                    if !result.script.is_empty() {
+                        print!("{}", result.script);
+                    } else {
+                        // 如果没有脚本，显示成功消息
+                        println!("Switched to CC environment: {}", name);
+                    }
+                } else {
+                    // 如果切换失败，显示错误信息
+                    eprintln!("Failed to switch CC environment: {}",
+                        result.error.unwrap_or_else(|| "Unknown error".to_string()));
+                    return Err("Environment switch failed".to_string());
+                }
+            }
+            CcCommands::Current { json } => {
+                let output = self.switcher.get_current_environment(
+                    EnvironmentType::Cc,
+                    if json { OutputFormat::Json } else { OutputFormat::Text }
+                ).await?;
+                print!("{}", output);
+            }
+            // 其他 CC 命令...
+            _ => {
+                return Err("CC command not yet implemented in new architecture".to_string());
+            }
+        }
+        Ok(())
+    }
+
     /// 处理环境管理命令
     async fn handle_env_command(&mut self, action: EnvCommands) -> Result<(), String> {
         match action {
@@ -229,19 +290,28 @@ function fnva {
         [string[]]$Args
     )
 
-    if ($Args.Count -ge 3 -and $Args[0] -eq "java" -and $Args[1] -eq "use") {
+    if ($Args.Count -ge 3 -and $Args[1] -eq "use") {
+        $envType = $Args[0]
         $envName = $Args[2]
-        $output = & fnva.exe java use $envName --shell powershell 2>$null
+        $output = & fnva.exe $Args[0] use $Args[2] --shell powershell 2>$null
         if ($output -is [array]) {
             $script = $output -join "`r`n"
         } else {
             $script = $output
         }
 
-        if ($LASTEXITCODE -eq 0 -and $script -match "JAVA_HOME") {
+        # Check if script contains relevant environment variables
+        $isValidScript = $false
+        if ($envType -eq "java" -and $script -match "JAVA_HOME") {
+            $isValidScript = $true
+        } elseif ($envType -eq "cc" -and ($script -match "ANTHROPIC_AUTH_TOKEN" -or $script -match "ANTHROPIC_BASE_URL")) {
+            $isValidScript = $true
+        }
+
+        if ($LASTEXITCODE -eq 0 -and $isValidScript) {
             try {
                 Invoke-Expression $script
-                Write-Host "Switched to Java: $envName" -ForegroundColor Green
+                Write-Host "Switched to $envType`: $envName" -ForegroundColor Green
             } catch {
                 Write-Error "Failed to execute switch script: $($_.Exception.Message)"
             }

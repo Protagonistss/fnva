@@ -25,6 +25,11 @@ pub enum Commands {
         #[command(subcommand)]
         action: LlmCommands,
     },
+    /// CC (Claude Code) 环境管理
+    Cc {
+        #[command(subcommand)]
+        action: CcCommands,
+    },
     /// 环境切换和管理
     Env {
         #[command(subcommand)]
@@ -219,6 +224,60 @@ pub enum LlmCommands {
     },
 }
 
+/// CC (Claude Code) 环境管理命令
+#[derive(Subcommand)]
+pub enum CcCommands {
+    /// 列出所有 CC 环境
+    List {
+        /// JSON 格式输出
+        #[arg(long)]
+        json: bool,
+    },
+    /// 切换到指定的 CC 环境
+    Use {
+        /// 环境名称
+        name: String,
+        /// Shell 类型
+        #[arg(short, long)]
+        shell: Option<String>,
+        /// JSON 格式输出
+        #[arg(long)]
+        json: bool,
+    },
+    /// 添加 CC 环境
+    Add {
+        /// 环境名称
+        #[arg(short, long)]
+        name: String,
+        /// 提供商
+        #[arg(short, long)]
+        provider: String,
+        /// API Key
+        #[arg(short = 'k', long)]
+        api_key: Option<String>,
+        /// Base URL
+        #[arg(short = 'u', long)]
+        base_url: Option<String>,
+        /// 模型名称
+        #[arg(short, long)]
+        model: Option<String>,
+        /// 描述
+        #[arg(short = 'd', long)]
+        description: Option<String>,
+    },
+    /// 删除 CC 环境
+    Remove {
+        /// 环境名称
+        name: String,
+    },
+    /// 显示当前激活的 CC 环境
+    Current {
+        /// JSON 格式输出
+        #[arg(long)]
+        json: bool,
+    },
+}
+
 /// 环境管理命令
 #[derive(Subcommand)]
 pub enum EnvCommands {
@@ -311,6 +370,7 @@ pub fn parse_environment_type(env_type_str: &str) -> Result<EnvironmentType, Str
     match env_type_str.to_lowercase().as_str() {
         "java" => Ok(EnvironmentType::Java),
         "llm" => Ok(EnvironmentType::Llm),
+        "cc" => Ok(EnvironmentType::Cc),
         "maven" => Ok(EnvironmentType::Maven),
         "gradle" => Ok(EnvironmentType::Gradle),
         "python" => Ok(EnvironmentType::Python),
