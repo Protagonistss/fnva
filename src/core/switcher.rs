@@ -401,11 +401,13 @@ impl EnvironmentSwitcher {
         let manager = self.managers.get(&env_type)
             .ok_or_else(|| format!("No manager registered for environment type: {:?}", env_type))?;
 
+        // 一次性加载配置，避免重复读取
+        let config = Config::load()?;
+
         let manager = manager.lock().unwrap();
         let environments = manager.list()?;
 
-        // 获取当前环境和默认环境
-        let config = Config::load()?;
+        // 获取当前环境
         let current_env = {
             let session_manager = self.session_manager.lock().unwrap();
             session_manager.get_current_environment(env_type).cloned()

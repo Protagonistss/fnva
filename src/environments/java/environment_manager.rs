@@ -8,21 +8,31 @@ use serde_json;
 /// Java 环境管理器
 pub struct JavaEnvironmentManager {
     installations: HashMap<String, crate::environments::java::scanner::JavaInstallation>,
+    /// 路径规范化缓存
+    path_cache: HashMap<String, String>,
 }
 
 impl JavaEnvironmentManager {
-    /// 创建新的 Java 环境管理器
+    /// 创建新的 Java 环境管理器（仅从配置文件加载，不进行系统扫描）
     pub fn new() -> Self {
         let mut manager = Self {
             installations: HashMap::new(),
+            path_cache: HashMap::new(),
         };
 
-        // 首先从配置文件加载环境
+        // 仅从配置文件加载环境
         if let Err(e) = manager.load_from_config() {
             eprintln!("Warning: Failed to load environments from config: {}", e);
         }
 
-        // 然后扫描系统中的 Java 环境，添加新发现的环境
+        manager
+    }
+
+    /// 创建新的 Java 环境管理器并进行系统扫描
+    pub fn new_with_scan() -> Self {
+        let mut manager = Self::new();
+
+        // 扫描系统中的 Java 环境，添加新发现的环境
         if let Ok(installations) = JavaScanner::scan_system() {
             for installation in installations {
                 let name = installation.name.clone();
@@ -38,6 +48,26 @@ impl JavaEnvironmentManager {
         }
 
         manager
+    }
+
+    /// 扫描系统并更新环境列表
+    pub fn scan_and_update(&mut self) -> Result<(), String> {
+        // 扫描系统中的 Java 环境
+        let installations = JavaScanner::scan_system()?;
+
+        for installation in installations {
+            let name = installation.name.clone();
+            // 只有当环境中不存在时才添加
+            if !self.installations.contains_key(&name) {
+                // 将扫描发现的环境保存到配置文件中
+                if let Err(e) = Self::save_scanned_environment_to_config(&installation) {
+                    eprintln!("Warning: Failed to save scanned environment to config: {}", e);
+                }
+                self.installations.insert(name, installation);
+            }
+        }
+
+        Ok(())
     }
 
     /// 从配置文件加载 Java 环境
@@ -214,6 +244,19 @@ impl JavaEnvironmentManager {
             }
         }
     }
+
+    /// 缓存的路径规范化方法
+    fn normalize_path_cached(&mut self, path: &str) -> String {
+        // 如果缓存中存在，直接返回
+        if let Some(cached) = self.path_cache.get(path) {
+            return cached.clone();
+        }
+
+        // 否则计算并缓存
+        let normalized = Self::normalize_path_impl(path);
+        self.path_cache.insert(path.to_string(), normalized.clone());
+        normalized
+    }
 }
 
 impl EnvironmentManager for JavaEnvironmentManager {
@@ -224,7 +267,7 @@ impl EnvironmentManager for JavaEnvironmentManager {
     fn list(&self) -> Result<Vec<DynEnvironment>, String> {
         let mut result = Vec::new();
 
-        // 加载配置以检查移除列表
+        // 加载配置以检查移除列表（一次性加载）
         let config = crate::infrastructure::config::Config::load().unwrap_or_else(|_| {
             eprintln!("Warning: Failed to load config for removed names check");
             crate::infrastructure::config::Config::new()
@@ -410,6 +453,7 @@ impl EnvironmentManager for JavaEnvironmentManager {
         Ok(result)
     }
 
+    
     fn set_current(&mut self, name: &str) -> Result<(), String> {
         // This would set the current environment, but for Java this is typically
         // handled by setting JAVA_HOME environment variable
