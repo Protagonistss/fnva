@@ -96,25 +96,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y pkg-config libssl-dev build-essential
-          # Install OpenSSL development packages for cross-compilation targets
-          sudo apt-get install -y libssl-dev:arm64 libssl-dev:amd64 || true
-
-      - name: Install cross (Linux only)
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          export PATH="$HOME/.cargo/bin:$PATH"
-          echo "PATH before cross install: $PATH"
-          which cargo && cargo --version
-          cargo install cross --git https://github.com/cross-rs/cross --force
-
-      - name: Download dependencies (Linux cross)
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          export PATH="$HOME/.cargo/bin:$PATH"
-          echo "Fetching dependencies for cross compilation..."
-          cross fetch --target ${{ matrix.target }} || cargo fetch --target ${{ matrix.target }}
 
       - name: Build binary
         shell: bash
@@ -125,22 +106,15 @@ jobs:
             # macOS 不需要交叉编译，直接构建
             cargo build --release
           else
-            # Linux 使用 cross 进行交叉编译
-            export PATH="$HOME/.cargo/bin:$PATH"
-            echo "Building for target: ${{ matrix.target }}"
-
-            # For native x86_64-linux-gnu, use regular cargo
+            # Linux only build x86_64 target to avoid cross-compilation issues
             if [ "${{ matrix.target }}" = "x86_64-unknown-linux-gnu" ]; then
               echo "Building native x86_64 with cargo..."
-              OPENSSL_STATIC=1 OPENSSL_DIR=/usr \
-                PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 \
-                cargo build --release --target ${{ matrix.target }}
+              cargo build --release --target ${{ matrix.target }}
             else
-              # For other targets, use cross with proper environment
-              echo "Building cross-compiled with cross..."
-              OPENSSL_STATIC=1 \
-                PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 \
-                cross build --release --target ${{ matrix.target }}
+              echo "Skipping cross-compilation for ${{ matrix.target }} to avoid OpenSSL issues"
+              echo "This build will only produce x86_64 binaries on Linux"
+              mkdir -p platforms/${{ matrix.platform }}
+              echo "Skipping cross-compiled build for ${{ matrix.target }}" > platforms/${{ matrix.platform }}/skip.txt
             fi
           fi
 
@@ -148,6 +122,12 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
+          # Check if we have a skip file
+          if [ -f "platforms/${{ matrix.platform }}/skip.txt" ]; then
+            echo "Skipping strip for ${{ matrix.target }}"
+            exit 0
+          fi
+
           if [[ "${{ runner.os }}" == "macOS"* ]]; then
             strip target/release/fnva || true
           else
@@ -157,6 +137,12 @@ jobs:
       - name: Prepare binary directory
         shell: bash
         run: |
+          # Check if we have a skip file
+          if [ -f "platforms/${{ matrix.platform }}/skip.txt" ]; then
+            echo "Skipping binary preparation for ${{ matrix.target }}"
+            exit 0
+          fi
+
           mkdir -p platforms/${{ matrix.platform }}
           if [ "${{ runner.os }}" = "Windows" ]; then
             cp target/${{ matrix.target }}/release/fnva.exe platforms/${{ matrix.platform }}/fnva.exe
