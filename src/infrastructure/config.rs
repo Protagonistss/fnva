@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// 配置文件结构
 #[derive(Debug, Serialize, Deserialize)]
@@ -18,6 +18,12 @@ pub struct Config {
     /// 默认 Java 环境名称（类似 fnm 的默认版本）
     #[serde(default)]
     pub default_java_env: Option<String>,
+    /// 自定义 Java 扫描路径
+    #[serde(default)]
+    pub custom_java_scan_paths: Vec<String>,
+    /// 明确移除的 Java 环境名称（防止重新扫描添加）
+    #[serde(default)]
+    pub removed_java_names: Vec<String>,
 }
 
 /// 仓库配置
@@ -51,6 +57,24 @@ pub struct JavaEnvironment {
     pub java_home: String,
     #[serde(default)]
     pub description: String,
+    /// 环境来源：manual（手动添加）或 scanned（扫描发现）
+    #[serde(default)]
+    pub source: EnvironmentSource,
+}
+
+/// 环境来源
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum EnvironmentSource {
+    #[serde(rename = "manual")]
+    Manual,
+    #[serde(rename = "scanned")]
+    Scanned,
+}
+
+impl Default for EnvironmentSource {
+    fn default() -> Self {
+        EnvironmentSource::Manual
+    }
 }
 
 /// LLM 环境配置
@@ -84,6 +108,8 @@ impl Config {
             },
             current_java_env: None,
             default_java_env: None,
+            custom_java_scan_paths: Vec::new(),
+            removed_java_names: Vec::new(),
         }
     }
 
@@ -233,6 +259,48 @@ impl Config {
             self.get_java_env(name)
         } else {
             None
+        }
+    }
+
+    /// 添加移除的 Java 环境名称
+    pub fn add_removed_java_name(&mut self, name: &str) {
+        if !self.removed_java_names.contains(&name.to_string()) {
+            self.removed_java_names.push(name.to_string());
+        }
+    }
+
+    /// 检查 Java 环境名称是否已被移除
+    pub fn is_java_name_removed(&self, name: &str) -> bool {
+        self.removed_java_names.contains(&name.to_string())
+    }
+
+    /// 移除 Java 环境名称（从移除列表中恢复）
+    pub fn remove_java_name_from_removed_list(&mut self, name: &str) {
+        self.removed_java_names.retain(|n| n != name);
+    }
+}
+
+/// 标准化路径格式
+fn normalize_path(path: &str) -> String {
+    let path = Path::new(path);
+
+    // 获取规范化路径
+    match path.canonicalize() {
+        Ok(canonical_path) => {
+            // 转换回字符串，处理 Windows 长路径前缀
+            let canonical_str = canonical_path.to_string_lossy();
+            // 移除 Windows 长路径前缀 \\?\
+            if canonical_str.starts_with("\\\\?\\") {
+                canonical_str[4..].to_string()
+            } else {
+                canonical_str.to_string()
+            }
+        }
+        Err(_) => {
+            // 如果无法规范化，至少标准化分隔符
+            path.to_string_lossy()
+                .replace('\\', "/")
+                .to_lowercase()
         }
     }
 }

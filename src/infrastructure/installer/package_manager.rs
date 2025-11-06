@@ -52,6 +52,7 @@ impl JavaPackageManager {
             name: env_name.clone(),
             java_home: package_path.clone(),
             description,
+            source: crate::config::EnvironmentSource::Manual,
         })?;
         config.save()?;
 

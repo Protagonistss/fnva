@@ -44,6 +44,7 @@ impl JavaInstaller {
             name: install_name.clone(),
             java_home: java_home.clone(),
             description,
+            source: crate::config::EnvironmentSource::Manual,
         })?;
         config.save()?;
 

@@ -224,6 +224,7 @@ try {{
             name,
             java_home,
             description: description.unwrap_or_default(),
+            source: crate::config::EnvironmentSource::Manual,
         };
 
         config.add_java_env(env)?;

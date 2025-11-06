@@ -7,10 +7,12 @@
 - ✅ **Java 环境管理**：快速切换不同版本的 JDK
 - ✅ **默认环境支持**：类似 fnm，支持设置默认 Java 环境
 - ✅ **自动加载**：新 Shell 会话自动加载默认环境
+- ✅ **智能扫描**：高效扫描系统 Java 安装，支持自定义路径
 - ✅ **LLM 环境管理**：支持多 LLM 提供商配置切换
 - ✅ **跨平台支持**：Windows、macOS、Linux
 - ✅ **多 Shell 支持**：bash、zsh、fish、PowerShell、CMD
-- ✅ **自动扫描**：自动检测系统中的 Java 安装
+- ✅ **配置化扫描**：支持配置文件和环境变量自定义扫描路径
+- ✅ **高效去重**：智能去除重复的 Java 环境条目
 - ✅ **环境变量引用**：支持 `${VAR_NAME}` 格式引用系统环境变量
 
 ## 安装
@@ -51,12 +53,6 @@ Windows 用户需要将 `target\release\fnva.exe` 添加到 PATH 环境变量中
 
 ```bash
 fnva java list
-```
-
-#### 扫描系统中的 Java 安装
-
-```bash
-fnva java scan
 ```
 
 #### 添加 Java 环境
@@ -105,6 +101,52 @@ fnva java current
 ```bash
 fnva java remove jdk-17
 ```
+
+#### 扫描系统中的 Java 安装
+
+```bash
+fnva java scan
+```
+
+**扫描功能详解：**
+
+**基础扫描：**
+- 自动检测系统标准 Java 安装路径
+- 扫描用户主目录下的 `.fnva/java-packages`
+- 检查 PATH 环境变量中的 Java 可执行文件
+
+**自定义扫描路径：**
+
+1. **配置文件方式**（推荐）：
+   ```toml
+   # ~/.fnva/config.toml
+   custom_java_scan_paths = [
+       "D:\\tools\\java",
+       "/opt/custom/java",
+       "/home/user/my-jdks"
+   ]
+   ```
+
+2. **环境变量方式**：
+   ```bash
+   # 临时添加扫描路径
+   export FNVA_SCAN_PATHS="/path/to/jdk1:/path/to/jdk2"
+   fnva java scan
+
+   # Windows
+   set FNVA_SCAN_PATHS=D:\tools\java;E:\other\java
+   fnva java scan
+   ```
+
+**扫描性能：**
+- 🔒 **安全**：只扫描指定路径，不进行全盘搜索
+- ⚡ **快速**：使用高效的去重算法，避免重复处理
+- 🎯 **精确**：智能识别 Java 安装，过滤无效路径
+
+**支持的扫描路径：**
+- Windows：`C:\Program Files\Java`、`C:\Program Files\Eclipse Adoptium` 等
+- macOS：`/Library/Java/JavaVirtualMachines`、`/opt/homebrew/Caskroom` 等
+- Linux：`/usr/lib/jvm`、`/opt/java`、`/usr/local/java` 等
 
 ### LLM 环境管理
 
@@ -296,7 +338,9 @@ fnva 类似 fnm 的工作方式：
 - **Linux/macOS**: `~/.fnva/config.toml`
 - **Windows**: `%USERPROFILE%\.fnva\config.toml`
 
-默认环境配置示例：
+#### 配置示例
+
+**基础配置：**
 ```toml
 default_java_env = "jdk21.0.6"
 
@@ -305,6 +349,32 @@ name = "jdk21.0.6"
 java_home = "E:\\env\\jdks\\jdk-21.0.6"
 description = "Java 21.0.6 LTS"
 ```
+
+**自定义扫描路径配置：**
+```toml
+# 自定义 Java 扫描路径
+custom_java_scan_paths = [
+    "D:\\tools\\java",
+    "/opt/custom/java",
+    "/home/user/my-jdks"
+]
+```
+
+**环境变量支持：**
+```bash
+# Linux/macOS
+export FNVA_SCAN_PATHS="/path/to/jdk1:/path/to/jdk2"
+
+# Windows
+set FNVA_SCAN_PATHS=D:\tools\java;E:\other\java
+```
+
+**支持的扫描路径类型：**
+- 系统标准 Java 安装目录
+- 用户主目录下的 `.fnva/java-packages`
+- 配置文件中的自定义路径
+- 环境变量 `FNVA_SCAN_PATHS` 指定的路径
+- PATH 环境变量中的 Java 可执行文件
 
 ## 许可证
 

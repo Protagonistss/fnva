@@ -17,15 +17,180 @@ impl JavaEnvironmentManager {
             installations: HashMap::new(),
         };
 
-        // 初始化时扫描已有的 Java 环境
+        // 首先从配置文件加载环境
+        if let Err(e) = manager.load_from_config() {
+            eprintln!("Warning: Failed to load environments from config: {}", e);
+        }
+
+        // 然后扫描系统中的 Java 环境，添加新发现的环境
         if let Ok(installations) = JavaScanner::scan_system() {
             for installation in installations {
                 let name = installation.name.clone();
-                manager.installations.insert(name, installation);
+                // 只有当环境中不存在时才添加
+                if !manager.installations.contains_key(&name) {
+                    // 将扫描发现的环境也保存到配置文件中
+                    if let Err(e) = Self::save_scanned_environment_to_config(&installation) {
+                        eprintln!("Warning: Failed to save scanned environment to config: {}", e);
+                    }
+                    manager.installations.insert(name, installation);
+                }
             }
         }
 
         manager
+    }
+
+    /// 从配置文件加载 Java 环境
+    fn load_from_config(&mut self) -> Result<(), String> {
+        use crate::infrastructure::config::Config;
+
+        let config = Config::load()?;
+
+        for env in &config.java_environments {
+            let installation = crate::environments::java::scanner::JavaInstallation {
+                name: env.name.clone(),
+                description: env.description.clone(),
+                java_home: env.java_home.clone(),
+                version: None, // 将在需要时检测
+                vendor: None,   // 将在需要时检测
+            };
+
+            self.installations.insert(env.name.clone(), installation);
+        }
+
+        Ok(())
+    }
+
+    /// 保存环境到配置文件
+    fn save_to_config_impl(name: &str, java_home: &str, description: &str) -> Result<(), String> {
+        use crate::infrastructure::config::{Config, JavaEnvironment};
+
+        let mut config = Config::load()?;
+
+        // Check if environment already exists and update it (overwrite)
+        if let Some(existing_env) = config.java_environments.iter_mut().find(|env| env.name == name) {
+            // Update existing environment
+            existing_env.java_home = java_home.to_string();
+            existing_env.description = description.to_string();
+            existing_env.source = crate::infrastructure::config::EnvironmentSource::Manual;
+        } else {
+            // Add new environment
+            let new_env = JavaEnvironment {
+                name: name.to_string(),
+                java_home: java_home.to_string(),
+                description: description.to_string(),
+                source: crate::infrastructure::config::EnvironmentSource::Manual,
+            };
+            config.java_environments.push(new_env);
+        }
+
+        config.save()?;
+
+        Ok(())
+    }
+
+    /// 将扫描发现的环境保存到配置文件
+    fn save_scanned_environment_to_config(installation: &crate::environments::java::scanner::JavaInstallation) -> Result<(), String> {
+        use crate::infrastructure::config::{Config, JavaEnvironment, EnvironmentSource};
+
+        let mut config = Config::load()?;
+
+        // 检查是否已经被用户明确移除（基于名称）
+        if config.is_java_name_removed(&installation.name) {
+            return Ok(()); // 被用户移除，不要重新添加
+        }
+
+        // 检查是否已经存在，如果存在则更新（覆盖）
+        if let Some(existing_env) = config.java_environments.iter_mut().find(|env| env.name == installation.name) {
+            // 更新现有环境的信息
+            existing_env.java_home = installation.java_home.clone();
+            existing_env.description = installation.description.clone();
+            if existing_env.source == EnvironmentSource::Manual {
+                // 如果是手动添加的，保持 source 为 Manual
+            } else {
+                existing_env.source = EnvironmentSource::Scanned;
+            }
+            config.save()?;
+            return Ok(());
+        }
+
+        // 添加新的扫描发现的环境
+        let scanned_env = JavaEnvironment {
+            name: installation.name.clone(),
+            java_home: installation.java_home.clone(),
+            description: installation.description.clone(),
+            source: EnvironmentSource::Scanned,
+        };
+
+        config.java_environments.push(scanned_env);
+        config.save()?;
+
+        Ok(())
+    }
+
+    /// 从移除列表中移除名称（允许重新添加）
+    fn remove_name_from_removed_list(name: &str) -> Result<(), String> {
+        use crate::infrastructure::config::Config;
+
+        let mut config = Config::load()?;
+        config.remove_java_name_from_removed_list(name);
+        config.save()?;
+        Ok(())
+    }
+
+    /// 从配置文件中删除环境
+    fn remove_from_config(name: &str) -> Result<(), String> {
+        use crate::infrastructure::config::Config;
+
+        let mut config = Config::load()?;
+
+        // 查找并删除指定的环境
+        let original_len = config.java_environments.len();
+        config.java_environments.retain(|env| env.name != name);
+
+        if config.java_environments.len() == original_len {
+            return Err(format!("Java environment '{}' not found in config", name));
+        }
+
+        // 将删除的环境名称添加到移除列表
+        config.add_removed_java_name(name);
+
+        // 保存配置文件
+        config.save()?;
+
+        Ok(())
+    }
+
+    /// 检测 Java 版本（辅助方法）
+    fn detect_java_version(java_home: &str) -> Result<Option<String>, String> {
+        use std::process::Command;
+
+        let java_exe = if cfg!(target_os = "windows") {
+            format!("{}\\bin\\java.exe", java_home)
+        } else {
+            format!("{}/bin/java", java_home)
+        };
+
+        let output = Command::new(&java_exe)
+            .arg("-version")
+            .output()
+            .map_err(|e| format!("Failed to execute java -version: {}", e))?;
+
+        if output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let lines: Vec<&str> = stderr.lines().collect();
+            if let Some(first_line) = lines.first() {
+                // 解析版本信息，例如："openjdk version "17.0.2" 2022-01-18"
+                if let Some(start) = first_line.find('"') {
+                    if let Some(end) = first_line.rfind('"') {
+                        let version = &first_line[start + 1..end];
+                        return Ok(Some(version.to_string()));
+                    }
+                }
+            }
+        }
+
+        Ok(None)
     }
 
     /// 标准化路径格式（与 scanner 中的方法相同）
@@ -58,14 +223,27 @@ impl EnvironmentManager for JavaEnvironmentManager {
 
     fn list(&self) -> Result<Vec<DynEnvironment>, String> {
         let mut result = Vec::new();
+
+        // 加载配置以检查移除列表
+        let config = crate::infrastructure::config::Config::load().unwrap_or_else(|_| {
+            eprintln!("Warning: Failed to load config for removed names check");
+            crate::infrastructure::config::Config::new()
+        });
+
         for installation in self.installations.values() {
-            result.push(DynEnvironment {
-                name: installation.name.clone(),
-                path: installation.java_home.clone(),
-                version: installation.version.clone(),
-                description: Some(installation.description.clone()),
-                is_active: installation.is_active(),
-            });
+            // 检查是否已经被移除（基于名称）
+            let is_removed = config.is_java_name_removed(&installation.name);
+
+            // 只显示未被移除的环境
+            if !is_removed {
+                result.push(DynEnvironment {
+                    name: installation.name.clone(),
+                    path: installation.java_home.clone(),
+                    version: installation.version.clone(),
+                    description: Some(installation.description.clone()),
+                    is_active: installation.is_active(),
+                });
+            }
         }
         Ok(result)
     }
@@ -102,23 +280,39 @@ impl EnvironmentManager for JavaEnvironmentManager {
         let installation = crate::environments::java::scanner::JavaScanner::create_installation_from_path(java_home)
             .map_err(|e| format!("Failed to create Java installation: {}", e))?;
 
+        // Extract version info before moving
+        let version_info = installation.version.as_deref().unwrap_or("unknown");
+
         // Override the name with the provided one
         let java_installation = crate::environments::java::scanner::JavaInstallation {
             name: name.to_string(),
-            description: format!("Java {} ({})",
-                installation.version.as_deref().unwrap_or("unknown"),
-                java_home),
+            description: format!("Java {} ({})", version_info, java_home),
             java_home: java_home.to_string(),
-            version: installation.version,
+            version: installation.version.clone(),
             vendor: installation.vendor,
         };
 
+        // If this name was previously removed, remove it from the removed list
+        Self::remove_name_from_removed_list(name)?;
+
+        // Add to in-memory installations
         self.installations.insert(name.to_string(), java_installation);
+
+        // Also save to configuration file
+        Self::save_to_config_impl(name, java_home, &format!("Java {} ({})", version_info, java_home))?;
+
         Ok(())
     }
 
     fn remove(&mut self, name: &str) -> Result<(), String> {
+        // 首先从内存中移除
         if self.installations.remove(name).is_some() {
+            // 尝试从配置文件中删除（如果存在的话）
+            if let Err(e) = Self::remove_from_config(name) {
+                // 如果配置文件中没有这个环境，那也没关系
+                // 可能是通过扫描发现的环境
+                eprintln!("Note: {}", e);
+            }
             Ok(())
         } else {
             Err(format!("Java environment '{}' not found", name))
@@ -165,14 +359,21 @@ impl EnvironmentManager for JavaEnvironmentManager {
         let mut result = Vec::new();
         let mut seen_paths = std::collections::HashSet::new();
 
-        // 添加已配置的环境
-        for (_, installation) in &self.installations {
+        // 首先添加已配置的环境（优先级更高）
+        for (name, installation) in &self.installations {
             let normalized_path = Self::normalize_path_impl(&installation.java_home);
             if !seen_paths.contains(&normalized_path) {
+                // 检测版本信息（如果还没有）
+                let version = if installation.version.is_none() {
+                    Self::detect_java_version(&installation.java_home).ok().flatten()
+                } else {
+                    installation.version.clone()
+                };
+
                 result.push(DynEnvironment {
-                    name: installation.name.clone(),
+                    name: name.clone(),
                     path: installation.java_home.clone(),
-                    version: installation.version.clone(),
+                    version,
                     description: Some(installation.description.clone()),
                     is_active: installation.is_active(),
                 });
@@ -180,20 +381,31 @@ impl EnvironmentManager for JavaEnvironmentManager {
             }
         }
 
-        // 添加扫描到的新环境（不包括已存在的）
+        // 然后添加扫描到的新环境（不包括已存在的路径）
+        let config = crate::infrastructure::config::Config::load().unwrap_or_else(|_| {
+            eprintln!("Warning: Failed to load config for removed names check");
+            crate::infrastructure::config::Config::new()
+        });
+
         for installation in installations {
             let normalized_path = Self::normalize_path_impl(&installation.java_home);
             if !seen_paths.contains(&normalized_path) {
-                result.push(DynEnvironment {
-                    name: installation.name.clone(),
-                    path: installation.java_home.clone(),
-                    version: installation.version.clone(),
-                    description: Some(installation.description.clone()),
-                    is_active: installation.is_active(),
-                });
-                seen_paths.insert(normalized_path);
+                // 检查该名称是否已被移除
+                if !config.is_java_name_removed(&installation.name) {
+                    result.push(DynEnvironment {
+                        name: installation.name.clone(),
+                        path: installation.java_home.clone(),
+                        version: installation.version.clone(),
+                        description: Some(installation.description.clone()),
+                        is_active: installation.is_active(),
+                    });
+                    seen_paths.insert(normalized_path);
+                }
             }
         }
+
+        // 按名称排序
+        result.sort_by(|a, b| a.name.cmp(&b.name));
 
         Ok(result)
     }

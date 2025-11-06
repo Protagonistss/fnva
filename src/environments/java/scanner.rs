@@ -21,8 +21,25 @@ impl EnvironmentInfo for JavaInstallation {
     }
 
     fn is_active(&self) -> bool {
-        // TODO: 检查是否是当前激活的环境
-        false
+        // 检查是否是当前激活的环境
+        if let Ok(java_home) = std::env::var("JAVA_HOME") {
+            // 标准化两个路径进行比较
+            let current_home = std::path::Path::new(&java_home)
+                .canonicalize()
+                .unwrap_or_else(|_| java_home.into())
+                .to_string_lossy()
+                .to_lowercase();
+
+            let install_home = std::path::Path::new(&self.java_home)
+                .canonicalize()
+                .unwrap_or_else(|_| self.java_home.clone().into())
+                .to_string_lossy()
+                .to_lowercase();
+
+            current_home == install_home
+        } else {
+            false
+        }
     }
 
     fn get_identifier(&self) -> &str {
@@ -117,11 +134,19 @@ impl JavaScanner {
                 r"C:\Program Files\Eclipse Adoptium".to_string(),
                 r"C:\Program Files\Amazon Corretto".to_string(),
                 r"C:\Program Files\Microsoft\jdk".to_string(),
-                r"C:\Program Files\Zulu\zulu-".to_string(),
-                // 添加 fnva 专用的 Java 包目录
-                r"C:\Users\Administrator\.fnva\java-packages".to_string(),
-                r"E:\env\jdks".to_string(),  // 用户之前提到的路径
+                r"C:\Program Files\Zulu".to_string(),
             ]);
+
+            // 动态添加用户相关的路径
+            if let Some(home_dir) = dirs::home_dir() {
+                let home_str = home_dir.to_string_lossy();
+                paths.push(format!("{}\\.fnva\\java-packages", home_str));
+            }
+
+            // 从配置文件读取自定义路径（如果存在）
+            if let Ok(custom_paths) = Self::get_custom_scan_paths() {
+                paths.extend(custom_paths);
+            }
         } else if cfg!(target_os = "macos") {
             // macOS 常见路径
             paths.extend_from_slice(&[
@@ -130,6 +155,17 @@ impl JavaScanner {
                 "/usr/local/java".to_string(),
                 "/opt/homebrew/Caskroom".to_string(),
             ]);
+
+            // 动态添加用户相关的路径
+            if let Some(home_dir) = dirs::home_dir() {
+                let home_str = home_dir.to_string_lossy();
+                paths.push(format!("{}/.fnva/java-packages", home_str));
+            }
+
+            // 从配置文件读取自定义路径
+            if let Ok(custom_paths) = Self::get_custom_scan_paths() {
+                paths.extend(custom_paths);
+            }
         } else {
             // Linux 常见路径
             paths.extend_from_slice(&[
@@ -139,9 +175,47 @@ impl JavaScanner {
                 "/opt/java".to_string(),
                 "/usr/java".to_string(),
             ]);
+
+            // 动态添加用户相关的路径
+            if let Some(home_dir) = dirs::home_dir() {
+                let home_str = home_dir.to_string_lossy();
+                paths.push(format!("{}/.fnva/java-packages", home_str));
+            }
+
+            // 从配置文件读取自定义路径
+            if let Ok(custom_paths) = Self::get_custom_scan_paths() {
+                paths.extend(custom_paths);
+            }
         }
 
         paths
+    }
+
+    /// 从配置文件获取自定义扫描路径
+    fn get_custom_scan_paths() -> Result<Vec<String>, String> {
+        use crate::infrastructure::config::Config;
+
+        let config = Config::load().map_err(|e| format!("Failed to load config: {}", e))?;
+
+        let mut custom_paths = Vec::new();
+
+        // 从配置文件的自定义扫描路径读取
+        for path in &config.custom_java_scan_paths {
+            if !path.trim().is_empty() {
+                custom_paths.push(path.trim().to_string());
+            }
+        }
+
+        // 从环境变量读取额外路径
+        if let Ok(env_paths) = std::env::var("FNVA_SCAN_PATHS") {
+            for path in env_paths.split(';') {
+                if !path.trim().is_empty() {
+                    custom_paths.push(path.trim().to_string());
+                }
+            }
+        }
+
+        Ok(custom_paths)
     }
 
     /// 检查路径是否是有效的 Java 安装

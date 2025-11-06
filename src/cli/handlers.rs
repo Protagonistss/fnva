@@ -92,9 +92,12 @@ impl CommandHandler {
                 let output = self.switcher.scan_environments(EnvironmentType::Java).await?;
                 print!("{}", output);
             }
-            JavaCommands::Add { name, home, description: _ } => {
-                // TODO: 实现添加 Java 环境
-                println!("Adding Java environment: {} from {}", name, home);
+            JavaCommands::Add { name, home, description } => {
+                let config_value = serde_json::json!({
+                    "java_home": home
+                });
+                let output = self.switcher.add_environment(EnvironmentType::Java, &name, config_value).await?;
+                print!("{}", output);
             }
             JavaCommands::Remove { name } => {
                 let output = self.switcher.remove_environment(EnvironmentType::Java, &name).await?;
