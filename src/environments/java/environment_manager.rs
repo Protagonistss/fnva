@@ -27,6 +27,28 @@ impl JavaEnvironmentManager {
 
         manager
     }
+
+    /// 标准化路径格式（与 scanner 中的方法相同）
+    fn normalize_path_impl(path: &str) -> String {
+        use std::path::Path;
+
+        // 转换为 Path 对象来标准化路径分隔符
+        let path = Path::new(path);
+
+        // 获取规范化路径
+        match path.canonicalize() {
+            Ok(canonical_path) => {
+                // 转换回字符串，保持原始格式
+                canonical_path.to_string_lossy().to_string()
+            }
+            Err(_) => {
+                // 如果无法规范化，至少标准化分隔符
+                path.to_string_lossy()
+                    .replace('\\', "/")
+                    .to_lowercase()
+            }
+        }
+    }
 }
 
 impl EnvironmentManager for JavaEnvironmentManager {
@@ -124,9 +146,13 @@ impl EnvironmentManager for JavaEnvironmentManager {
     fn get_current(&self) -> Result<Option<String>, String> {
         // Check environment variable JAVA_HOME to determine current
         if let Ok(java_home) = std::env::var("JAVA_HOME") {
+            // Normalize the JAVA_HOME path for comparison
+            let normalized_current = Self::normalize_path_impl(&java_home);
+
             // Find which environment matches this JAVA_HOME
             for (name, installation) in &self.installations {
-                if installation.java_home == java_home {
+                let normalized_installation = Self::normalize_path_impl(&installation.java_home);
+                if normalized_installation == normalized_current {
                     return Ok(Some(name.clone()));
                 }
             }
@@ -137,15 +163,36 @@ impl EnvironmentManager for JavaEnvironmentManager {
     fn scan(&self) -> Result<Vec<DynEnvironment>, String> {
         let installations = JavaScanner::scan_system()?;
         let mut result = Vec::new();
+        let mut seen_paths = std::collections::HashSet::new();
 
+        // 添加已配置的环境
+        for (_, installation) in &self.installations {
+            let normalized_path = Self::normalize_path_impl(&installation.java_home);
+            if !seen_paths.contains(&normalized_path) {
+                result.push(DynEnvironment {
+                    name: installation.name.clone(),
+                    path: installation.java_home.clone(),
+                    version: installation.version.clone(),
+                    description: Some(installation.description.clone()),
+                    is_active: installation.is_active(),
+                });
+                seen_paths.insert(normalized_path);
+            }
+        }
+
+        // 添加扫描到的新环境（不包括已存在的）
         for installation in installations {
-            result.push(DynEnvironment {
-                name: installation.name.clone(),
-                path: installation.java_home.clone(),
-                version: installation.version.clone(),
-                description: Some(installation.description.clone()),
-                is_active: installation.is_active(),
-            });
+            let normalized_path = Self::normalize_path_impl(&installation.java_home);
+            if !seen_paths.contains(&normalized_path) {
+                result.push(DynEnvironment {
+                    name: installation.name.clone(),
+                    path: installation.java_home.clone(),
+                    version: installation.version.clone(),
+                    description: Some(installation.description.clone()),
+                    is_active: installation.is_active(),
+                });
+                seen_paths.insert(normalized_path);
+            }
         }
 
         Ok(result)

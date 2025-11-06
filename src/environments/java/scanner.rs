@@ -37,6 +37,7 @@ impl JavaScanner {
     /// 扫描系统中的 Java 安装
     pub fn scan_system() -> Result<Vec<JavaInstallation>, String> {
         let mut installations = Vec::new();
+        let mut seen_paths = std::collections::HashSet::new();
 
         // 扫描常见路径
         let common_paths = Self::get_common_java_paths();
@@ -44,8 +45,12 @@ impl JavaScanner {
         for path in common_paths {
             // 首先尝试直接路径
             if Self::is_valid_java_installation(&path) {
-                if let Ok(installation) = Self::create_installation_from_path(&path) {
-                    installations.push(installation);
+                let normalized_path = Self::normalize_path(&path);
+                if !seen_paths.contains(&normalized_path) {
+                    if let Ok(installation) = Self::create_installation_from_path(&path) {
+                        installations.push(installation);
+                        seen_paths.insert(normalized_path);
+                    }
                 }
             } else {
                 // 如果直接路径无效，尝试扫描子目录
@@ -54,9 +59,11 @@ impl JavaScanner {
                         let entry_path = entry.path();
                         if entry_path.is_dir() {
                             let path_str = entry_path.to_string_lossy();
-                            if Self::is_valid_java_installation(&path_str) {
+                            let normalized_path = Self::normalize_path(&path_str);
+                            if !seen_paths.contains(&normalized_path) && Self::is_valid_java_installation(&path_str) {
                                 if let Ok(installation) = Self::create_installation_from_path(&path_str) {
                                     installations.push(installation);
+                                    seen_paths.insert(normalized_path);
                                 }
                             }
                         }
@@ -67,10 +74,35 @@ impl JavaScanner {
 
         // 扫描 PATH 中的 Java
         if let Ok(Some(path_java)) = Self::scan_path_java() {
-            installations.push(path_java);
+            let normalized_path = Self::normalize_path(&path_java.java_home);
+            if !seen_paths.contains(&normalized_path) {
+                installations.push(path_java);
+            }
         }
 
         Ok(installations)
+    }
+
+    /// 标准化路径格式，处理反斜杠和大小写问题
+    fn normalize_path(path: &str) -> String {
+        use std::path::Path;
+
+        // 转换为 Path 对象来标准化路径分隔符
+        let path = Path::new(path);
+
+        // 获取规范化路径
+        match path.canonicalize() {
+            Ok(canonical_path) => {
+                // 转换回字符串，保持原始格式
+                canonical_path.to_string_lossy().to_string()
+            }
+            Err(_) => {
+                // 如果无法规范化，至少标准化分隔符
+                path.to_string_lossy()
+                    .replace('\\', "/")
+                    .to_lowercase()
+            }
+        }
     }
 
     /// 获取常见的 Java 安装路径
