@@ -96,6 +96,17 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y pkg-config libssl-dev
+          # Install OpenSSL development packages for cross-compilation targets
+          sudo apt-get install -y libssl-dev:arm64 libssl-dev:amd64 || true
+
+      - name: Set OpenSSL environment variables (Linux only)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          echo "OPENSSL_DIR=/usr/lib/x86_64-linux-gnu" >> $GITHUB_ENV
+          echo "OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu" >> $GITHUB_ENV
+          echo "OPENSSL_INCLUDE_DIR=/usr/include/openssl" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig" >> $GITHUB_ENV
 
       - name: Install cross (Linux only)
         if: runner.os == 'Linux'
@@ -126,6 +137,14 @@ jobs:
             # Linux 使用 cross 进行交叉编译
             export PATH="$HOME/.cargo/bin:$PATH"
             echo "Building with cross..."
+            echo "Environment variables:"
+            echo "OPENSSL_DIR: $OPENSSL_DIR"
+            echo "PKG_CONFIG_PATH: $PKG_CONFIG_PATH"
+            # Set environment variables for cross compilation
+            export OPENSSL_DIR=/usr
+            export OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu
+            export OPENSSL_INCLUDE_DIR=/usr/include/openssl
+            export PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1
             cross build --release --target ${{ matrix.target }}
           fi
 
