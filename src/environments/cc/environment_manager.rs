@@ -170,6 +170,9 @@ impl EnvironmentManager for CcEnvironmentManager {
                 "anycc" => {
                     config["anthropic_default_sonnet_model"] = serde_json::Value::String("claude-sonnet-4-5".to_string());
                 }
+                "kimicc" => {
+                    config["anthropic_default_sonnet_model"] = serde_json::Value::String("kimi-k2-turbo-preview".to_string());
+                }
                 _ => {
                     // For other environments, use the model specified in config
                     if !cc_env.model.is_empty() {
