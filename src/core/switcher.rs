@@ -53,18 +53,8 @@ impl EnvironmentSwitcher {
             manager.get_current()?
         };
 
-        // 如果已经是当前环境，直接返回
-        if let Some(ref current) = old_env {
-            if current == name {
-                return Ok(SwitchResult {
-                    name: name.to_string(),
-                    env_type,
-                    script: String::new(),
-                    success: true,
-                    error: None,
-                });
-            }
-        }
+        // 注意：移除提前返回逻辑，始终生成完整的切换脚本
+        // 这样可以确保所有必需的环境变量都被正确设置，即使环境已经被识别
 
         // 验证环境是否存在
         let env_info = {

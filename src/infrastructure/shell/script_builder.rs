@@ -120,13 +120,8 @@ impl ScriptBuilder {
                         ));
                     }
 
-                    // Also set OpenAI variables for compatibility if needed
-                    if let Some(api_key) = config.get("api_key").and_then(|v| v.as_str()) {
-                        script.push_str(&format!(
-                            "$env:OPENAI_API_KEY = \"{}\"\n",
-                            api_key
-                        ));
-                    }
+                    // Note: Removed OPENAI_API_KEY setting for CC environments
+                    // CC (Claude Code) environments should not set OpenAI variables
                 } else {
                     // OpenAI environment variables (original implementation)
                     let api_key = config.get("api_key")
@@ -215,10 +210,8 @@ impl ScriptBuilder {
                         script.push_str(&format!("export ANTHROPIC_DEFAULT_SONNET_MODEL=\"{}\"\n", default_model));
                     }
 
-                    // Also set OpenAI variables for compatibility if needed
-                    if let Some(api_key) = config.get("api_key").and_then(|v| v.as_str()) {
-                        script.push_str(&format!("export OPENAI_API_KEY=\"{}\"\n", api_key));
-                    }
+                    // Note: Removed OPENAI_API_KEY setting for CC environments
+                    // CC (Claude Code) environments should not set OpenAI variables
                 } else {
                     // OpenAI environment variables (original implementation)
                     let api_key = config.get("api_key")
@@ -269,20 +262,16 @@ impl ScriptBuilder {
                 script.push_str(&format!("echo \"Switched to Java environment: {}\"\n", env_name));
                 script.push_str("echo \"JAVA_HOME: $JAVA_HOME\"\n");
             }
-            EnvironmentType::Llm | EnvironmentType::Cc => {
+            EnvironmentType::Llm => {
                 let api_key = config.get("api_key")
                     .and_then(|v| v.as_str())
                     .ok_or("Missing api_key in config")?;
 
                 script.push_str(&format!("set -gx OPENAI_API_KEY \"{}\"\n", api_key));
-
-                if let Some(model) = config.get("model").and_then(|v| v.as_str()) {
-                    script.push_str(&format!("set -gx OPENAI_MODEL \"{}\"\n", model));
-                }
-
-                if let Some(base_url) = config.get("base_url").and_then(|v| v.as_str()) {
-                    script.push_str(&format!("set -gx OPENAI_BASE_URL \"{}\"\n", base_url));
-                }
+            }
+            EnvironmentType::Cc => {
+                // CC environments use Anthropic variables, not OpenAI
+                // No OpenAI variables should be set for Claude Code environments
             }
             _ => {
                 return Err(format!("Environment type {:?} not yet supported", env_type));
@@ -330,7 +319,7 @@ impl ScriptBuilder {
                 script.push_str(&format!("echo Switched to Java environment: {}\n", env_name));
                 script.push_str("echo JAVA_HOME: %JAVA_HOME%\n");
             }
-            EnvironmentType::Llm | EnvironmentType::Cc => {
+            EnvironmentType::Llm => {
                 let api_key = config.get("api_key")
                     .and_then(|v| v.as_str())
                     .ok_or("Missing api_key in config")?;
@@ -344,6 +333,10 @@ impl ScriptBuilder {
                 if let Some(base_url) = config.get("base_url").and_then(|v| v.as_str()) {
                     script.push_str(&format!("set OPENAI_BASE_URL={}\n", base_url));
                 }
+            }
+            EnvironmentType::Cc => {
+                // CC environments use Anthropic variables, not OpenAI
+                // No OpenAI variables should be set for Claude Code environments
             }
             _ => {
                 return Err(format!("Environment type {:?} not yet supported", env_type));
