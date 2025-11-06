@@ -1,49 +1,153 @@
-# fnva - Fast Node Version Manager for Java
+# fnva - Fast Environment Version Alter
 
-类似 fnm 的跨平台 Java 环境管理工具，支持默认环境设置和自动加载。
+跨平台环境管理工具，支持 Java、LLM 和 Claude Code 环境，具有默认环境设置和自动加载功能。
 
 ## 功能特性
 
 - ✅ **Java 环境管理**：快速切换不同版本的 JDK
-- ✅ **默认环境支持**：类似 fnm，支持设置默认 Java 环境
+- ✅ **LLM 环境管理**：支持多 LLM 提供商配置切换
+- ✅ **Claude Code (CC) 环境管理**：专门为 Claude Code 设计的环境切换
+- ✅ **默认环境支持**：支持设置默认环境
 - ✅ **自动加载**：新 Shell 会话自动加载默认环境
 - ✅ **智能扫描**：高效扫描系统 Java 安装，支持自定义路径
-- ✅ **LLM 环境管理**：支持多 LLM 提供商配置切换
 - ✅ **跨平台支持**：Windows、macOS、Linux
 - ✅ **多 Shell 支持**：bash、zsh、fish、PowerShell、CMD
 - ✅ **配置化扫描**：支持配置文件和环境变量自定义扫描路径
-- ✅ **高效去重**：智能去除重复的 Java 环境条目
-- ✅ **环境变量引用**：支持 `${VAR_NAME}` 格式引用系统环境变量
+- ✅ **高效去重**：智能去除重复的环境条目
 
 ## 安装
 
-### 从源码构建（推荐）
+### 方式一：通过 npm 安装（推荐）
 
 ```bash
-git clone <repository-url>
+# 全局安装
+npm install -g fnva
+
+# 使用 yarn
+yarn global add fnva
+
+# 使用 pnpm
+pnpm add -g fnva
+```
+
+### 方式二：从 Releases 下载二进制文件
+
+1. 访问 [GitHub Releases](https://github.com/your-repo/fnva/releases)
+2. 下载对应平台的二进制文件：
+   - Windows: `fnva-win32-x64.exe`
+   - macOS: `fnva-darwin-x64` 或 `fnva-darwin-arm64`
+   - Linux: `fnva-linux-x64`
+
+3. 将二进制文件重命名为 `fnva`（Windows 下为 `fnva.exe`）
+
+4. 添加到 PATH 环境变量（详见下面的配置步骤）
+
+### 方式三：包管理器安装
+
+```bash
+# macOS (Homebrew)
+brew tap fnva/fnva
+brew install fnva
+
+# Windows (Winget)
+winget install fnva.fnva
+
+# Windows (Scoop)
+scoop bucket add fnva
+scoop install fnva
+
+# Windows (Chocolatey)
+choco install fnva
+
+# 通用 (Cargo)
+cargo install fnva
+```
+
+### 方式四：从源码构建（开发者）
+
+**前置要求：**
+- **Rust** 1.70+
+- **系统依赖**：
+  - Linux: `pkg-config`, `libssl-dev`, `build-essential`
+  - macOS: Xcode Command Line Tools
+  - Windows: Microsoft Visual Studio C++ Build Tools
+
+```bash
+# 克隆仓库
+git clone git@github.com:Protagonistss/fnva.git
 cd fnva
+
+# 构建
 cargo build --release
+
+# 二进制文件位置：
+# Windows: target\release\fnva.exe
+# macOS/Linux: target/release/fnva
 ```
 
-### 通过 Cargo 安装
+### 安装后配置
+
+#### 1. 验证安装
 
 ```bash
-cargo install --path .
+fnva --version
 ```
 
-### 添加到 PATH
+#### 2. Shell 集成
 
-将二进制文件复制到系统 PATH 中：
+为了获得最佳体验，需要配置 Shell 集成。这会让 fnva 在新的 Shell 会话中自动加载环境。
+
+**PowerShell（推荐）：**
+```powershell
+# 添加到 PowerShell Profile
+fnva env env --shell powershell | Out-String | Invoke-Expression
+
+# 或手动添加到 $PROFILE
+echo 'fnva env env --shell powershell | Out-String | Invoke-Expression' >> $PROFILE
+```
+
+**Bash/Zsh：**
+```bash
+# 添加到 ~/.bashrc 或 ~/.zshrc
+echo 'eval "$(fnva env env --shell bash)"' >> ~/.bashrc
+# 或
+echo 'eval "$(fnva env env --shell zsh)"' >> ~/.zshrc
+
+# 重新加载配置
+source ~/.bashrc  # 或 source ~/.zshrc
+```
+
+**Fish：**
+```fish
+# 添加到 ~/.config/fish/config.fish
+echo 'fnva env env --shell fish | source' >> ~/.config/fish/config.fish
+```
+
+#### 3. 配置文件
+
+首次运行时，fnva 会自动创建配置文件：
 
 ```bash
-# Linux/macOS
-sudo cp target/release/fnva /usr/local/bin/fnva
-
-# 或添加到 ~/.bashrc 或 ~/.zshrc
-export PATH="$PATH:$(pwd)/target/release"
+# 配置文件位置
+Linux/macOS: ~/.fnva/config.toml
+Windows:     %USERPROFILE%\.fnva\config.toml
 ```
 
-Windows 用户需要将 `target\release\fnva.exe` 添加到 PATH 环境变量中。
+#### 4. 测试安装
+
+```bash
+# 列出所有环境类型
+fnva env list-types
+
+# 查看 Java 环境
+fnva java list
+
+# 查看 CC 环境
+fnva cc list
+
+# 查看 LLM 环境
+fnva llm list
+```
 
 ## 使用方法
 
@@ -77,7 +181,7 @@ fnva java use jdk-17 --shell powershell | Invoke-Expression
 fnva java use jdk-17 --shell cmd > %TEMP%\fnva_use.cmd && call %TEMP%\fnva_use.cmd
 ```
 
-#### 设置默认 Java 环境（类似 fnm）
+#### 设置默认 Java 环境
 
 ```bash
 # 设置默认环境
@@ -213,6 +317,113 @@ fnva llm use openai-dev --shell powershell | Invoke-Expression
 fnva llm remove openai-dev
 ```
 
+### Claude Code (CC) 环境管理
+
+专门为 Claude Code 设计的环境管理功能，支持多种 Claude Code 兼容服务的环境切换。
+
+#### 列出所有 CC 环境
+
+```bash
+fnva cc list
+```
+
+#### 添加 CC 环境
+
+```bash
+# 方法一：使用 JSON 配置
+fnva cc add glmcc '{
+  "provider": "anthropic",
+  "api_key": "your-api-key",
+  "base_url": "https://open.bigmodel.cn/api/anthropic",
+  "model": "glm-4.6",
+  "description": "GLM-4.6 Claude Code 环境"
+}'
+
+# 方法二：直接编辑配置文件
+# 编辑 ~/.fnva/config.toml，添加：
+# [[cc_environments]]
+# name = "glmcc"
+# provider = "anthropic"
+# api_key = "your-api-key"
+# base_url = "https://open.bigmodel.cn/api/anthropic"
+# model = "glm-4.6"
+# description = "GLM-4.6 Claude Code 环境"
+```
+
+#### 切换到 CC 环境
+
+```bash
+# PowerShell（推荐）
+fnva cc use glmcc --shell powershell | Invoke-Expression
+
+# Bash/Zsh
+eval "$(fnva cc use glmcc)"
+
+# Fish
+fnva cc use glmcc --shell fish | source
+
+# CMD
+fnva cc use glmcc --shell cmd > %TEMP%\fnva_cc.cmd && call %TEMP%\fnva_cc.cmd
+```
+
+#### 查看当前激活的 CC 环境
+
+```bash
+fnva cc current
+```
+
+#### 删除 CC 环境
+
+```bash
+fnva cc remove glmcc
+```
+
+#### 预配置的 CC 环境
+
+fnva 提供了一些常用的 CC 环境配置：
+
+- **glmcc**: GLM-4.6 智谱 AI Claude Code 兼容服务
+- **anycc**: AnyCC 通用 Claude Code 代理服务
+- **kimicc**: Kimi AI Claude Code 兼容服务
+
+#### 环境变量说明
+
+CC 环境切换会设置以下环境变量：
+
+- `ANTHROPIC_AUTH_TOKEN`: Claude Code 认证令牌
+- `ANTHROPIC_BASE_URL`: Claude Code API 基础 URL
+- `ANTHROPIC_DEFAULT_SONNET_MODEL`: 默认使用的模型
+- `API_TIMEOUT_MS`: API 请求超时时间
+- `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`: 禁用非必要网络流量
+
+#### 配置示例
+
+```toml
+[[cc_environments]]
+name = "glmcc"
+provider = "anthropic"
+api_key = "your-glm-api-key"
+base_url = "https://open.bigmodel.cn/api/anthropic"
+model = "glm-4.6"
+description = "GLM-4.6 Claude Code 环境"
+
+[[cc_environments]]
+name = "anycc"
+provider = "anthropic"
+api_key = "your-anycc-api-key"
+base_url = "https://your-anycc-proxy.com"
+model = "claude-sonnet-4-5"
+description = "AnyCC 代理服务"
+
+[[cc_environments]]
+name = "kimicc"
+provider = "anthropic"
+api_key = "your-kimi-api-key"
+base_url = "https://api.moonshot.cn/anthropic"
+model = "kimi-k2-turbo-preview"
+description = "Kimi AI Claude Code 环境"
+```
+
 ## 配置文件
 
 配置文件位置：
@@ -226,11 +437,13 @@ fnva llm remove openai-dev
 查看 `config/config.toml.example` 获取完整配置示例。
 
 ```toml
+# Java 环境配置
 [[java_environments]]
 name = "jdk-17"
 java_home = "/usr/lib/jvm/java-17-openjdk"
 description = "OpenJDK 17"
 
+# LLM 环境配置
 [[llm_environments]]
 name = "openai-dev"
 provider = "openai"
@@ -238,143 +451,50 @@ api_key = "${OPENAI_API_KEY}"
 base_url = "https://api.openai.com/v1"
 model = "gpt-4"
 temperature = 0.7
-```
+max_tokens = 2000
+description = "OpenAI 开发环境"
 
-## 环境变量引用
+# Claude Code (CC) 环境配置
+[[cc_environments]]
+name = "glmcc"
+provider = "anthropic"
+api_key = "${GLM_API_KEY}"
+base_url = "https://open.bigmodel.cn/api/anthropic"
+model = "glm-4.6"
+description = "GLM-4.6 Claude Code 环境"
 
-在配置文件中可以使用 `${VAR_NAME}` 格式引用系统环境变量：
+[[cc_environments]]
+name = "anycc"
+provider = "anthropic"
+api_key = "sk-your-api-key"
+base_url = "https://your-proxy.com"
+model = "claude-sonnet-4-5"
+description = "AnyCC 代理服务"
 
-```toml
-[[llm_environments]]
-name = "openai-prod"
-provider = "openai"
-api_key = "${OPENAI_API_KEY}"  # 从系统环境变量读取
-```
-
-## Shell 集成（fnm 风格）
-
-### PowerShell（推荐）
-
-在你的 PowerShell Profile 中添加以下内容以启用 fnm 风格的自动环境切换：
-
-```powershell
-# fnva 环境集成（类似 fnm env）
-fnva env env --shell powershell | Out-String | Invoke-Expression
-```
-
-#### 功能特性
-
-- **自动加载默认环境**：新 PowerShell 会话自动加载设置的默认 Java 环境
-- **环境持久化**：重启 PowerShell 后自动恢复上次的 Java 环境
-- **智能切换函数**：提供 `fnva java use` 交互式切换功能
-- **Shell 函数集成**：自动添加 PowerShell 函数用于环境切换
-
-#### 使用示例
-
-```powershell
-# 1. 设置默认环境
-fnva java default jdk21
-
-# 2. 重启 PowerShell 后会自动加载默认环境
-# 显示: "Loading default Java environment: jdk21"
-
-# 3. 交互式切换
-fnva java use jdk17
-
-# 4. 查看当前环境
-fnva java current
-```
-
-### Bash/Zsh
-
-在 `~/.bashrc` 或 `~/.zshrc` 中添加：
-
-```bash
-# fnva 环境集成
-eval "$(fnva env env --shell bash)"
-
-# 或使用别名快速切换
-alias java17='eval "$(fnva java use jdk-17)"'
-alias java11='eval "$(fnva java use jdk-11)"'
-```
-
-### Fish
-
-在 `~/.config/fish/config.fish` 中添加：
-
-```fish
-# fnva 环境集成
-fnva env env --shell fish | source
-
-# 或定义函数
-function java17
-    fnva java use jdk-17 | source
-end
-
-function java11
-    fnva java use jdk-11 | source
-end
-```
-
-## 工作原理
-
-### 默认环境管理
-
-fnva 类似 fnm 的工作方式：
-
-1. **设置默认环境**：
-   ```bash
-   fnva java default jdk21
-   ```
-
-2. **Shell 集成**：在 Shell Profile 中添加环境切换脚本
-
-3. **自动加载**：新 Shell 会话自动检测并加载默认环境
-
-4. **环境持久化**：环境配置保存在 `~/.fnva/config.toml` 中
-
-### 配置文件位置
-
-- **Linux/macOS**: `~/.fnva/config.toml`
-- **Windows**: `%USERPROFILE%\.fnva\config.toml`
-
-#### 配置示例
-
-**基础配置：**
-```toml
-default_java_env = "jdk21.0.6"
-
-[[java_environments]]
-name = "jdk21.0.6"
-java_home = "E:\\env\\jdks\\jdk-21.0.6"
-description = "Java 21.0.6 LTS"
-```
-
-**自定义扫描路径配置：**
-```toml
-# 自定义 Java 扫描路径
-custom_java_scan_paths = [
-    "D:\\tools\\java",
-    "/opt/custom/java",
-    "/home/user/my-jdks"
+# 仓库配置
+[repositories]
+java = [
+    "https://mirrors.aliyun.com/eclipse/temurin-compliance/temurin",
+    "https://api.adoptium.net/v3"
+]
+maven = [
+    "https://maven.aliyun.com/repository/public",
+    "https://search.maven.org/solrsearch/select"
 ]
 ```
 
-**环境变量支持：**
-```bash
-# Linux/macOS
-export FNVA_SCAN_PATHS="/path/to/jdk1:/path/to/jdk2"
+### 常用命令速查
 
-# Windows
-set FNVA_SCAN_PATHS=D:\tools\java;E:\other\java
-```
-
-**支持的扫描路径类型：**
-- 系统标准 Java 安装目录
-- 用户主目录下的 `.fnva/java-packages`
-- 配置文件中的自定义路径
-- 环境变量 `FNVA_SCAN_PATHS` 指定的路径
-- PATH 环境变量中的 Java 可执行文件
+| 命令 | 功能 | 示例 |
+|------|------|------|
+| `fnva java list` | 列出 Java 环境 | `fnva java list` |
+| `fnva java use <name>` | 切换 Java 环境 | `fnva java use jdk21` |
+| `fnva java default <name>` | 设置默认 Java | `fnva java default jdk21` |
+| `fnva cc list` | 列出 CC 环境 | `fnva cc list` |
+| `fnva cc use <name>` | 切换 CC 环境 | `fnva cc use glmcc` |
+| `fnva llm list` | 列出 LLM 环境 | `fnva llm list` |
+| `fnva llm use <name>` | 切换 LLM 环境 | `fnva llm use openai-dev` |
+| `fnva env switch <type> <name>` | 通用切换 | `fnva env switch java jdk17` |
 
 ## 许可证
 
