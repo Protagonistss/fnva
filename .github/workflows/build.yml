@@ -137,15 +137,20 @@ jobs:
             # Linux 使用 cross 进行交叉编译
             export PATH="$HOME/.cargo/bin:$PATH"
             echo "Building with cross..."
-            echo "Environment variables:"
-            echo "OPENSSL_DIR: $OPENSSL_DIR"
-            echo "PKG_CONFIG_PATH: $PKG_CONFIG_PATH"
-            # Set environment variables for cross compilation
-            export OPENSSL_DIR=/usr
-            export OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu
-            export OPENSSL_INCLUDE_DIR=/usr/include/openssl
-            export PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1
-            cross build --release --target ${{ matrix.target }}
+
+            # Try building with cross first
+            if cross build --release --target ${{ matrix.target }}; then
+              echo "Build successful with cross"
+            else
+              echo "Cross build failed, trying with static OpenSSL..."
+              # Fallback: try building with static OpenSSL linking
+              OPENSSL_STATIC=1 OPENSSL_DIR=/usr \
+                PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 \
+                cross build --release --target ${{ matrix.target }} || {
+                echo "All build attempts failed"
+                exit 1
+              }
+            fi
           fi
 
       - name: Strip binary (Unix)
