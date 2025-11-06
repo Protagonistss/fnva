@@ -95,18 +95,9 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libssl-dev
+          sudo apt-get install -y pkg-config libssl-dev build-essential
           # Install OpenSSL development packages for cross-compilation targets
           sudo apt-get install -y libssl-dev:arm64 libssl-dev:amd64 || true
-
-      - name: Set OpenSSL environment variables (Linux only)
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          echo "OPENSSL_DIR=/usr/lib/x86_64-linux-gnu" >> $GITHUB_ENV
-          echo "OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu" >> $GITHUB_ENV
-          echo "OPENSSL_INCLUDE_DIR=/usr/include/openssl" >> $GITHUB_ENV
-          echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig" >> $GITHUB_ENV
 
       - name: Install cross (Linux only)
         if: runner.os == 'Linux'
@@ -136,20 +127,20 @@ jobs:
           else
             # Linux 使用 cross 进行交叉编译
             export PATH="$HOME/.cargo/bin:$PATH"
-            echo "Building with cross..."
+            echo "Building for target: ${{ matrix.target }}"
 
-            # Try building with cross first
-            if cross build --release --target ${{ matrix.target }}; then
-              echo "Build successful with cross"
-            else
-              echo "Cross build failed, trying with static OpenSSL..."
-              # Fallback: try building with static OpenSSL linking
+            # For native x86_64-linux-gnu, use regular cargo
+            if [ "${{ matrix.target }}" = "x86_64-unknown-linux-gnu" ]; then
+              echo "Building native x86_64 with cargo..."
               OPENSSL_STATIC=1 OPENSSL_DIR=/usr \
                 PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 \
-                cross build --release --target ${{ matrix.target }} || {
-                echo "All build attempts failed"
-                exit 1
-              }
+                cargo build --release --target ${{ matrix.target }}
+            else
+              # For other targets, use cross with proper environment
+              echo "Building cross-compiled with cross..."
+              OPENSSL_STATIC=1 \
+                PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 \
+                cross build --release --target ${{ matrix.target }}
             fi
           fi
 
