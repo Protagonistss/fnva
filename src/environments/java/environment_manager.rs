@@ -411,19 +411,10 @@ impl EnvironmentManager for JavaEnvironmentManager {
             }
         }
 
-        // 然后添加扫描到的新环境（不包括已存在的路径）
-        let config = crate::infrastructure::config::Config::load().unwrap_or_else(|_| {
-            eprintln!("Warning: Failed to load config for removed names check");
-            crate::infrastructure::config::Config::new()
-        });
-
+        // 移除了移除名称检查，现在显示所有环境
         for installation in installations {
             let normalized_path = Self::normalize_path_impl(&installation.java_home);
             if !seen_paths.contains(&normalized_path) {
-                // 移除了黑名单检查，现在显示所有环境
-                // 原来：检查该名称是否已被移除
-                // 原来：if !config.is_java_name_removed(&installation.name) {
-                
                 result.push(DynEnvironment {
                     name: installation.name.clone(),
                     path: installation.java_home.clone(),
