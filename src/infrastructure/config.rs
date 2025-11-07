@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// 配置文件结构
 #[derive(Debug, Serialize, Deserialize)]
@@ -397,31 +397,6 @@ impl Config {
     /// 移除 Java 环境名称（从移除列表中恢复）
     pub fn remove_java_name_from_removed_list(&mut self, name: &str) {
         self.removed_java_names.retain(|n| n != name);
-    }
-}
-
-#[allow(dead_code)]
-fn normalize_path(path: &str) -> String {
-    let path = Path::new(path);
-
-    // 获取规范化路径
-    match path.canonicalize() {
-        Ok(canonical_path) => {
-            // 转换回字符串，处理 Windows 长路径前缀
-            let canonical_str = canonical_path.to_string_lossy();
-            // 移除 Windows 长路径前缀 \\?\
-            if canonical_str.starts_with("\\\\?\\") {
-                canonical_str[4..].to_string()
-            } else {
-                canonical_str.to_string()
-            }
-        }
-        Err(_) => {
-            // 如果无法规范化，至少标准化分隔符
-            path.to_string_lossy()
-                .replace('\\', "/")
-                .to_lowercase()
-        }
     }
 }
 

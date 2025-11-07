@@ -516,36 +516,6 @@ impl RemoteManager {
         (platform, arch.to_string(), os.to_string())
     }
 
-    #[allow(dead_code)]
-    fn find_download_url(binaries: &[AdoptiumBinary]) -> Option<String> {
-        let current_os = std::env::consts::OS;
-        let current_arch = std::env::consts::ARCH;
-
-        for binary in binaries {
-            let os_match = match current_os {
-                "windows" => binary.os == "windows",
-                "macos" => binary.os == "mac",
-                "linux" => binary.os == "linux",
-                _ => false,
-            };
-
-            let arch_match = match current_arch {
-                "x86_64" => binary.architecture == "x64",
-                "aarch64" => binary.architecture == "aarch64",
-                "x86" => binary.architecture == "x86",
-                _ => false,
-            };
-
-            if os_match && arch_match && binary.image_type == "jdk" {
-                if let Some(package) = &binary.package {
-                    return Some(package.link.clone());
-                }
-            }
-        }
-
-        None
-    }
-
     /// 查询 Maven 依赖的可用版本
     pub async fn list_maven_versions(
         repo_url: &str,

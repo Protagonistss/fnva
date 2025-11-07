@@ -37,8 +37,6 @@ impl LlmEnvironmentManager {
                 api_key: env.api_key.clone(),
                 base_url: env.base_url.clone(),
                 model: env.model.clone(),
-                temperature: env.temperature,
-                max_tokens: env.max_tokens,
                 description: env.description.clone(),
             };
 
@@ -116,8 +114,6 @@ impl EnvironmentManager for LlmEnvironmentManager {
             api_key: api_key.to_string(),
             base_url: base_url.to_string(),
             model: model.to_string(),
-            temperature: None,
-            max_tokens: None,
         };
 
         self.environments.insert(name.to_string(), llm_environment);
@@ -204,8 +200,6 @@ impl EnvironmentManager for LlmEnvironmentManager {
                 api_key: auth_token,
                 base_url: base_url,
                 model: std::env::var("ANTHROPIC_MODEL").unwrap_or_else(|_| "claude-3-sonnet-20240229".to_string()),
-                temperature: None,
-                max_tokens: None,
             };
             result.push(DynEnvironment {
                 name: llm_env.name.clone(),
@@ -243,10 +237,6 @@ struct LlmEnvironment {
     api_key: String,
     base_url: String,
     model: String,
-    #[allow(dead_code)]
-    temperature: Option<f64>,
-    #[allow(dead_code)]
-    max_tokens: Option<u32>,
 }
 
 impl LlmEnvironment {

@@ -148,32 +148,6 @@ impl JavaPackageManager {
         }
     }
 
-    /// 检测平台信息
-    #[allow(dead_code)]
-    fn detect_platform_info() -> (String, String, String) {
-        let arch = match std::env::consts::ARCH {
-            "x86_64" => "x64",
-            "aarch64" => "aarch64",
-            "x86" => "x86",
-            _ => "x64",
-        };
-
-        let os = match std::env::consts::OS {
-            "windows" => "windows",
-            "macos" => "macos",
-            "linux" => "linux",
-            _ => "linux",
-        };
-
-        let version = if cfg!(target_os = "windows") {
-            format!("{}-{}", os, arch)
-        } else {
-            format!("{}-{}", os, arch)
-        };
-
-        (version, arch.to_string(), os.to_string())
-    }
-
     /// 获取包类型
     fn get_package_type(url: &str) -> &'static str {
         if url.ends_with(".tar.gz") || url.ends_with(".tgz") {
@@ -629,13 +603,5 @@ mod tests {
         assert_eq!(JavaPackageManager::normalize_env_name("8"), "8");
         assert_eq!(JavaPackageManager::normalize_env_name("invalid"), "invalid");
         assert_eq!(JavaPackageManager::normalize_env_name(""), "");
-    }
-
-    #[test]
-    fn test_detect_platform_info() {
-        let (version, arch, os) = JavaPackageManager::detect_platform_info();
-        assert!(!version.is_empty());
-        assert!(!arch.is_empty());
-        assert!(!os.is_empty());
     }
 }

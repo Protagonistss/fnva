@@ -73,6 +73,9 @@ impl JavaEnvironmentManager {
 
         let config = Config::load()?;
 
+        // 清除旧的环境数据，确保重新加载最新的配置
+        self.installations.clear();
+
         for env in &config.java_environments {
             let installation = crate::environments::java::scanner::JavaInstallation {
                 name: env.name.clone(),

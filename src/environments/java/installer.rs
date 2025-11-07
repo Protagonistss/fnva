@@ -1,14 +1,9 @@
 use crate::config::Config;
-use crate::remote::{JavaVersionInfo, RemoteManager, GitHubJavaDownloader, GitHubJavaVersion};
-use crate::utils::validate_java_home;
-use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs;
 use std::path::Path;
 use std::process::Command;
 use tempfile::TempDir;
-use tokio::fs::File;
-use tokio::io::AsyncWriteExt;
 
 /// Java 安装管理器
 pub struct JavaInstaller;
@@ -44,7 +39,7 @@ impl JavaInstaller {
         config: &mut Config,
         auto_switch: bool,
     ) -> Result<String, String> {
-        let downloader = GitHubJavaDownloader::new();
+        let downloader = crate::remote::GitHubJavaDownloader::new();
 
         // 尝试从自定义名称中解析版本，如果失败则使用最新版本
         let java_version = match downloader.find_version_by_spec(version_spec).await {
@@ -64,7 +59,7 @@ impl JavaInstaller {
 
         println!("📦 使用GitHub下载器: {}", java_version.release_name);
 
-        let (os, arch) = GitHubJavaDownloader::get_current_system_info();
+        let (os, arch) = crate::remote::GitHubJavaDownloader::get_current_system_info();
         let java_home = Self::download_and_install_from_github(&downloader, &java_version, &os, &arch, version_spec).await?;
         Self::complete_installation_simple(version_spec, config, auto_switch, &java_home, &java_version.version, &java_version.release_name).await
     }
@@ -202,80 +197,17 @@ impl JavaInstaller {
         };
 
         // 验证安装
-        if !validate_java_home(&java_home) {
+        if !crate::utils::validate_java_home(&java_home) {
             return Err("安装验证失败".to_string());
         }
 
         Ok(java_home)
     }
 
-    /// 解析版本规格（旧的兼容版本）
-    #[allow(dead_code)]
-    fn parse_version_spec_legacy(version_spec: &str) -> Result<u32, String> {
-        // 支持格式: "v21", "21", "java21", "jdk21" 等
-        let cleaned = version_spec
-            .trim()
-            .to_lowercase()
-            .replace("v", "")
-            .replace("java", "")
-            .replace("jdk", "");
-
-        if let Ok(version) = cleaned.parse::<u32>() {
-            // 验证支持的版本（暂时保持原有逻辑）
-            match version {
-                8 | 11 | 17 | 21 => Ok(version),
-                _ => Err(format!(
-                    "不支持的 Java 版本: {}. 支持的版本: 8, 11, 17, 21",
-                    version
-                )),
-            }
-        } else {
-            Err(format!("无效的版本规格: {}", version_spec))
-        }
-    }
-
-    /// 获取版本信息（旧的兼容版本）
-    #[allow(dead_code)]
-    async fn get_version_info_legacy(major_version: &u32) -> Result<JavaVersionInfo, String> {
-        // 尝试多个源
-        let repositories = vec![
-            "https://api.adoptium.net/v3",
-            "https://api.adoptopenjdk.net/v3",
-        ];
-
-        for repo in repositories {
-            println!("🔍 尝试从 {} 获取版本信息...", repo);
-
-            let mut remote_manager = RemoteManager::new();
-            match remote_manager.list_java_versions(
-                Some(repo),
-                Some(*major_version),
-                None,
-                None,
-            ).await {
-                Ok(mut versions) => {
-                    if let Some(version) = versions.pop() {
-                        println!("✅ 成功获取版本信息: {}", version.version);
-                        return Ok(version);
-                    } else {
-                        println!("⚠️  {} 中未找到 Java {} 版本", repo, major_version);
-                    }
-                }
-                Err(e) => {
-                    println!("⚠️  从 {} 获取版本信息失败: {}", repo, e);
-                }
-            }
-        }
-
-        Err(format!("所有源都无法获取 Java {} 的版本信息", major_version))
-    }
-
-  
-    
     /// 从 GitHub 下载和安装 Java（保留旧方法以维持兼容性）
     async fn download_and_install_from_github(
-        downloader: &GitHubJavaDownloader,
-        version_info: &GitHubJavaVersion,
+        downloader: &crate::remote::GitHubJavaDownloader,
+        version_info: &crate::remote::GitHubJavaVersion,
         os: &str,
         arch: &str,
         env_name: &str,
@@ -332,208 +264,11 @@ impl JavaInstaller {
         };
 
         // 验证安装
-        if !validate_java_home(&java_home) {
+        if !crate::utils::validate_java_home(&java_home) {
             return Err("安装验证失败".to_string());
         }
 
         Ok(java_home)
-    }
-
-    /// 下载和安装 Java（保留旧方法以维持兼容性）
-    #[allow(dead_code)]
-    async fn download_and_install(version_info: &JavaVersionInfo) -> Result<String, String> {
-        let download_url = version_info.download_url.as_ref()
-            .ok_or("没有可用的下载链接")?;
-
-        println!("📥 正在下载 Java {}...", version_info.version);
-        println!("🔗 下载地址: {}", download_url);
-
-        // 创建临时目录
-        let temp_dir = TempDir::new()
-            .map_err(|e| format!("创建临时目录失败: {}", e))?;
-
-        let file_name = Self::extract_filename_from_url(download_url);
-        let file_path = temp_dir.path().join(&file_name);
-
-        // 下载文件
-        Self::download_file_with_progress(download_url, &file_path).await?;
-
-        println!("📦 正在安装...");
-
-        
-        // 根据文件类型进行安装
-        let java_home = if file_name.ends_with(".zip") || file_name.ends_with(".tar.gz") {
-            Self::install_archive(&file_path, &version_info.version, &version_info.release_name).await?
-        } else {
-            return Err(format!("不支持的安装包格式: {}", file_name));
-        };
-
-        // 验证安装
-        if !validate_java_home(&java_home) {
-            return Err("安装验证失败".to_string());
-        }
-
-        Ok(java_home)
-    }
-
-    /// 从 URL 提取文件名
-    #[allow(dead_code)]
-    fn extract_filename_from_url(url: &str) -> String {
-        url.split('/')
-            .last()
-            .unwrap_or("java-installer")
-            .to_string()
-    }
-
-    /// 下载文件并显示进度，带重试机制
-    async fn download_file_with_progress(url: &str, dest_path: &Path) -> Result<(), String> {
-        let max_retries = 3;
-        let retry_delay = std::time::Duration::from_secs(2);
-
-        for attempt in 1..=max_retries {
-            println!("📥 尝试下载 (第 {} 次)...", attempt);
-
-            match Self::download_attempt(url, dest_path).await {
-                Ok(()) => {
-                    println!("✅ 下载成功完成");
-                    return Ok(());
-                }
-                Err(e) => {
-                    println!("⚠️  下载失败 (第 {} 次): {}", attempt, e);
-
-                    if attempt < max_retries {
-                        println!("⏳ {} 秒后重试...", retry_delay.as_secs());
-                        tokio::time::sleep(retry_delay).await;
-                    } else {
-                        return Err(format!("下载失败，已重试 {} 次: {}", max_retries, e));
-                    }
-                }
-            }
-        }
-
-        Err("下载失败".to_string())
-    }
-
-    /// 单次下载尝试
-    async fn download_attempt(url: &str, dest_path: &Path) -> Result<(), String> {
-        // 网络连接诊断
-        Self::diagnose_network_connection(url).await?;
-
-        // 创建客户端，设置超时和重试
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(300)) // 5分钟超时
-            .connect_timeout(std::time::Duration::from_secs(30)) // 连接超时30秒
-            .build()
-            .map_err(|e| format!("创建HTTP客户端失败: {}", e))?;
-
-        println!("🔗 正在连接: {}", url);
-
-        let response = client
-            .get(url)
-            .header("User-Agent", "fnva/0.0.4")
-            .send()
-            .await
-            .map_err(|e| format!("下载请求失败: {}", e))?;
-
-        if !response.status().is_success() {
-            return Err(format!("服务器返回错误: {} {}", response.status(), response.status().canonical_reason().unwrap_or("Unknown")));
-        }
-
-        let total_size = response.content_length()
-            .unwrap_or(0);
-
-        println!("📊 文件大小: {} MB", total_size / (1024 * 1024));
-
-        let pb = ProgressBar::new(total_size);
-        pb.set_style(
-            ProgressStyle::default_bar()
-                .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta}) {percent}%")
-                .unwrap()
-                .progress_chars("#>-")
-        );
-
-        let mut file = File::create(dest_path)
-            .await
-            .map_err(|e| format!("创建文件失败: {}", e))?;
-
-        let mut downloaded = 0u64;
-        let mut stream = response.bytes_stream();
-
-        while let Some(item) = stream.next().await {
-            let chunk = item.map_err(|e| {
-                // 提供更详细的错误信息
-                if e.is_timeout() {
-                    "下载超时，请检查网络连接".to_string()
-                } else if e.is_connect() {
-                    "连接失败，请检查网络设置".to_string()
-                } else {
-                    format!("下载流错误: {}", e)
-                }
-            })?;
-
-            file.write_all(&chunk)
-                .await
-                .map_err(|e| format!("写入文件失败: {}", e))?;
-
-            let new = std::cmp::min(downloaded + (chunk.len() as u64), total_size);
-            downloaded = new;
-            pb.set_position(new);
-        }
-
-        pb.finish_with_message("下载完成");
-        file.flush().await
-            .map_err(|e| format!("刷新文件失败: {}", e))?;
-
-        // 验证文件大小
-        let metadata = tokio::fs::metadata(dest_path).await
-            .map_err(|e| format!("获取文件信息失败: {}", e))?;
-
-        if total_size > 0 && metadata.len() != total_size {
-            return Err(format!("文件大小不匹配: 期望 {} 字节，实际 {} 字节", total_size, metadata.len()));
-        }
-
-        Ok(())
-    }
-
-    /// 网络连接诊断
-    async fn diagnose_network_connection(url: &str) -> Result<(), String> {
-        println!("🔍 诊断网络连接...");
-
-        // 解析 URL
-        let parsed_url = url::Url::parse(url)
-            .map_err(|e| format!("无效的 URL: {}", e))?;
-
-        let host = parsed_url.host_str()
-            .ok_or("无法解析主机名")?;
-
-        println!("🌐 主机: {}", host);
-        println!("🔍 测试连接...");
-
-        // 测试 DNS 解析
-        match tokio::net::lookup_host(format!("{}:80", host)).await {
-            Ok(addresses) => {
-                let addr_vec: Vec<_> = addresses.collect();
-                if addr_vec.is_empty() {
-                    return Err("DNS 解析失败：没有找到地址".to_string());
-                }
-                println!("✅ DNS 解析成功: {:?}", addr_vec.first());
-            }
-            Err(e) => {
-                return Err(format!("DNS 解析失败: {}", e));
-            }
-        }
-
-        // 测试 HTTPS 连接
-        match tokio::net::TcpStream::connect(format!("{}:443", host)).await {
-            Ok(_) => {
-                println!("✅ TCP 连接成功");
-            }
-            Err(e) => {
-                return Err(format!("TCP 连接失败: {}。可能的原因：防火墙阻止、网络不可达或服务器不可用", e));
-            }
-        }
-
-        Ok(())
     }
 
     /// 安装压缩包（跨平台）
@@ -619,7 +354,7 @@ impl JavaInstaller {
     /// 查找已安装的 Java 目录
     fn find_installed_java(install_dir: &Path) -> Result<String, String> {
         // 检查是否直接包含 Java 安装
-        if validate_java_home(&install_dir.to_string_lossy()) {
+        if crate::utils::validate_java_home(&install_dir.to_string_lossy()) {
             return Ok(install_dir.to_string_lossy().to_string());
         }
 
@@ -630,14 +365,14 @@ impl JavaInstaller {
             let entry = entry.map_err(|e| format!("读取目录项失败: {}", e))?;
             let path = entry.path();
 
-            if path.is_dir() && validate_java_home(&path.to_string_lossy()) {
+            if path.is_dir() && crate::utils::validate_java_home(&path.to_string_lossy()) {
                 return Ok(path.to_string_lossy().to_string());
             }
 
             // 对于 macOS，检查 Contents/Home
             if cfg!(target_os = "macos") {
                 let contents_home = path.join("Contents").join("Home");
-                if contents_home.exists() && validate_java_home(&contents_home.to_string_lossy()) {
+                if contents_home.exists() && crate::utils::validate_java_home(&contents_home.to_string_lossy()) {
                     return Ok(contents_home.to_string_lossy().to_string());
                 }
             }
@@ -652,7 +387,7 @@ impl JavaInstaller {
             .ok_or_else(|| format!("Java 环境 '{}' 不存在", version_name))?;
 
         // 验证 Java Home 路径
-        if !validate_java_home(&java_env.java_home) {
+        if !crate::utils::validate_java_home(&java_env.java_home) {
             return Err(format!("无效的 JAVA_HOME 路径: {}", java_env.java_home));
         }
 
@@ -673,7 +408,7 @@ impl JavaInstaller {
 
         match downloader_type.as_str() {
             "github" => {
-                let downloader = GitHubJavaDownloader::new();
+                let downloader = crate::remote::GitHubJavaDownloader::new();
                 let versions = downloader.list_available_versions().await?;
 
                 for version in versions.into_iter().take(20) {
