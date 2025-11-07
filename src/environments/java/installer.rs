@@ -13,6 +13,45 @@ use tokio::io::AsyncWriteExt;
 /// Java 安装管理器
 pub struct JavaInstaller;
 
+/// 智能版本规范处理函数
+fn normalize_version_spec(version_spec: &str) -> (String, String, bool) {
+    let cleaned = version_spec.trim()
+        .to_lowercase()
+        .replace("v", "")
+        .replace("java", "")
+        .replace("jdk", "")
+        .replace("pkg", "")
+        .replace("package", "")
+        .trim()
+        .to_string();
+
+    // 分割版本号 parts
+    let parts: Vec<&str> = cleaned.split('.').filter(|p| !p.is_empty()).collect();
+    
+    if parts.is_empty() {
+        // 如果清理后为空，返回默认版本
+        return ("17".to_string(), "jdk17".to_string(), false);
+    }
+
+    // 尝试解析为数字
+    let first_part = parts[0];
+    if let Ok(_major) = first_part.parse::<u32>() {
+        if parts.len() == 1 {
+            // 只有主版本号，如 "8" -> 需要安装该主版本号的最新LTS
+            let env_name = format!("jdk{}", first_part);
+            return (first_part.to_string(), env_name, false);
+        } else {
+            // 完整版本号，如 "8.0.2" 或 "18.0.2" -> 尝试精确匹配
+            let full_version = parts.join(".");
+            let env_name = format!("jdk{}", full_version);
+            return (full_version, env_name, true);
+        }
+    }
+
+    // 如果无法解析为数字，返回默认版本
+    ("17".to_string(), "jdk17".to_string(), false)
+}
+
 impl JavaInstaller {
     /// 安装指定版本的 Java（使用配置的下载器）
     pub async fn install_java(
@@ -65,7 +104,7 @@ impl JavaInstaller {
         println!("📦 使用GitHub下载器: {}", java_version.release_name);
 
         let (os, arch) = GitHubJavaDownloader::get_current_system_info();
-        let java_home = Self::download_and_install_from_github(&downloader, &java_version, &os, &arch).await?;
+        let java_home = Self::download_and_install_from_github(&downloader, &java_version, &os, &arch, version_spec).await?;
         Self::complete_installation_simple(version_spec, config, auto_switch, &java_home, &java_version.version, &java_version.release_name).await
     }
 
@@ -110,11 +149,8 @@ impl JavaInstaller {
         version: &str,
         _release_name: &str,
     ) -> Result<String, String> {
-        // 环境名完全对应用户输入（移除空格和前缀）
-        let install_name = version_spec.trim()
-            .replace("java", "")
-            .replace("jdk", "")
-            .to_lowercase();
+        // 环境名使用用户输入的原始格式，保持用户习惯
+        let install_name = version_spec.trim().to_lowercase();
 
         // 检查是否已安装
         if config.get_java_env(&install_name).is_some() {
@@ -153,7 +189,7 @@ impl JavaInstaller {
         version_info: &crate::remote::AliyunJavaVersion,
         os: &str,
         arch: &str,
-        _version_spec: &str,
+        env_name: &str,
     ) -> Result<String, String> {
         // 创建临时目录
         let temp_dir = TempDir::new()
@@ -199,9 +235,9 @@ impl JavaInstaller {
         
         // 根据文件类型进行安装
         let java_home = if extension == "zip" {
-            Self::install_archive(&file_path, &version_info.version).await?
+            Self::install_archive(&file_path, &version_info.version, env_name).await?
         } else {
-            Self::install_archive(&file_path, &version_info.version).await?
+            Self::install_archive(&file_path, &version_info.version, env_name).await?
         };
 
         // 验证安装
@@ -281,6 +317,7 @@ impl JavaInstaller {
         version_info: &GitHubJavaVersion,
         os: &str,
         arch: &str,
+        env_name: &str,
     ) -> Result<String, String> {
         // 创建临时目录
         let temp_dir = TempDir::new()
@@ -328,9 +365,9 @@ impl JavaInstaller {
         
         // 根据文件类型进行安装
         let java_home = if extension == "zip" {
-            Self::install_archive(&file_path, &version_info.version).await?
+            Self::install_archive(&file_path, &version_info.version, env_name).await?
         } else {
-            Self::install_archive(&file_path, &version_info.version).await?
+            Self::install_archive(&file_path, &version_info.version, env_name).await?
         };
 
         // 验证安装
@@ -364,10 +401,8 @@ impl JavaInstaller {
 
         
         // 根据文件类型进行安装
-        let java_home = if file_name.ends_with(".msi") {
-            Self::install_msi(&file_path, &version_info.version).await?
-        } else if file_name.ends_with(".zip") || file_name.ends_with(".tar.gz") {
-            Self::install_archive(&file_path, &version_info.version).await?
+        let java_home = if file_name.ends_with(".zip") || file_name.ends_with(".tar.gz") {
+            Self::install_archive(&file_path, &version_info.version, &version_info.release_name).await?
         } else {
             return Err(format!("不支持的安装包格式: {}", file_name));
         };
@@ -540,50 +575,8 @@ impl JavaInstaller {
         Ok(())
     }
 
-    /// 安装 MSI 文件（Windows）
-    async fn install_msi(msi_path: &Path, version: &str) -> Result<String, String> {
-        if cfg!(target_os = "windows") {
-            // 获取 fnva 安装目录
-            let fnva_dir = dirs::home_dir()
-                .ok_or("无法获取用户主目录")?
-                .join(".fnva")
-                .join("java-packages");
-
-            fs::create_dir_all(&fnva_dir)
-                .map_err(|e| format!("创建安装目录失败: {}", e))?;
-
-            let java_home = fnva_dir.join(format!("jdk-{}", version));
-
-            // 使用 msiexec 静默安装到指定目录
-            let output = Command::new("msiexec")
-                .args([
-                    "/i", msi_path.to_str().unwrap(),
-                    "/quiet",
-                    &format!("INSTALLDIR={}", java_home.to_str().unwrap()),
-                    "ADDLOCAL=FeatureMain,FeatureEnvironment,FeatureJarFileRunWith,FeatureJavaHome",
-                    "INSTALLDIR2={}",
-                ])
-                .output()
-                .map_err(|e| format!("执行安装命令失败: {}", e))?;
-
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                return Err(format!("MSI 安装失败: {}", stderr));
-            }
-
-            // 等待安装完成
-            tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
-
-            // 查找实际的 JAVA_HOME
-            let actual_home = Self::find_installed_java(&java_home)?;
-            Ok(actual_home)
-        } else {
-            Err("MSI 安装包仅支持 Windows".to_string())
-        }
-    }
-
     /// 安装压缩包（跨平台）
-    async fn install_archive(archive_path: &Path, version: &str) -> Result<String, String> {
+    async fn install_archive(archive_path: &Path, version: &str, env_name: &str) -> Result<String, String> {
         // 获取 fnva 安装目录
         let fnva_dir = dirs::home_dir()
             .ok_or("无法获取用户主目录")?
@@ -593,7 +586,7 @@ impl JavaInstaller {
         fs::create_dir_all(&fnva_dir)
             .map_err(|e| format!("创建安装目录失败: {}", e))?;
 
-        let java_home = fnva_dir.join(format!("jdk-{}", version));
+        let java_home = fnva_dir.join(env_name);
 
         // 解压文件
         if archive_path.to_str().unwrap().ends_with(".zip") {

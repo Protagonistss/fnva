@@ -39,7 +39,7 @@ impl JavaPackageManager {
         println!("📦 选择资源包格式: {}", Self::get_package_type(&download_url));
 
         // 下载和解压
-        let package_path = Self::download_and_extract_package(&download_url, &version_info).await?;
+        let package_path = Self::download_and_extract_package(&download_url, &version_info, &env_name).await?;
 
         // 验证安装
         if !validate_java_home(&package_path) {
@@ -98,7 +98,8 @@ impl JavaPackageManager {
 
     /// 规范化环境名称（直接使用用户输入的名称）
     fn normalize_env_name(version_spec: &str) -> String {
-        version_spec.trim().to_string()
+        // 直接返回用户输入，保持用户习惯
+        version_spec.trim().to_lowercase()
     }
 
     /// 获取版本信息
@@ -189,7 +190,8 @@ impl JavaPackageManager {
     /// 下载并解压资源包
     async fn download_and_extract_package(
         download_url: &str,
-        version_info: &JavaVersionInfo,
+        _version_info: &JavaVersionInfo,
+        env_name: &str,
     ) -> Result<String, String> {
         // 创建临时目录
         let temp_dir = TempDir::new()
@@ -203,12 +205,12 @@ impl JavaPackageManager {
 
         println!("📦 正在解压资源包...");
 
-        // 创建安装目录
+        // 创建安装目录 - 使用环境名而非版本号
         let install_dir = dirs::home_dir()
             .ok_or("无法获取用户主目录")?
             .join(".fnva")
             .join("java-packages")
-            .join(format!("jdk-{}", version_info.version));
+            .join(env_name);
 
         fs::create_dir_all(&install_dir)
             .map_err(|e| format!("创建安装目录失败: {}", e))?;
@@ -612,6 +614,21 @@ mod tests {
 
         assert!(JavaPackageManager::parse_version_spec("22").is_err());
         assert!(JavaPackageManager::parse_version_spec("invalid").is_err());
+    }
+
+    #[test]
+    fn test_normalize_env_name() {
+        assert_eq!(JavaPackageManager::normalize_env_name("v21"), "v21");
+        assert_eq!(JavaPackageManager::normalize_env_name("21"), "21");
+        assert_eq!(JavaPackageManager::normalize_env_name("jdk21"), "jdk21");
+        assert_eq!(JavaPackageManager::normalize_env_name("pkg21"), "pkg21");
+        assert_eq!(JavaPackageManager::normalize_env_name("V11"), "v11");
+        assert_eq!(JavaPackageManager::normalize_env_name("11"), "11");
+        assert_eq!(JavaPackageManager::normalize_env_name("8.0.422"), "8.0.422");
+        assert_eq!(JavaPackageManager::normalize_env_name("8.0"), "8.0");
+        assert_eq!(JavaPackageManager::normalize_env_name("8"), "8");
+        assert_eq!(JavaPackageManager::normalize_env_name("invalid"), "invalid");
+        assert_eq!(JavaPackageManager::normalize_env_name(""), "");
     }
 
     #[test]

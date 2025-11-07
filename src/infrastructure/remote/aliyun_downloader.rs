@@ -330,8 +330,11 @@ impl AliyunJavaDownloader {
         let versions = self.list_available_versions().await?;
 
         let spec_cleaned = spec.trim().to_lowercase()
-            .replace("jdk", "")  // 移除 jdk 前缀
-            .replace("java", ""); // 移除 java 前缀
+            .replace("v", "")      // 移除 v 前缀
+            .replace("jdk", "")    // 移除 jdk 前缀
+            .replace("java", "")   // 移除 java 前缀
+            .trim()                // 清理前后空格
+            .to_string();
 
         if spec_cleaned == "lts" || spec_cleaned == "latest-lts" {
             // 返回最新的 LTS 版本
@@ -347,17 +350,73 @@ impl AliyunJavaDownloader {
                 .ok_or("未找到可用版本".to_string());
         }
 
-        // 尝试解析为主版本号 (支持 jdk8, java8, 8 等格式)
-        if let Ok(major) = spec_cleaned.parse::<u32>() {
-            for version in versions {
-                if version.major == major {
-                    return Ok(version);
+        // 尝试解析为主版本号或完整版本号
+        let parts: Vec<&str> = spec_cleaned.split('.').filter(|p| !p.is_empty()).collect();
+        
+        if !parts.is_empty() && parts[0].parse::<u32>().is_ok() {
+            if parts.len() == 1 {
+                // 主版本号输入（如 "8"）- LTS优先策略
+                let major = parts[0].parse::<u32>().unwrap();
+                
+                // 首先查找该主版本的LTS版本，按版本号倒序（最新版本优先）
+                let mut lts_versions: Vec<&AliyunJavaVersion> = versions.iter()
+                    .filter(|v| v.major == major && v.is_lts)
+                    .collect();
+                
+                // 按版本号排序（从新到旧）
+                lts_versions.sort_by(|a, b| {
+                    let a_parts: Vec<&str> = a.version.split('.').collect();
+                    let b_parts: Vec<&str> = b.version.split('.').collect();
+                    b_parts.cmp(&a_parts) // 倒序
+                });
+                
+                if let Some(latest_lts) = lts_versions.first() {
+                    return Ok((**latest_lts).clone());
                 }
+                
+                // 如果没有LTS版本，返回该主版本的最新版本
+                let mut major_versions: Vec<&AliyunJavaVersion> = versions.iter()
+                    .filter(|v| v.major == major)
+                    .collect();
+                
+                // 按版本号排序（从新到旧）
+                major_versions.sort_by(|a, b| {
+                    let a_parts: Vec<&str> = a.version.split('.').collect();
+                    let b_parts: Vec<&str> = b.version.split('.').collect();
+                    b_parts.cmp(&a_parts) // 倒序
+                });
+                
+                if let Some(latest) = major_versions.first() {
+                    return Ok((**latest).clone());
+                }
+                
+                return Err(format!("未找到 Java {}", major));
+            } else {
+                // 完整版本号输入（如 "8.0.2"）- 精确匹配优先
+                let full_version = parts.join(".");
+                
+                // 首先尝试精确匹配
+                for version in &versions {
+                    if version.version == full_version ||
+                       version.version.replace('-', ".") == full_version ||
+                       version.release_name.to_lowercase().contains(&full_version) {
+                        return Ok(version.clone());
+                    }
+                }
+                
+                // 精确匹配失败，尝试主版本匹配
+                let major = parts[0].parse::<u32>().unwrap();
+                for version in &versions {
+                    if version.major == major {
+                        return Ok(version.clone());
+                    }
+                }
+                
+                return Err(format!("未找到版本: {}", spec));
             }
-            return Err(format!("未找到 Java {}", major));
         }
 
-        // 尝试精确匹配
+        // 尝试直接字符串匹配（向后兼容）
         for version in versions {
             if version.version == spec_cleaned ||
                version.version == spec_cleaned.replace('-', ".") ||
