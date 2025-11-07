@@ -400,7 +400,7 @@ impl Config {
     }
 }
 
-/// 标准化路径格式
+#[allow(dead_code)]
 fn normalize_path(path: &str) -> String {
     let path = Path::new(path);
 

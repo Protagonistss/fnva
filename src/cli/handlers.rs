@@ -1,7 +1,7 @@
 use crate::cli::commands::*;
 use crate::cli::output::{OutputFormat, FORMATTER};
 use crate::core::switcher::EnvironmentSwitcher;
-use crate::core::environment_manager::{EnvironmentType, EnvironmentManagerFactory};
+use crate::core::environment_manager::EnvironmentType;
 use crate::infrastructure::shell::platform::detect_shell;
 use std::sync::{Arc, Mutex};
 
@@ -121,7 +121,7 @@ impl CommandHandler {
                     }
                 }
             }
-            JavaCommands::Add { name, home, description } => {
+            JavaCommands::Add { name, home, description: _ } => {
                 let config_value = serde_json::json!({
                     "java_home": home
                 });
@@ -276,7 +276,7 @@ impl CommandHandler {
     /// 处理环境管理命令
     async fn handle_env_command(&mut self, action: EnvCommands) -> Result<(), String> {
         match action {
-            EnvCommands::GenerateEnv { shell, use_on_cd } => {
+            EnvCommands::GenerateEnv { shell, use_on_cd: _ } => {
                 let shell_type = match shell {
                     Some(s) => Some(parse_shell_type(&s)?),
                     None => Some(detect_shell()),
@@ -418,7 +418,7 @@ function fnva {
     }
 
     /// 处理 Java 远程查询（简化版本）
-    async fn handle_java_ls_remote(&self, java_version: Option<u32>, repository: Option<String>) -> Result<String, String> {
+    async fn handle_java_ls_remote(&self, java_version: Option<u32>, _repository: Option<String>) -> Result<String, String> {
         use crate::environments::java::installer::JavaInstaller;
 
         println!("🔍 正在查询可用的 Java 版本...");

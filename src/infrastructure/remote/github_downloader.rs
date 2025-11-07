@@ -1,7 +1,6 @@
 use reqwest;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use regex::Regex;
 
 /// GitHub Java 发行版信息（从 jdk 仓库获取）
 #[derive(Debug, Clone, Serialize, Deserialize)]

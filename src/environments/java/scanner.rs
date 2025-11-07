@@ -240,7 +240,7 @@ impl JavaScanner {
 
     /// 从路径创建 Java 安装信息
     pub fn create_installation_from_path(path: &str) -> Result<JavaInstallation, String> {
-        let java_home = std::path::Path::new(path);
+        let _java_home = std::path::Path::new(path);
         let name = Self::extract_name_from_path(path)?;
         let version = Self::detect_java_version(path)?;
         let vendor = Self::detect_vendor(path)?;

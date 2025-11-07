@@ -56,7 +56,7 @@ impl ShellIntegration {
     }
 
     /// 生成 PowerShell 脚本内容
-    fn generate_powershell_script(config: &Config, env_name: &str) -> Result<String, String> {
+    fn generate_powershell_script(config: &Config, _env_name: &str) -> Result<String, String> {
         let mut script_content = String::new();
 
         // 脚本头部注释

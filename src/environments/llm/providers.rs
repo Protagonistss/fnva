@@ -22,6 +22,7 @@ pub trait LlmProvider: Send + Sync {
 /// LLM 提供商异步接口
 pub trait LlmProviderAsync: LlmProvider {
     /// 测试连接
+    #[allow(async_fn_in_trait)]
     async fn test_connection(&self, config: &LlmProviderConfig) -> Result<(), String>;
 }
 

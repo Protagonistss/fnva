@@ -4,6 +4,7 @@ use std::time::Duration;
 /// HTTP 客户端包装器
 pub struct HttpClient {
     client: Client,
+    #[allow(dead_code)]
     timeout: Duration,
 }
 

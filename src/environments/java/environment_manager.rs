@@ -8,8 +8,6 @@ use serde_json;
 /// Java 环境管理器
 pub struct JavaEnvironmentManager {
     installations: HashMap<String, crate::environments::java::scanner::JavaInstallation>,
-    /// 路径规范化缓存
-    path_cache: HashMap<String, String>,
 }
 
 impl JavaEnvironmentManager {
@@ -17,7 +15,6 @@ impl JavaEnvironmentManager {
     pub fn new() -> Self {
         let mut manager = Self {
             installations: HashMap::new(),
-            path_cache: HashMap::new(),
         };
 
         // 仅从配置文件加载环境
@@ -244,19 +241,6 @@ impl JavaEnvironmentManager {
             }
         }
     }
-
-    /// 缓存的路径规范化方法
-    fn normalize_path_cached(&mut self, path: &str) -> String {
-        // 如果缓存中存在，直接返回
-        if let Some(cached) = self.path_cache.get(path) {
-            return cached.clone();
-        }
-
-        // 否则计算并缓存
-        let normalized = Self::normalize_path_impl(path);
-        self.path_cache.insert(path.to_string(), normalized.clone());
-        normalized
-    }
 }
 
 impl EnvironmentManager for JavaEnvironmentManager {
@@ -454,7 +438,7 @@ impl EnvironmentManager for JavaEnvironmentManager {
     }
 
     
-    fn set_current(&mut self, name: &str) -> Result<(), String> {
+    fn set_current(&mut self, _name: &str) -> Result<(), String> {
         // This would set the current environment, but for Java this is typically
         // handled by setting JAVA_HOME environment variable
         // For now, this is a no-op

@@ -219,7 +219,7 @@ impl EnvironmentManager for LlmEnvironmentManager {
         Ok(result)
     }
 
-    fn set_current(&mut self, name: &str) -> Result<(), String> {
+    fn set_current(&mut self, _name: &str) -> Result<(), String> {
         // This would set the current environment by updating environment variables
         // For now, this is a no-op - the actual switching is handled by use_env
         Ok(())
@@ -243,7 +243,9 @@ struct LlmEnvironment {
     api_key: String,
     base_url: String,
     model: String,
+    #[allow(dead_code)]
     temperature: Option<f64>,
+    #[allow(dead_code)]
     max_tokens: Option<u32>,
 }
 

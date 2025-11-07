@@ -348,7 +348,7 @@ impl ScriptBuilder {
 
     /// 构建 PowerShell 集成脚本 - 类似 fnm 的简洁方案
     fn build_powershell_integration_script(
-        current_envs: &HashMap<EnvironmentType, String>,
+        _current_envs: &HashMap<EnvironmentType, String>,
     ) -> Result<String, String> {
         let username = std::env::var("USERNAME").unwrap_or_else(|_| "Administrator".to_string());
 
@@ -400,7 +400,7 @@ impl ScriptBuilder {
 
     /// 构建 Bash/Zsh 集成脚本
     fn build_bash_integration_script(
-        current_envs: &HashMap<EnvironmentType, String>,
+        _current_envs: &HashMap<EnvironmentType, String>,
     ) -> Result<String, String> {
         let script = r#"# fnva Bash/Zsh Integration
 # Add this to your ~/.bashrc or ~/.zshrc
@@ -432,7 +432,7 @@ echo "🚀 fnva Bash/Zsh integration loaded"
 
     /// 构建 Fish 集成脚本
     fn build_fish_integration_script(
-        current_envs: &HashMap<EnvironmentType, String>,
+        _current_envs: &HashMap<EnvironmentType, String>,
     ) -> Result<String, String> {
         let script = r#"# fnva Fish Integration
 # Add this to your ~/.config/fish/config.fish
@@ -457,7 +457,7 @@ echo "🚀 fnva Fish integration loaded"
 
     /// 构建 CMD 集成脚本
     fn build_cmd_integration_script(
-        current_envs: &HashMap<EnvironmentType, String>,
+        _current_envs: &HashMap<EnvironmentType, String>,
     ) -> Result<String, String> {
         let script = r#"@echo off
 REM fnva CMD Integration

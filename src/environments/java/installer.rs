@@ -108,7 +108,7 @@ impl JavaInstaller {
         auto_switch: bool,
         java_home: &str,
         version: &str,
-        release_name: &str,
+        _release_name: &str,
     ) -> Result<String, String> {
         // 环境名完全对应用户输入（移除空格和前缀）
         let install_name = version_spec.trim()
@@ -153,7 +153,7 @@ impl JavaInstaller {
         version_info: &crate::remote::AliyunJavaVersion,
         os: &str,
         arch: &str,
-        version_spec: &str,
+        _version_spec: &str,
     ) -> Result<String, String> {
         // 创建临时目录
         let temp_dir = TempDir::new()
@@ -213,6 +213,7 @@ impl JavaInstaller {
     }
 
     /// 解析版本规格（旧的兼容版本）
+    #[allow(dead_code)]
     fn parse_version_spec_legacy(version_spec: &str) -> Result<u32, String> {
         // 支持格式: "v21", "21", "java21", "jdk21" 等
         let cleaned = version_spec
@@ -237,6 +238,7 @@ impl JavaInstaller {
     }
 
     /// 获取版本信息（旧的兼容版本）
+    #[allow(dead_code)]
     async fn get_version_info_legacy(major_version: &u32) -> Result<JavaVersionInfo, String> {
         // 尝试多个源
         let repositories = vec![
@@ -340,6 +342,7 @@ impl JavaInstaller {
     }
 
     /// 下载和安装 Java（保留旧方法以维持兼容性）
+    #[allow(dead_code)]
     async fn download_and_install(version_info: &JavaVersionInfo) -> Result<String, String> {
         let download_url = version_info.download_url.as_ref()
             .ok_or("没有可用的下载链接")?;
@@ -378,6 +381,7 @@ impl JavaInstaller {
     }
 
     /// 从 URL 提取文件名
+    #[allow(dead_code)]
     fn extract_filename_from_url(url: &str) -> String {
         url.split('/')
             .last()

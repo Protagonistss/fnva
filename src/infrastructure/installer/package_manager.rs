@@ -148,6 +148,7 @@ impl JavaPackageManager {
     }
 
     /// 检测平台信息
+    #[allow(dead_code)]
     fn detect_platform_info() -> (String, String, String) {
         let arch = match std::env::consts::ARCH {
             "x86_64" => "x64",
@@ -364,6 +365,7 @@ impl JavaPackageManager {
             // Windows 平台尝试使用内置解压或其他工具
             if cfg!(target_os = "windows") {
                 // 对于 Windows，我们优先使用 ZIP 格式
+                let _ = (tar_path, dest_dir); // 避免未使用变量警告
                 return Err("Windows 平台建议使用 ZIP 格式的资源包".to_string());
             }
         }

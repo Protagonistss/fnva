@@ -188,7 +188,7 @@ impl RemoteManager {
     }
 
     /// 获取版本的下载 URL
-    async fn get_download_url_for_version(&self, version: &crate::environments::java::JavaVersion) -> Result<Option<String>, String> {
+    async fn get_download_url_for_version(&self, _version: &crate::environments::java::JavaVersion) -> Result<Option<String>, String> {
         // 这里可以根据版本信息生成下载 URL
         // 暂时返回 None，让调用者使用默认逻辑
         Ok(None)
@@ -338,13 +338,13 @@ impl RemoteManager {
 
     /// 从 Adoptium/GitHub 查询 Java 版本（简化版本，使用 GitHub 下载链接）
     async fn list_java_versions_from_adoptium(
-        repo_url: &str,
+        _repo_url: &str,
         feature_version: Option<u32>,
     ) -> Result<Vec<JavaVersionInfo>, String> {
         println!("使用 GitHub/Adoptium 源查询 Java 版本...");
 
         // 获取平台信息
-        let (platform, arch, os) = Self::detect_platform_info();
+        let (_platform, arch, os) = Self::detect_platform_info();
 
         let mut versions = Vec::new();
 
@@ -516,7 +516,7 @@ impl RemoteManager {
         (platform, arch.to_string(), os.to_string())
     }
 
-    /// 查找适合当前平台的下载链接
+    #[allow(dead_code)]
     fn find_download_url(binaries: &[AdoptiumBinary]) -> Option<String> {
         let current_os = std::env::consts::OS;
         let current_arch = std::env::consts::ARCH;
