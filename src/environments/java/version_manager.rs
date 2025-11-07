@@ -60,7 +60,7 @@ impl JavaVersion {
 }
 
 /// 版本解析结果
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum VersionSpec {
     Major(u32),
     Exact(String),
@@ -326,7 +326,6 @@ impl VersionManager {
                 if let Some(latest) = versions.iter().max_by(|a, b| {
                     match (a.major.cmp(&b.major), a.minor.cmp(&b.minor), a.patch.cmp(&b.patch)) {
                         (std::cmp::Ordering::Equal, std::cmp::Ordering::Equal, patch_cmp) => patch_cmp,
-                        (std::cmp::Ordering::Equal, std::cmp::Ordering::Equal, _) => std::cmp::Ordering::Equal,
                         (std::cmp::Ordering::Equal, minor_cmp, _) => minor_cmp,
                         (major_cmp, _, _) => major_cmp,
                     }

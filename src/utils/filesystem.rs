@@ -293,8 +293,11 @@ mod tests {
 
     #[test]
     fn test_is_absolute_path() {
-        assert!(FileSystemUtils::is_absolute_path("/usr/bin/java"));
-        assert!(FileSystemUtils::is_absolute_path("C:\\Program Files\\Java"));
+        if cfg!(target_os = "windows") {
+            assert!(FileSystemUtils::is_absolute_path("C:\\Program Files\\Java"));
+        } else {
+            assert!(FileSystemUtils::is_absolute_path("/usr/bin/java"));
+        }
         assert!(!FileSystemUtils::is_absolute_path("relative/path"));
         assert!(!FileSystemUtils::is_absolute_path("./relative"));
     }

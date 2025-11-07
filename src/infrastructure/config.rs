@@ -477,6 +477,7 @@ mod tests {
             name: "test".to_string(),
             java_home: "/usr/lib/jvm/java-17".to_string(),
             description: "Test JDK".to_string(),
+            source: EnvironmentSource::Manual,
         };
         
         assert!(config.add_java_env(env.clone()).is_ok());

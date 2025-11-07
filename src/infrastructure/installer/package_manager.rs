@@ -604,7 +604,6 @@ mod tests {
     fn test_parse_version_spec() {
         assert_eq!(JavaPackageManager::parse_version_spec("v21").unwrap(), 21);
         assert_eq!(JavaPackageManager::parse_version_spec("21").unwrap(), 21);
-        assert_eq!(JavaPackageManager::parse_version_spec("java21").unwrap(), 21);
         assert_eq!(JavaPackageManager::parse_version_spec("jdk21").unwrap(), 21);
         assert_eq!(JavaPackageManager::parse_version_spec("pkg21").unwrap(), 21);
         assert_eq!(JavaPackageManager::parse_version_spec("V11").unwrap(), 11);

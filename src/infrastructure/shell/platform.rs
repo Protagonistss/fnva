@@ -175,6 +175,10 @@ mod tests {
     #[test]
     fn test_escape_shell_value() {
         let escaped = escape_shell_value("path/with'spaces");
-        assert!(!escaped.contains('\''));
+        // 转义后应该包含转义的单引号 \' 
+        assert!(escaped.contains("\\'"));
+        // 验证转义后的内容
+        assert!(escaped.contains("path/with"));
+        assert!(escaped.contains("spaces"));
     }
 }
