@@ -1,5 +1,6 @@
 use reqwest;
 use serde::{Deserialize, Serialize};
+use crate::environments::java::VersionManager;
 
 /// Java 版本信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -46,7 +47,10 @@ pub struct MavenArtifactInfo {
 }
 
 /// 远程查询管理器
-pub struct RemoteManager;
+pub struct RemoteManager {
+    /// 版本管理器
+    version_manager: VersionManager,
+}
 
 /// Adoptium API 返回的 Java 版本信息
 #[derive(Debug, Deserialize)]
@@ -114,15 +118,88 @@ pub struct MavenArtifact {
 }
 
 impl RemoteManager {
-    /// 查询可用的 Java 版本
+    /// 创建新的远程管理器
+    pub fn new() -> Self {
+        Self {
+            version_manager: VersionManager::new("https://api.adoptium.net/v3"),
+        }
+    }
+
+    /// 获取版本管理器的可变引用
+    pub fn version_manager_mut(&mut self) -> &mut VersionManager {
+        &mut self.version_manager
+    }
+    /// 查询可用的 Java 版本（使用新的版本管理器）
     pub async fn list_java_versions(
-        repo_url: &str,
+        &mut self,
+        repo_url: Option<&str>,
         feature_version: Option<u32>,
         _os: Option<&str>,
         _arch: Option<&str>,
     ) -> Result<Vec<JavaVersionInfo>, String> {
         println!("正在查询 Java 版本信息...");
 
+        // 优先使用新的版本管理器
+        match self.version_manager.get_versions().await {
+            Ok(versions) => {
+                let mut result = Vec::new();
+
+                if let Some(major) = feature_version {
+                    // 返回指定主版本的 Java
+                    for version in versions.iter().filter(|v| v.major == major) {
+                        let version_info = JavaVersionInfo {
+                            version: version.version.clone(),
+                            major: Some(version.major),
+                            minor: version.minor,
+                            patch: version.patch,
+                            release_name: version.release_name.clone(),
+                            download_url: self.get_download_url_for_version(&version).await?,
+                        };
+                        result.push(version_info);
+                    }
+
+                    if result.is_empty() {
+                        return Err(format!("未找到 Java {} 的可用版本", major));
+                    }
+                } else {
+                    // 返回所有版本
+                    for version in versions {
+                        let version_info = JavaVersionInfo {
+                            version: version.version.clone(),
+                            major: Some(version.major),
+                            minor: version.minor,
+                            patch: version.patch,
+                            release_name: version.release_name.clone(),
+                            download_url: self.get_download_url_for_version(&version).await?,
+                        };
+                        result.push(version_info);
+                    }
+                }
+
+                Ok(result)
+            }
+            Err(e) => {
+                // 回退到原有的实现
+                println!("⚠️  新版本管理器失败，回退到原有实现: {}", e);
+                let repo_url = repo_url.unwrap_or("https://api.adoptium.net/v3");
+                self.list_java_versions_legacy(repo_url, feature_version).await
+            }
+        }
+    }
+
+    /// 获取版本的下载 URL
+    async fn get_download_url_for_version(&self, version: &crate::environments::java::JavaVersion) -> Result<Option<String>, String> {
+        // 这里可以根据版本信息生成下载 URL
+        // 暂时返回 None，让调用者使用默认逻辑
+        Ok(None)
+    }
+
+    /// 原有的版本查询实现（作为回退）
+    async fn list_java_versions_legacy(
+        &self,
+        repo_url: &str,
+        feature_version: Option<u32>,
+    ) -> Result<Vec<JavaVersionInfo>, String> {
         // 判断源的类型
         if repo_url.contains("aliyun.com") || repo_url.contains("mirrors.aliyun.com") {
             // 使用阿里云镜像逻辑

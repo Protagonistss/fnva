@@ -97,6 +97,30 @@ impl CommandHandler {
                 let output = self.switcher.scan_environments(EnvironmentType::Java).await?;
                 print!("{}", output);
             }
+            JavaCommands::LsRemote { query_type, java_version, maven_artifact: _, search: _, repository, limit: _ } => {
+                if query_type == "java" {
+                    // 使用新的版本管理器查询 Java 版本
+                    let output = self.handle_java_ls_remote(java_version, repository).await?;
+                    print!("{}", output);
+                } else {
+                    return Err(format!("查询类型 '{}' 尚不支持", query_type));
+                }
+            }
+            JavaCommands::Install { version, auto_switch } => {
+                use crate::environments::java::installer::JavaInstaller;
+                use crate::infrastructure::config::Config;
+
+                let mut config = Config::load().map_err(|e| format!("加载配置失败: {}", e))?;
+                match JavaInstaller::install_java(&version, &mut config, auto_switch).await {
+                    Ok(java_home) => {
+                        println!("✅ Java {} 安装成功！", version);
+                        println!("📁 安装路径: {}", java_home);
+                    }
+                    Err(e) => {
+                        return Err(format!("安装失败: {}", e));
+                    }
+                }
+            }
             JavaCommands::Add { name, home, description } => {
                 let config_value = serde_json::json!({
                     "java_home": home
@@ -391,6 +415,52 @@ function fnva {
         // TODO: 实现网络测试
         println!("Network test not yet implemented in new architecture");
         Ok(())
+    }
+
+    /// 处理 Java 远程查询（简化版本）
+    async fn handle_java_ls_remote(&self, java_version: Option<u32>, repository: Option<String>) -> Result<String, String> {
+        use crate::environments::java::installer::JavaInstaller;
+
+        println!("🔍 正在查询可用的 Java 版本...");
+
+        // 暂时使用旧的实现，确保基本功能可用
+        match JavaInstaller::list_installable_versions().await {
+            Ok(versions) => {
+                let mut output = String::new();
+                output.push_str("📋 可用的 Java 版本:\n\n");
+
+                if let Some(major) = java_version {
+                    let filtered_versions: Vec<String> = versions
+                        .into_iter()
+                        .filter(|v| v.contains(&major.to_string()))
+                        .collect();
+
+                    if filtered_versions.is_empty() {
+                        output.push_str(&format!("❌ 未找到 Java {} 的可用版本\n", major));
+                    } else {
+                        output.push_str(&format!("🎯 Java {} 可用版本:\n", major));
+                        for version in filtered_versions {
+                            output.push_str(&format!("  {}\n", version));
+                        }
+                    }
+                } else {
+                    output.push_str("🌟 所有可用版本:\n");
+                    for version in versions {
+                        output.push_str(&format!("  {}\n", version));
+                    }
+                }
+
+                output.push_str("\n💡 使用示例:\n");
+                output.push_str("  fnva java install 21        # 安装 Java 21\n");
+                output.push_str("  fnva java install lts        # 安装最新 LTS 版本\n");
+                output.push_str("  fnva java install latest     # 安装最新版本\n");
+
+                Ok(output)
+            }
+            Err(e) => {
+                Err(format!("查询版本失败: {}", e))
+            }
+        }
     }
 
     /// 处理历史命令

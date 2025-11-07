@@ -107,13 +107,14 @@ impl JavaPackageManager {
         let config = Config::load().map_err(|e| format!("加载配置失败: {}", e))?;
 
         // 使用配置中的 Java 仓库
-        let repositories = &config.repositories.java;
+        let repositories = &config.repositories.java.repositories;
 
         for repo in repositories {
             println!("🔍 尝试从 {} 获取版本信息...", repo);
 
-            match RemoteManager::list_java_versions(
-                repo,
+            let mut remote_manager = RemoteManager::new();
+            match remote_manager.list_java_versions(
+                Some(repo),
                 Some(*major_version),
                 None,
                 None,
@@ -382,32 +383,32 @@ impl JavaPackageManager {
 
         // 检测是否需要去除第一层目录
         let mut strip_components = 0;
-        if archive.len() > 10 {
-            // 读取第一个条目来检测目录结构
-            let first_file = archive.by_index(0)
-                .map_err(|e| format!("读取第一个文件项失败: {}", e))?;
-            let first_name = first_file.name().to_string();
-            drop(first_file);
+        if archive.len() > 3 {
+            // 读取前几个条目来检测目录结构
+            let sample_size = std::cmp::min(10, archive.len());
+            let mut first_dirs = Vec::new();
 
-            // 如果第一个条目是目录，检查是否需要去除这个层级
-            if first_name.ends_with('/') {
-                let prefix = &first_name;
-                let mut files_in_prefix = 0;
-                let sample_size = std::cmp::min(20, archive.len());
+            for i in 0..sample_size {
+                let file_name = {
+                    let file = archive.by_index(i)
+                        .map_err(|e| format!("读取文件项失败: {}", e))?;
+                    let name = file.name().to_string();
+                    drop(file); // 立即释放借用
+                    name
+                };
 
-                for i in 0..sample_size {
-                    if let Ok(file) = archive.by_index(i) {
-                        let file_name = file.name();
-                        if file_name.starts_with(prefix) && file_name != prefix {
-                            files_in_prefix += 1;
-                        }
-                    }
+                let parts: Vec<&str> = file_name.split('/').collect();
+                if parts.len() > 1 && parts[0].contains("jdk") {
+                    first_dirs.push(parts[0].to_string());
                 }
+            }
 
-                // 如果大部分文件都在前缀目录下，则去除这个目录层级
-                if files_in_prefix > sample_size / 2 {
+            // 如果检测到一致的 JDK 目录前缀，则去除
+            if let Some(first_dir) = first_dirs.first() {
+                let all_same = first_dirs.iter().all(|dir| dir == first_dir);
+                if all_same && !first_dir.is_empty() {
                     strip_components = 1;
-                    println!("🔧 检测到多余的目录层级，自动去除: {}", prefix.trim_end_matches('/'));
+                    println!("🔧 检测到 JDK 目录层级，自动去除: {}", first_dir);
                 }
             }
         }
@@ -532,14 +533,15 @@ impl JavaPackageManager {
 
         // 加载配置以获取仓库列表
         let config = Config::load().map_err(|e| format!("加载配置失败: {}", e))?;
-        let repositories = &config.repositories.java;
+        let repositories = &config.repositories.java.repositories;
 
         for major_version in [21, 17, 11, 8] {
             let mut found = false;
 
             for repo in repositories {
-                match RemoteManager::list_java_versions(
-                    repo,
+                let mut remote_manager = RemoteManager::new();
+                match remote_manager.list_java_versions(
+                    Some(repo),
                     Some(major_version),
                     None,
                     None,

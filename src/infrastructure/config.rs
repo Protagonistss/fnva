@@ -14,6 +14,12 @@ pub struct Config {
     pub cc_environments: Vec<CcEnvironment>,
     #[serde(default)]
     pub repositories: Repositories,
+    /// Java 下载源配置
+    #[serde(default)]
+    pub java_download_sources: JavaDownloadSources,
+    /// Java 版本缓存配置
+    #[serde(default)]
+    pub java_version_cache: JavaVersionCache,
     /// 当前激活的 Java 环境名称
     #[serde(default)]
     pub current_java_env: Option<String>,
@@ -28,13 +34,103 @@ pub struct Config {
     pub removed_java_names: Vec<String>,
 }
 
-/// 仓库配置
+/// Java 下载源配置（简化版）
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct JavaDownloadSources {
+    /// 主要下载源名称：github 或 aliyun
+    #[serde(default = "default_primary_source")]
+    pub primary: String,
+    /// 备用下载源名称列表
+    #[serde(default)]
+    pub fallback: Vec<String>,
+    /// 自定义下载源列表
+    #[serde(default)]
+    pub sources: Vec<JavaDownloadSourceConfig>,
+}
+
+fn default_primary_source() -> String {
+    "aliyun".to_string() // 默认使用阿里云镜像（国内更快）
+}
+
+/// Java 下载源配置项
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JavaDownloadSourceConfig {
+    pub name: String,
+    pub url: String,
+    #[serde(default = "default_priority")]
+    pub priority: u32,
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub region: Option<String>,
+    #[serde(default)]
+    pub source_type: String,
+}
+
+fn default_priority() -> u32 {
+    10
+}
+
+/// Java 版本缓存配置
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct JavaVersionCache {
+    /// 缓存生存时间（秒）
+    #[serde(default = "default_cache_ttl")]
+    pub ttl: u64,
+    /// 是否启用缓存
+    #[serde(default = "default_cache_enabled")]
+    pub enabled: bool,
+}
+
+fn default_cache_ttl() -> u64 {
+    3600 // 1 小时
+}
+
+fn default_cache_enabled() -> bool {
+    true
+}
+
+/// 仓库配置（向后兼容）
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Repositories {
-    #[serde(default = "default_java_repositories")]
-    pub java: Vec<String>,
+    #[serde(default = "default_java_downloader")]
+    pub java: JavaDownloaderConfig,
     #[serde(default = "default_maven_repositories")]
     pub maven: Vec<String>,
+}
+
+/// Java 下载器配置
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct JavaDownloaderConfig {
+    /// 下载器类型：github 或 aliyun
+    #[serde(default = "default_java_downloader_type")]
+    pub downloader: String,
+    /// 备用下载器列表
+    #[serde(default)]
+    pub fallback: Vec<String>,
+    /// 是否启用自动回退
+    #[serde(default = "default_java_fallback_enabled")]
+    pub enable_fallback: bool,
+    /// 传统仓库URL列表（向后兼容）
+    #[serde(default)]
+    pub repositories: Vec<String>,
+}
+
+fn default_java_downloader() -> JavaDownloaderConfig {
+    JavaDownloaderConfig {
+        downloader: "aliyun".to_string(),
+        fallback: vec!["github".to_string()],
+        enable_fallback: true,
+        repositories: default_java_repositories(),
+    }
+}
+
+fn default_java_downloader_type() -> String {
+    "aliyun".to_string()
+}
+
+fn default_java_fallback_enabled() -> bool {
+    true
 }
 
 fn default_java_repositories() -> Vec<String> {
@@ -121,9 +217,15 @@ impl Config {
             llm_environments: Vec::new(),
             cc_environments: Vec::new(),
             repositories: Repositories {
-                java: default_java_repositories(),
+                java: default_java_downloader(),
                 maven: default_maven_repositories(),
             },
+            java_download_sources: JavaDownloadSources {
+                primary: "aliyun".to_string(),
+                fallback: vec!["github".to_string()],
+                sources: Vec::new(),
+            },
+            java_version_cache: JavaVersionCache::default(),
             current_java_env: None,
             default_java_env: None,
             custom_java_scan_paths: Vec::new(),
