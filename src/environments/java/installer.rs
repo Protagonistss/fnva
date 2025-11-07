@@ -13,45 +13,6 @@ use tokio::io::AsyncWriteExt;
 /// Java 安装管理器
 pub struct JavaInstaller;
 
-/// 智能版本规范处理函数
-fn normalize_version_spec(version_spec: &str) -> (String, String, bool) {
-    let cleaned = version_spec.trim()
-        .to_lowercase()
-        .replace("v", "")
-        .replace("java", "")
-        .replace("jdk", "")
-        .replace("pkg", "")
-        .replace("package", "")
-        .trim()
-        .to_string();
-
-    // 分割版本号 parts
-    let parts: Vec<&str> = cleaned.split('.').filter(|p| !p.is_empty()).collect();
-    
-    if parts.is_empty() {
-        // 如果清理后为空，返回默认版本
-        return ("17".to_string(), "jdk17".to_string(), false);
-    }
-
-    // 尝试解析为数字
-    let first_part = parts[0];
-    if let Ok(_major) = first_part.parse::<u32>() {
-        if parts.len() == 1 {
-            // 只有主版本号，如 "8" -> 需要安装该主版本号的最新LTS
-            let env_name = format!("jdk{}", first_part);
-            return (first_part.to_string(), env_name, false);
-        } else {
-            // 完整版本号，如 "8.0.2" 或 "18.0.2" -> 尝试精确匹配
-            let full_version = parts.join(".");
-            let env_name = format!("jdk{}", full_version);
-            return (full_version, env_name, true);
-        }
-    }
-
-    // 如果无法解析为数字，返回默认版本
-    ("17".to_string(), "jdk17".to_string(), false)
-}
-
 impl JavaInstaller {
     /// 安装指定版本的 Java（使用配置的下载器）
     pub async fn install_java(
@@ -576,7 +537,7 @@ impl JavaInstaller {
     }
 
     /// 安装压缩包（跨平台）
-    async fn install_archive(archive_path: &Path, version: &str, env_name: &str) -> Result<String, String> {
+    async fn install_archive(archive_path: &Path, _version: &str, env_name: &str) -> Result<String, String> {
         // 获取 fnva 安装目录
         let fnva_dir = dirs::home_dir()
             .ok_or("无法获取用户主目录")?
@@ -809,11 +770,9 @@ impl JavaInstaller {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[tokio::test]
     async fn test_version_manager_parsing() {
-        let mut version_manager = crate::environments::java::VersionManager::new("https://api.adoptium.net/v3");
+        let _version_manager = crate::environments::java::VersionManager::new("https://api.adoptium.net/v3");
 
         // 测试版本解析
         assert!(matches!(
