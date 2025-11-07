@@ -496,6 +496,12 @@ impl JavaInstaller {
 
         // 从配置中移除
         config.remove_java_env(version_name)?;
+        
+        // 如果删除的是默认环境，清理默认环境设置
+        if config.default_java_env.as_ref().map_or(false, |default| default == version_name) {
+            config.default_java_env = None;
+        }
+        
         config.save()?;
 
         println!("✅ Java {} 卸载成功", version_name);

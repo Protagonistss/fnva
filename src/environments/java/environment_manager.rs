@@ -77,6 +77,9 @@ impl JavaEnvironmentManager {
         self.installations.clear();
 
         for env in &config.java_environments {
+            // 移除了黑名单检查逻辑，现在允许所有环境重新加载
+            // 原来：if config.is_java_name_removed(&env.name) { continue; }
+            
             let installation = crate::environments::java::scanner::JavaInstallation {
                 name: env.name.clone(),
                 description: env.description.clone(),
@@ -124,11 +127,6 @@ impl JavaEnvironmentManager {
         use crate::infrastructure::config::{Config, JavaEnvironment, EnvironmentSource};
 
         let mut config = Config::load()?;
-
-        // 检查是否已经被用户明确移除（基于名称）
-        if config.is_java_name_removed(&installation.name) {
-            return Ok(()); // 被用户移除，不要重新添加
-        }
 
         // 检查是否已经存在，如果存在则更新（覆盖）
         if let Some(existing_env) = config.java_environments.iter_mut().find(|env| env.name == installation.name) {
@@ -182,8 +180,13 @@ impl JavaEnvironmentManager {
             return Err(format!("Java environment '{}' not found in config", name));
         }
 
-        // 将删除的环境名称添加到移除列表
-        config.add_removed_java_name(name);
+        // 如果删除的是默认环境，清理默认环境设置
+        if config.default_java_env.as_ref().map_or(false, |default| default == name) {
+            config.default_java_env = None;
+        }
+
+        // 修复：不将删除的环境名加入黑名单，允许用户重新安装相同名字的环境
+        // 移除了：config.add_removed_java_name(name);
 
         // 保存配置文件
         config.save()?;
@@ -252,29 +255,26 @@ impl EnvironmentManager for JavaEnvironmentManager {
     }
 
     fn list(&self) -> Result<Vec<DynEnvironment>, String> {
-        let mut result = Vec::new();
-
-        // 加载配置以检查移除列表（一次性加载）
+        // 重新从配置文件加载最新数据，确保同步
         let config = crate::infrastructure::config::Config::load().unwrap_or_else(|_| {
-            eprintln!("Warning: Failed to load config for removed names check");
+            eprintln!("Warning: Failed to load config");
             crate::infrastructure::config::Config::new()
         });
 
-        for installation in self.installations.values() {
-            // 检查是否已经被移除（基于名称）
-            let is_removed = config.is_java_name_removed(&installation.name);
+        let mut result = Vec::new();
 
-            // 只显示未被移除的环境
-            if !is_removed {
-                result.push(DynEnvironment {
-                    name: installation.name.clone(),
-                    path: installation.java_home.clone(),
-                    version: installation.version.clone(),
-                    description: Some(installation.description.clone()),
-                    is_active: installation.is_active(),
-                });
-            }
+        for env in &config.java_environments {
+            let environment = DynEnvironment {
+                name: env.name.clone(),
+                path: env.java_home.clone(),
+                version: None, // 版本信息在需要时动态检测
+                description: Some(env.description.clone()),
+                is_active: false, // 当前激活状态由会话管理处理
+            };
+            
+            result.push(environment);
         }
+
         Ok(result)
     }
 
@@ -420,17 +420,18 @@ impl EnvironmentManager for JavaEnvironmentManager {
         for installation in installations {
             let normalized_path = Self::normalize_path_impl(&installation.java_home);
             if !seen_paths.contains(&normalized_path) {
-                // 检查该名称是否已被移除
-                if !config.is_java_name_removed(&installation.name) {
-                    result.push(DynEnvironment {
-                        name: installation.name.clone(),
-                        path: installation.java_home.clone(),
-                        version: installation.version.clone(),
-                        description: Some(installation.description.clone()),
-                        is_active: installation.is_active(),
-                    });
-                    seen_paths.insert(normalized_path);
-                }
+                // 移除了黑名单检查，现在显示所有环境
+                // 原来：检查该名称是否已被移除
+                // 原来：if !config.is_java_name_removed(&installation.name) {
+                
+                result.push(DynEnvironment {
+                    name: installation.name.clone(),
+                    path: installation.java_home.clone(),
+                    version: installation.version.clone(),
+                    description: Some(installation.description.clone()),
+                    is_active: installation.is_active(),
+                });
+                seen_paths.insert(normalized_path);
             }
         }
 

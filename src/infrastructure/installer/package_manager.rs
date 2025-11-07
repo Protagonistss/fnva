@@ -567,6 +567,12 @@ impl JavaPackageManager {
 
         // 从配置中移除
         config.remove_java_env(package_name)?;
+        
+        // 如果删除的是默认环境，清理默认环境设置
+        if config.default_java_env.as_ref().map_or(false, |default| default == package_name) {
+            config.default_java_env = None;
+        }
+        
         config.save()?;
 
         println!("✅ Java 资源包 {} 卸载成功", package_name);
