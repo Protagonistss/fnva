@@ -17,6 +17,22 @@ impl JavaInstaller {
     ) -> Result<String, String> {
         println!("🚀 正在准备安装 Java {}...", version_spec);
 
+        // 在开始安装前，检查本地是否已有对应的Java包（避免重复下载）
+        if let Ok(java_home) = Self::check_local_java_package(version_spec, config) {
+            println!("🎉 检测到本地Java包: {}", version_spec);
+            println!("📁 使用本地安装: {}", java_home);
+            
+            // 直接完成安装流程（使用本地包）
+            return Self::complete_installation_simple(
+                version_spec, 
+                config, 
+                auto_switch, 
+                &java_home, 
+                "local", 
+                "local"
+            ).await;
+        }
+
         // 从repositories配置中读取Java下载器设置
         let downloader_type = config.repositories.java.downloader.clone();
 
@@ -53,13 +69,14 @@ impl JavaInstaller {
                 downloader.list_available_versions().await?
                     .into_iter()
                     .next()
-                    .ok_or("没有可用的 Java 版本".to_string())?
+                    .ok_or_else(|| "无法获取最新版本".to_string())?
             }
         };
 
         println!("📦 使用GitHub下载器: {}", java_version.release_name);
 
         let (os, arch) = crate::remote::GitHubJavaDownloader::get_current_system_info();
+        // 恢复使用用户输入的原始格式
         let java_home = Self::download_and_install_from_github(&downloader, &java_version, &os, &arch, version_spec).await?;
         Self::complete_installation_simple(version_spec, config, auto_switch, &java_home, &java_version.version, &java_version.release_name).await
     }
@@ -91,6 +108,7 @@ impl JavaInstaller {
         println!("📦 使用阿里云下载器: {}", java_version.release_name);
 
         let (os, arch) = crate::remote::AliyunJavaDownloader::get_current_system_info();
+        // 恢复使用用户输入的原始格式
         let java_home = Self::download_and_install_from_aliyun(&downloader, &java_version, &os, &arch, version_spec).await?;
         Self::complete_installation_simple(version_spec, config, auto_switch, &java_home, &java_version.version, &java_version.release_name).await
     }
@@ -105,8 +123,8 @@ impl JavaInstaller {
         version: &str,
         _release_name: &str,
     ) -> Result<String, String> {
-        // 环境名使用用户输入的原始格式，保持用户习惯
-        let install_name = version_spec.trim().to_lowercase();
+        // 使用用户输入的原始名称，确保名称唯一性
+        let install_name = version_spec.to_string();
 
         // 检查是否已安装
         if config.get_java_env(&install_name).is_some() {
@@ -506,6 +524,34 @@ impl JavaInstaller {
 
         println!("✅ Java {} 卸载成功", version_name);
         Ok(())
+    }
+
+    /// 检查本地是否已有对应的Java包
+    fn check_local_java_package(version_spec: &str, config: &Config) -> Result<String, String> {
+        let fnva_dir = dirs::home_dir()
+            .ok_or("无法获取用户主目录")?
+            .join(".fnva")
+            .join("java-packages");
+
+        if !fnva_dir.exists() {
+            return Err("本地Java包目录不存在，请先安装Java".to_string());
+        }
+
+        // 如果在配置中已经存在该环境，则不认为是可用的本地包
+        if config.get_java_env(version_spec).is_some() {
+            return Err(format!("Java {} 已经在配置中存在", version_spec));
+        }
+
+        let java_home = fnva_dir.join(version_spec);
+
+        // 如果本地包目录存在，则查找实际的Java安装路径
+        if java_home.exists() {
+            // 查找实际的Java安装目录（可能在其子目录中）
+            let actual_java_home = Self::find_installed_java(&java_home)?;
+            return Ok(actual_java_home);
+        }
+
+        Err(format!("本地未找到Java包: {}", version_spec))
     }
 }
 
