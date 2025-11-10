@@ -14,9 +14,17 @@ $platformDir = "$os-$arch"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $binaryPath = Join-Path $scriptDir ".." "platforms" $platformDir "fnva.exe"
 
+# 如果分层结构不存在，尝试扁平结构
+if (-not (Test-Path $binaryPath)) {
+    $binaryPath = Join-Path $scriptDir ".." "platforms" "fnva.exe"
+}
+
 # 检查二进制文件是否存在
 if (-not (Test-Path $binaryPath)) {
-    Write-Host "错误: 未找到二进制文件: $binaryPath" -ForegroundColor Red
+    Write-Host "错误: 未找到二进制文件" -ForegroundColor Red
+    Write-Host "尝试的路径: " -ForegroundColor Yellow
+    Write-Host "  1. $(Join-Path $scriptDir ".." "platforms" $platformDir "fnva.exe")" -ForegroundColor Yellow
+    Write-Host "  2. $(Join-Path $scriptDir ".." "platforms" "fnva.exe")" -ForegroundColor Yellow
     Write-Host "请运行 'npm run build' 构建二进制文件" -ForegroundColor Yellow
     exit 1
 }
