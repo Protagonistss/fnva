@@ -27,8 +27,8 @@ function resolveArch() {
   return 'x64';
 }
 
-function buildBinaryPath() {
-  const platform = resolvePlatform();
+function platformBinaryPath(platformOverride) {
+  const platform = platformOverride || resolvePlatform();
   const arch = resolveArch();
   const scriptDir = __dirname;
   const projectRoot = path.resolve(scriptDir, '..');
@@ -37,13 +37,53 @@ function buildBinaryPath() {
   return path.join(projectRoot, 'platforms', platformDir, binaryName);
 }
 
+function buildBinaryPath() {
+  const platform = resolvePlatform();
+  const binaryCandidates = [];
+
+  // 1. Prebuilt binary shipped with the npm package
+  binaryCandidates.push(platformBinaryPath(platform));
+
+  // Flat legacy structure: platforms/fnva(.exe)
+  const scriptDir = __dirname;
+  const projectRoot = path.resolve(scriptDir, '..');
+  const flatBinaryName = platform === 'win32' ? 'fnva.exe' : 'fnva';
+  binaryCandidates.push(path.join(projectRoot, 'platforms', flatBinaryName));
+
+  // 2. User-provided override via environment variable
+  if (process.env.FNVA_NATIVE_PATH) {
+    binaryCandidates.push(process.env.FNVA_NATIVE_PATH);
+  }
+
+  // 3. Local cargo build outputs (helpful for development installs)
+  const targetDir = path.resolve(__dirname, '..', 'target');
+  if (platform === 'win32') {
+    binaryCandidates.push(path.join(targetDir, 'release', 'fnva.exe'));
+    binaryCandidates.push(path.join(targetDir, 'debug', 'fnva.exe'));
+  } else {
+    binaryCandidates.push(path.join(targetDir, 'release', 'fnva'));
+    binaryCandidates.push(path.join(targetDir, 'debug', 'fnva'));
+  }
+
+  for (const candidate of binaryCandidates) {
+    if (candidate && fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
 function run() {
   const binaryPath = buildBinaryPath();
 
-  if (!fs.existsSync(binaryPath)) {
-    console.error(`Error: binary not found: ${binaryPath}`);
+  if (!binaryPath) {
+    console.error('Error: fnva native binary not found.');
     console.error('');
-    console.error("Please build the CLI binaries first, e.g. run 'npm run build' or 'npm run build:all'.");
+    console.error("Please either:");
+    console.error("  1) Run 'npm run build' (or 'npm run build:all') to produce platform binaries,");
+    console.error("  2) Install a release package that includes the platforms directory, or");
+    console.error("  3) Set FNVA_NATIVE_PATH to the full path of an existing fnva executable.");
     process.exit(1);
   }
 
