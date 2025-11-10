@@ -42,28 +42,7 @@ pnpm add -g fnva
 
 4. 添加到 PATH 环境变量（详见下面的配置步骤）
 
-### 方式三：包管理器安装
-
-```bash
-# macOS (Homebrew)
-brew tap fnva/fnva
-brew install fnva
-
-# Windows (Winget)
-winget install fnva.fnva
-
-# Windows (Scoop)
-scoop bucket add fnva
-scoop install fnva
-
-# Windows (Chocolatey)
-choco install fnva
-
-# 通用 (Cargo)
-cargo install fnva
-```
-
-### 方式四：从源码构建（开发者）
+### 方式三：从源码构建（开发者）
 
 **前置要求：**
 - **Rust** 1.70+
