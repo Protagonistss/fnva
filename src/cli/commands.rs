@@ -270,6 +270,20 @@ pub enum CcCommands {
         /// 环境名称
         name: String,
     },
+    /// 管理默认 CC 环境
+    Default {
+        /// CC 环境名称，省略则查看当前默认
+        name: Option<String>,
+        /// 取消默认
+        #[arg(long)]
+        unset: bool,
+        /// Shell 类型
+        #[arg(short, long)]
+        shell: Option<String>,
+        /// JSON 输出
+        #[arg(long)]
+        json: bool,
+    },
     /// 显示当前激活的 CC 环境
     Current {
         /// JSON 格式输出

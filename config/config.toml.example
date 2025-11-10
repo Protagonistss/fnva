@@ -6,6 +6,7 @@ current_java_env = "jdk17"
 
 # 默认 Java 环境名称（类似 fnm 的默认版本）
 default_java_env = "jdk17"
+default_cc_env = "glmcc"
 
 # 自定义 Java 扫描路径（用于自动发现已安装的 Java）
 custom_java_scan_paths = [

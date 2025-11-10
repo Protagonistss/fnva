@@ -158,13 +158,11 @@ impl SessionManager {
         }
 
         // 如果没有当前环境，尝试获取默认环境（仅支持 Java）
-        if env_type == EnvironmentType::Java {
-            if let Some(ref default) = config.default_java_env {
-                return Some(default);
-            }
+        match env_type {
+            EnvironmentType::Java => config.default_java_env.as_deref(),
+            EnvironmentType::Cc => config.default_cc_env.as_deref(),
+            _ => None,
         }
-
-        None
     }
 
     /// 检查环境是否是当前环境或默认环境
@@ -177,11 +175,13 @@ impl SessionManager {
         }
 
         // 检查是否是默认环境（仅支持 Java）
-        if env_type == EnvironmentType::Java {
-            if let Some(ref default) = config.default_java_env {
-                if default == name {
-                    return true;
-                }
+        if let Some(default) = match env_type {
+            EnvironmentType::Java => config.default_java_env.as_deref(),
+            EnvironmentType::Cc => config.default_cc_env.as_deref(),
+            _ => None,
+        } {
+            if default == name {
+                return true;
             }
         }
 

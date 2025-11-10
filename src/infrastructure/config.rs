@@ -26,6 +26,8 @@ pub struct Config {
     /// 默认 Java 环境名称（类似 fnm 的默认版本）
     #[serde(default)]
     pub default_java_env: Option<String>,
+    #[serde(default)]
+    pub default_cc_env: Option<String>,
     /// 自定义 Java 扫描路径
     #[serde(default)]
     pub custom_java_scan_paths: Vec<String>,
@@ -228,6 +230,7 @@ impl Config {
             java_version_cache: JavaVersionCache::default(),
             current_java_env: None,
             default_java_env: None,
+            default_cc_env: None,
             custom_java_scan_paths: Vec::new(),
             removed_java_names: Vec::new(),
         }
@@ -351,6 +354,11 @@ impl Config {
         Ok(())
     }
 
+    pub fn set_default_cc_env(&mut self, name: String) -> Result<(), String> {
+        self.default_cc_env = Some(name);
+        Ok(())
+    }
+
     /// 获取默认 Java 环境
     pub fn get_default_java_env(&self) -> Option<&JavaEnvironment> {
         if let Some(ref name) = self.default_java_env {
@@ -363,6 +371,10 @@ impl Config {
     /// 清除默认 Java 环境
     pub fn clear_default_java_env(&mut self) {
         self.default_java_env = None;
+    }
+
+    pub fn clear_default_cc_env(&mut self) {
+        self.default_cc_env = None;
     }
 
     /// 获取有效的 Java 环境（优先级：当前环境 → 默认环境）

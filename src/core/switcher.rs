@@ -327,13 +327,22 @@ impl EnvironmentSwitcher {
         env_type: EnvironmentType,
         name: &str,
     ) -> Result<String, String> {
-        if env_type != EnvironmentType::Java {
-            return Err("Default environment support is currently only available for Java".to_string());
+        let manager_entry = self.managers.get(&env_type)
+            .ok_or_else(|| format!("No manager registered for environment type: {:?}", env_type))?;
+        {
+            let manager = manager_entry.lock().unwrap();
+            if !manager.is_available(name)? {
+                return Err(format!("{} environment '{}' not found", env_type, name));
+            }
         }
 
         // 直接设置默认环境（不验证）
         let mut config = Config::load()?;
-        config.set_default_java_env(name.to_string())?;
+        match env_type {
+            EnvironmentType::Java => config.set_default_java_env(name.to_string())?,
+            EnvironmentType::Cc => config.set_default_cc_env(name.to_string())?,
+            _ => return Err("Default environment support is currently only available for Java and CC".to_string()),
+        }
         config.save()?;
 
         Ok(format!("Set default {} environment: {}", env_type, name))
@@ -344,12 +353,12 @@ impl EnvironmentSwitcher {
         &self,
         env_type: EnvironmentType,
     ) -> Result<String, String> {
-        if env_type != EnvironmentType::Java {
-            return Err("Default environment support is currently only available for Java".to_string());
-        }
-
         let mut config = Config::load()?;
-        config.clear_default_java_env();
+        match env_type {
+            EnvironmentType::Java => config.clear_default_java_env(),
+            EnvironmentType::Cc => config.clear_default_cc_env(),
+            _ => return Err("Default environment support is currently only available for Java and CC".to_string()),
+        }
         config.save()?;
 
         Ok(format!("Cleared default {} environment", env_type))
@@ -360,12 +369,13 @@ impl EnvironmentSwitcher {
         &self,
         env_type: EnvironmentType,
     ) -> Result<Option<String>, String> {
-        if env_type != EnvironmentType::Java {
-            return Ok(None);
-        }
-
         let config = Config::load()?;
-        Ok(config.default_java_env.clone())
+        let default_env = match env_type {
+            EnvironmentType::Java => config.default_java_env.clone(),
+            EnvironmentType::Cc => config.default_cc_env.clone(),
+            _ => None,
+        };
+        Ok(default_env)
     }
 
     /// 切换到默认环境
@@ -374,12 +384,13 @@ impl EnvironmentSwitcher {
         env_type: EnvironmentType,
         shell_type: Option<ShellType>,
     ) -> Result<SwitchResult, String> {
-        if env_type != EnvironmentType::Java {
-            return Err("Default environment support is currently only available for Java".to_string());
-        }
-
         let config = Config::load()?;
-        if let Some(default_env) = config.default_java_env.clone() {
+        let default_env = match env_type {
+            EnvironmentType::Java => config.default_java_env.clone(),
+            EnvironmentType::Cc => config.default_cc_env.clone(),
+            _ => None,
+        };
+        if let Some(default_env) = default_env {
             self.switch_environment(env_type, &default_env, shell_type, Some("Switch to default environment".to_string())).await
         } else {
             Ok(SwitchResult {
@@ -387,7 +398,7 @@ impl EnvironmentSwitcher {
                 env_type,
                 script: String::new(),
                 success: false,
-                error: Some("No default environment set".to_string()),
+                error: Some(format!("No default {} environment set", env_type)),
             })
         }
     }
@@ -412,7 +423,11 @@ impl EnvironmentSwitcher {
             let session_manager = self.session_manager.lock().unwrap();
             session_manager.get_current_environment(env_type).cloned()
         };
-        let default_env = config.default_java_env.clone();
+        let default_env = match env_type {
+            EnvironmentType::Java => config.default_java_env.clone(),
+            EnvironmentType::Cc => config.default_cc_env.clone(),
+            _ => None,
+        };
 
         // 格式化输出
         match output_format {

@@ -345,6 +345,19 @@ fnva cc use glmcc --shell fish | source
 fnva cc use glmcc --shell cmd > %TEMP%\fnva_cc.cmd && call %TEMP%\fnva_cc.cmd
 ```
 
+#### Manage default CC environment
+
+```bash
+# Set default CC environment
+fnva cc default glmcc
+
+# Show current default CC environment
+fnva cc default
+
+# Unset default CC environment
+fnva cc default --unset
+```
+
 #### 查看当前激活的 CC 环境
 
 ```bash
@@ -471,6 +484,7 @@ maven = [
 | `fnva java default <name>` | 设置默认 Java | `fnva java default jdk21` |
 | `fnva cc list` | 列出 CC 环境 | `fnva cc list` |
 | `fnva cc use <name>` | 切换 CC 环境 | `fnva cc use glmcc` |
+| `fnva cc default <name>` | 设置默认 CC 环境 | `fnva cc default glmcc` |
 | `fnva llm list` | 列出 LLM 环境 | `fnva llm list` |
 | `fnva llm use <name>` | 切换 LLM 环境 | `fnva llm use openai-dev` |
 | `fnva env switch <type> <name>` | 通用切换 | `fnva env switch java jdk17` |

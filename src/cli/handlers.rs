@@ -221,7 +221,7 @@ impl CommandHandler {
     async fn handle_cc_command(&mut self, action: CcCommands) -> Result<(), String> {
         match action {
             CcCommands::List { json } => {
-                let output = self.switcher.list_environments(
+                let output = self.switcher.list_environments_with_default(
                     EnvironmentType::Cc,
                     if json { OutputFormat::Json } else { OutputFormat::Text }
                 ).await?;
@@ -256,6 +256,41 @@ impl CommandHandler {
                     eprintln!("Failed to switch CC environment: {}",
                         result.error.unwrap_or_else(|| "Unknown error".to_string()));
                     return Err("Environment switch failed".to_string());
+                }
+            }
+            CcCommands::Default { name, unset, shell, json } => {
+                if unset {
+                    let output = self.switcher.clear_default_environment(EnvironmentType::Cc).await?;
+                    print!("{}", output);
+                } else if let Some(env_name) = name {
+                    let output = self.switcher.set_default_environment(EnvironmentType::Cc, &env_name).await?;
+                    print!("{}", output);
+                } else {
+                    match self.switcher.get_default_environment(EnvironmentType::Cc).await? {
+                        Some(env_name) => {
+                            if let Some(shell_name) = shell {
+                                match parse_shell_type(&shell_name) {
+                                    Ok(shell_type) => {
+                                        let result = self.switcher.switch_environment(
+                                            EnvironmentType::Cc,
+                                            &env_name,
+                                            Some(shell_type),
+                                            Some("Switch to default environment".to_string())
+                                        ).await?;
+                                        let output = FORMATTER.format_switch_result(
+                                            &result,
+                                            if json { OutputFormat::Json } else { OutputFormat::Text }
+                                        )?;
+                                        print!("{}", output);
+                                    }
+                                    Err(e) => return Err(e),
+                                }
+                            } else {
+                                println!("Default CC environment: {}", env_name);
+                            }
+                        }
+                        None => println!("No default CC environment set"),
+                    }
                 }
             }
             CcCommands::Current { json } => {
@@ -306,6 +341,25 @@ try {
     }
 } catch {
     # Ignore errors during default loading
+}
+
+# Auto-load default CC environment
+try {
+    $defaultCcRaw = & fnva.exe cc default 2>$null
+    if ($LASTEXITCODE -eq 0 -and $defaultCcRaw -and $defaultCcRaw -notmatch "No default") {
+        # Extract environment name from output like "Default CC environment: glmcc"
+        $defaultCc = ($defaultCcRaw -split ':')[-1].Trim()
+        Write-Host "Loading default CC environment: $defaultCc" -ForegroundColor Cyan
+        $ccSwitchScript = & fnva.exe cc use $defaultCc --shell powershell 2>$null
+        if ($LASTEXITCODE -eq 0 -and $ccSwitchScript) {
+            if ($ccSwitchScript -is [array]) {
+                $ccSwitchScript = $ccSwitchScript -join "`r`n"
+            }
+            Invoke-Expression $ccSwitchScript
+        }
+    }
+} catch {
+    # Ignore errors during default CC loading
 }
 
 function fnva {
