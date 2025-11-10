@@ -250,8 +250,17 @@ impl HistoryManager {
         let content = fs::read_to_string(&self.history_path)
             .map_err(|e| format!("Failed to read history file: {}", e))?;
 
-        self.history = toml::from_str(&content)
+        #[derive(Deserialize)]
+        struct HistoryFile {
+            history: Vec<SwitchHistory>,
+        }
+
+        let parsed_history = toml::from_str::<HistoryFile>(&content)
+            .map(|file| file.history)
+            .or_else(|_| toml::from_str::<Vec<SwitchHistory>>(&content))
             .map_err(|e| format!("Failed to parse history file: {}", e))?;
+
+        self.history = parsed_history;
 
         // 限制历史记录数量
         if self.history.len() > self.max_history {
@@ -263,8 +272,14 @@ impl HistoryManager {
 
     /// 保存历史记录
     fn save_history(&self) -> Result<(), String> {
+        #[derive(Serialize)]
+        struct HistoryFile<'a> {
+            history: &'a [SwitchHistory],
+        }
         // 尝试序列化历史记录，如果失败则跳过（为了向后兼容）
-        let content = match toml::to_string_pretty(&self.history) {
+        let content = match toml::to_string_pretty(&HistoryFile {
+            history: &self.history,
+        }) {
             Ok(content) => content,
             Err(e) => {
                 eprintln!("Warning: Failed to serialize history: {}. Skipping history save.", e);
