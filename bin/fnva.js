@@ -80,6 +80,10 @@ function isEnvironmentSwitchCommand(args) {
          args[1] === 'use';
 }
 
+function hasDirectExecuteFlag(args) {
+  return args.includes('--exec') || args.includes('-e');
+}
+
 function parseEnvironmentScript(scriptContent) {
   if (!scriptContent || scriptContent.trim() === '') {
     return {};
@@ -161,9 +165,6 @@ function run() {
   const isSwitchCommand = isEnvironmentSwitchCommand(args);
 
   if (isSwitchCommand) {
-    // 对于环境切换命令，检查是否在管道模式
-    const isPipedOutput = !process.stdout.isTTY;
-
     const { spawnSync } = require('child_process');
     const result = spawnSync(binaryPath, args, {
       encoding: 'utf8',
@@ -184,31 +185,80 @@ function run() {
     if (stdout.includes('JAVA_HOME') || stdout.includes('ANTHROPIC_') || stdout.includes('OPENAI_')) {
       // 将数组输出转换为字符串
       const script = Array.isArray(stdout) ? stdout.join('\n') : stdout;
+      const envType = args[0];
+      const envName = args[2];
 
-      if (isPipedOutput) {
-        // 管道模式：只输出纯净的脚本
-        console.log(script);
+      // 在 Windows 上：启动新的 PowerShell 会话并自动执行环境切换
+      if (process.platform === 'win32') {
+        console.log(`✅ Switched to ${envType} environment: ${envName}`);
+        console.log(`🚀 Starting new PowerShell session with ${envName} environment...`);
+        console.log(`Type "exit" to return to previous session\n`);
+
+        try {
+          // 创建临时脚本文件
+          const os = require('os');
+          const fs = require('fs');
+          const tempScript = os.tmpdir() + '\\fnva_env_' + Date.now() + '.ps1';
+
+          // 写入环境设置脚本 + 启动交互式会话
+          const fullScript = script + '\n\n' +
+            'Write-Host "✨ Environment ready! You are now in fnva: ' + envName + '" -ForegroundColor Green\n' +
+            'Write-Host "Current Java version:" -ForegroundColor Yellow\n' +
+            'java --version\n' +
+            'Write-Host ""\n' +
+            'Write-Host "Type "exit" to return to previous session." -ForegroundColor Cyan\n' +
+            'Write-Host ""\n' +
+            '$Host.UI.RawUI.WindowTitle = "fnva: ' + envName + '"\n' +
+            '# Start interactive prompt\n' +
+            'while ($true) {\n' +
+            '    try {\n' +
+            '        $input = Read-Host "PS fnva:' + envName + '"\n' +
+            '        if ($input -eq "exit") { break }\n' +
+            '        if ($input.Trim() -ne "") {\n' +
+            '            try {\n' +
+            '                Invoke-Expression $input\n' +
+            '            } catch {\n' +
+            '                Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red\n' +
+            '            }\n' +
+            '        }\n' +
+            '    } catch {\n' +
+            '        break\n' +
+            '    }\n' +
+            '}\n' +
+            'Write-Host "👋 Returning to original session..." -ForegroundColor Cyan\n';
+
+          fs.writeFileSync(tempScript, fullScript, 'utf8');
+
+          // 启动新的交互式 PowerShell 会话
+          const { spawn } = require('child_process');
+          const ps = spawn('powershell', ['-NoExit', '-ExecutionPolicy', 'Bypass', '-File', tempScript], {
+            stdio: 'inherit',
+            shell: false  // 避免 shell 注入问题
+          });
+
+          ps.on('exit', (code) => {
+            // 清理临时文件
+            try {
+              fs.unlinkSync(tempScript);
+            } catch (e) {
+              // 忽略清理错误
+            }
+            console.log('👋 Returned to original session');
+          });
+
+          // 保持当前进程运行直到子进程结束
+          return;
+
+        } catch (error) {
+          console.error(`Failed to start PowerShell session: ${error.message}`);
+          console.log(`📝 Script was: ${script}`);
+        }
       } else {
-        // 交互模式：显示详细信息和选项
-        const envType = args[0];
-        const envName = args[2];
-
+        // Unix-like systems: 显示使用说明
         console.log(`✅ Switched to ${envType} environment: ${envName}`);
         console.log('');
-        console.log('📝 Environment script ready. To apply it:');
-        console.log('');
-        console.log('Method 1 (Recommended): Copy and paste this into PowerShell:');
-        console.log('----------------------------------------');
-        console.log(script);
-        console.log('----------------------------------------');
-        console.log('');
-        console.log('Method 2 (One-line):');
-        console.log('node bin/fnva.js java use ' + envName + ' | powershell -Command -');
-        console.log('');
-        console.log('Method 3 (Save and execute):');
-        console.log('node bin/fnva.js java use ' + envName + ' > temp.ps1 && powershell -ExecutionPolicy Bypass -File temp.ps1 && del temp.ps1');
-        console.log('');
-        console.log('💡 After applying, test with: java --version');
+        console.log('💡 To apply this environment, run:');
+        console.log(`  node bin/fnva.js ${args.join(' ')} | bash`);
       }
     } else {
       // 如果不是环境脚本，直接输出
