@@ -84,6 +84,25 @@ function hasDirectExecuteFlag(args) {
   return args.includes('--exec') || args.includes('-e');
 }
 
+function getShellArg(args) {
+  const idx = args.indexOf('--shell');
+  if (idx !== -1 && idx + 1 < args.length) {
+    return args[idx + 1];
+  }
+  return null;
+}
+
+function detectShell() {
+  if (process.platform === 'win32') {
+    return 'powershell';
+  }
+  return 'bash';
+}
+
+function hasSessionFlag(args) {
+  return args.includes('--session');
+}
+
 function parseEnvironmentScript(scriptContent) {
   if (!scriptContent || scriptContent.trim() === '') {
     return {};
@@ -165,10 +184,23 @@ function run() {
   const isSwitchCommand = isEnvironmentSwitchCommand(args);
 
   if (isSwitchCommand) {
+    const shellArg = getShellArg(args);
+    if (!shellArg || shellArg === 'auto') {
+      const detected = detectShell();
+      if (shellArg === 'auto') {
+        const idx = args.indexOf('--shell');
+        if (idx !== -1 && idx + 1 < args.length) {
+          args[idx + 1] = detected;
+        }
+      } else {
+        args.push('--shell', detected);
+      }
+    }
+
     const { spawnSync } = require('child_process');
     const result = spawnSync(binaryPath, args, {
       encoding: 'utf8',
-      shell: true
+      shell: false
     });
 
     if (result.error) {
@@ -188,70 +220,42 @@ function run() {
       const envType = args[0];
       const envName = args[2];
 
-      // 在 Windows 上：启动新的 PowerShell 会话并自动执行环境切换
+      // Windows：默认不启动新的会话；可通过 --session 开启旧行为
       if (process.platform === 'win32') {
-        console.log(`✅ Switched to ${envType} environment: ${envName}`);
-        console.log(`🚀 Starting new PowerShell session with ${envName} environment...`);
-        console.log(`Type "exit" to return to previous session\n`);
+        if (hasSessionFlag(args)) {
+          console.log(`✅ Switched to ${envType} environment: ${envName}`);
+          console.log(`🚀 Starting new PowerShell session with ${envName} environment...`);
+          console.log(`Type "exit" to return to previous session\n`);
 
-        try {
-          // 创建临时脚本文件
-          const os = require('os');
-          const fs = require('fs');
-          const tempScript = os.tmpdir() + '\\fnva_env_' + Date.now() + '.ps1';
-
-          // 写入环境设置脚本 + 启动交互式会话
-          const fullScript = script + '\n\n' +
-            'Write-Host "✨ Environment ready! You are now in fnva: ' + envName + '" -ForegroundColor Green\n' +
-            'Write-Host "Current Java version:" -ForegroundColor Yellow\n' +
-            'java --version\n' +
-            'Write-Host ""\n' +
-            'Write-Host "Type "exit" to return to previous session." -ForegroundColor Cyan\n' +
-            'Write-Host ""\n' +
-            '$Host.UI.RawUI.WindowTitle = "fnva: ' + envName + '"\n' +
-            '# Start interactive prompt\n' +
-            'while ($true) {\n' +
-            '    try {\n' +
-            '        $input = Read-Host "PS fnva:' + envName + '"\n' +
-            '        if ($input -eq "exit") { break }\n' +
-            '        if ($input.Trim() -ne "") {\n' +
-            '            try {\n' +
-            '                Invoke-Expression $input\n' +
-            '            } catch {\n' +
-            '                Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Red\n' +
-            '            }\n' +
-            '        }\n' +
-            '    } catch {\n' +
-            '        break\n' +
-            '    }\n' +
-            '}\n' +
-            'Write-Host "👋 Returning to original session..." -ForegroundColor Cyan\n';
-
-          fs.writeFileSync(tempScript, fullScript, 'utf8');
-
-          // 启动新的交互式 PowerShell 会话
-          const { spawn } = require('child_process');
-          const ps = spawn('powershell', ['-NoExit', '-ExecutionPolicy', 'Bypass', '-File', tempScript], {
-            stdio: 'inherit',
-            shell: false  // 避免 shell 注入问题
-          });
-
-          ps.on('exit', (code) => {
-            // 清理临时文件
-            try {
-              fs.unlinkSync(tempScript);
-            } catch (e) {
-              // 忽略清理错误
-            }
-            console.log('👋 Returned to original session');
-          });
-
-          // 保持当前进程运行直到子进程结束
-          return;
-
-        } catch (error) {
-          console.error(`Failed to start PowerShell session: ${error.message}`);
-          console.log(`📝 Script was: ${script}`);
+          try {
+            const os = require('os');
+            const fs = require('fs');
+            const tempScript = os.tmpdir() + '\\fnva_env_' + Date.now() + '.ps1';
+            const fullScript = script + '\n';
+            fs.writeFileSync(tempScript, fullScript, 'utf8');
+            const { spawn } = require('child_process');
+            const ps = spawn('powershell', ['-NoExit', '-ExecutionPolicy', 'Bypass', '-File', tempScript], {
+              stdio: 'inherit',
+              shell: false
+            });
+            ps.on('exit', () => {
+              try { fs.unlinkSync(tempScript); } catch (_) {}
+              console.log('👋 Returned to original session');
+            });
+            return;
+          } catch (error) {
+            console.error(`Failed to start PowerShell session: ${error.message}`);
+            console.log(`📝 Script was: ${script}`);
+          }
+        } else {
+          console.log(`✅ Switched to ${envType} environment: ${envName}`);
+          if (process.stdout.isTTY) {
+            console.log('');
+            console.log('💡 在当前会话应用环境：');
+            console.log(`  fnva ${envType} use ${envName} --shell powershell | Invoke-Expression`);
+          } else {
+            process.stdout.write(script);
+          }
         }
       } else {
         // Unix-like systems: 显示使用说明
