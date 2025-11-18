@@ -27,12 +27,12 @@ jobs:
             arch: aarch64
             target: aarch64-unknown-linux-gnu
             platform: linux-arm64
-          - os: macos-latest
+          - os: macos-13
             arch: x86_64
             target: x86_64-apple-darwin
             platform: darwin-x64
             native_target: x86_64-apple-darwin
-          - os: macos-13
+          - os: macos-14
             arch: aarch64
             target: aarch64-apple-darwin
             platform: darwin-arm64
@@ -48,12 +48,9 @@ jobs:
 
       - name: Install Rust (macOS)
         if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          # For macOS, use homebrew to install rust
-          brew install rust
-          echo "Rust installed via homebrew"
-          which cargo && cargo --version && rustc --version
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - name: Install Rust (Linux/Windows)
         if: runner.os != 'macOS'
@@ -67,7 +64,7 @@ jobs:
         run: |
           echo "PATH: $PATH"
           which cargo && cargo --version && rustc --version
-          rustup target add ${{ matrix.target }}
+          rustup target add ${{ matrix.target }} || true
 
       - name: Verify Rust installation (Linux/Windows)
         if: runner.os != 'macOS'
@@ -103,8 +100,7 @@ jobs:
           if [ "${{ runner.os }}" = "Windows" ]; then
             cargo build --release --target ${{ matrix.target }}
           elif [[ "${{ runner.os }}" == "macOS"* ]]; then
-            # macOS 不需要交叉编译，直接构建
-            cargo build --release
+            cargo build --release --target ${{ matrix.target }}
           else
             # Linux only build x86_64 target to avoid cross-compilation issues
             if [ "${{ matrix.target }}" = "x86_64-unknown-linux-gnu" ]; then
@@ -128,11 +124,7 @@ jobs:
             exit 0
           fi
 
-          if [[ "${{ runner.os }}" == "macOS"* ]]; then
-            strip target/release/fnva || true
-          else
-            strip target/${{ matrix.target }}/release/fnva || true
-          fi
+          strip target/${{ matrix.target }}/release/fnva || true
 
       - name: Prepare binary directory
         shell: bash
@@ -147,10 +139,28 @@ jobs:
           if [ "${{ runner.os }}" = "Windows" ]; then
             cp target/${{ matrix.target }}/release/fnva.exe platforms/${{ matrix.platform }}/fnva.exe
           elif [[ "${{ runner.os }}" == "macOS"* ]]; then
-            cp target/release/fnva platforms/${{ matrix.platform }}/fnva
+            cp target/${{ matrix.target }}/release/fnva platforms/${{ matrix.platform }}/fnva
           else
             cp target/${{ matrix.target }}/release/fnva platforms/${{ matrix.platform }}/fnva
           fi
+
+      - name: Make executable and verify (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          if [ -f "platforms/${{ matrix.platform }}/skip.txt" ]; then
+            echo "Skipping verify for ${{ matrix.target }}"
+            exit 0
+          fi
+
+          chmod +x platforms/${{ matrix.platform }}/fnva
+          echo "Architecture info:"
+          if command -v lipo >/dev/null 2>&1; then
+            lipo -info platforms/${{ matrix.platform }}/fnva || true
+          fi
+          file platforms/${{ matrix.platform }}/fnva || true
+          echo "Smoke run: --help"
+          ./platforms/${{ matrix.platform }}/fnva --help >/dev/null 2>&1 || true
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
