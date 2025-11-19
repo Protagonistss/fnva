@@ -32,15 +32,30 @@ function getPowerShellFunction() {
 # fnva 自动化函数 - 由 npm 安装自动添加
 function fnva {
     if ($args.Count -ge 2 -and ($args[0] -eq "java" -or $args[0] -eq "llm" -or $args[0] -eq "cc") -and ($args[1] -eq "use")) {
-        $tempFile = "$env:TEMP\fnva_script_$(Get-Random).ps1"
+        $tempFile = Join-Path $env:TEMP ("fnva_script_" + (Get-Random) + ".ps1")
 
         $env:FNVAAUTOMODE = "1"
         try {
-            cmd.exe /c "set FNVA_AUTO_MODE=%FNVAAUTOMODE% && fnva $args" | Out-File -FilePath $tempFile -Encoding UTF8
-            & $tempFile
+            # 捕获 fnva 输出并保存到临时文件
+            $output = cmd.exe /c "set FNVA_AUTO_MODE=%FNVAAUTOMODE% && fnva $args" 2>&1
+
+            # 如果输出包含 PowerShell 脚本内容，保存并执行
+            if ($output -match '\$env:' -or $output -match 'Write-Host') {
+                $output | Out-File -FilePath $tempFile -Encoding UTF8
+                try {
+                    & $tempFile
+                } catch {
+                    Write-Host "执行脚本时出错: $_" -ForegroundColor Red
+                }
+            } else {
+                # 如果不是脚本内容，直接输出
+                $output
+            }
         } finally {
             $env:FNVAAUTOMODE = ""
-            Remove-Item $tempFile -ErrorAction SilentlyContinue
+            if (Test-Path $tempFile) {
+                Remove-Item $tempFile -ErrorAction SilentlyContinue
+            }
         }
     } else {
         $env:FNVAAUTOMODE = "1"
