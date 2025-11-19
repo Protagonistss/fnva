@@ -38,6 +38,11 @@ function platformBinaryPath(platformOverride) {
 }
 
 function buildBinaryPath() {
+  // 如果设置了 FNVA_SKIP_NATIVE，跳过原生二进制查找
+  if (process.env.FNVA_SKIP_NATIVE === '1') {
+    return null;
+  }
+
   const platform = resolvePlatform();
   const binaryCandidates = [];
 
@@ -272,16 +277,100 @@ function generateSimpleScript(envVars, envType, envName) {
   return lines.join('\n');
 }
 
+function handleNodeOnlyMode(args) {
+  const fs = require('fs');
+  const path = require('path');
+  const os = require('os');
+
+  // 简单的命令处理
+  if (args.length === 0) {
+    console.log('fnva - 环境管理工具 (Node.js 模式)');
+    console.log('');
+    console.log('支持的命令:');
+    console.log('  java list     - 列出 Java 环境');
+    console.log('  java use <n>  - 切换 Java 环境');
+    console.log('');
+    console.log('注意: Node.js 模式功能有限，建议使用原生二进制版本。');
+    return;
+  }
+
+  if (args[0] === 'java') {
+    const homeDir = os.homedir();
+    const fnvaDir = path.join(homeDir, '.fnva', 'java-packages');
+
+    if (args[1] === 'list') {
+      if (!fs.existsSync(fnvaDir)) {
+        console.log('No Java environments found');
+        return;
+      }
+
+      const versions = fs.readdirSync(fnvaDir, { withFileTypes: true })
+        .filter(dirent => dirent.isDirectory())
+        .map(dirent => dirent.name)
+        .sort();
+
+      if (versions.length === 0) {
+        console.log('No Java environments found');
+      } else {
+        console.log('Available java environments:');
+        versions.forEach(version => {
+          const jdkPath = path.join(fnvaDir, version);
+          if (fs.existsSync(path.join(jdkPath, 'release'))) {
+            try {
+              const releaseContent = fs.readFileSync(path.join(jdkPath, 'release'), 'utf8');
+              const versionMatch = releaseContent.match(/JAVA_VERSION="(.+)"/);
+              const javaVersion = versionMatch ? versionMatch[1].replace(/"/g, '') : 'Unknown';
+              console.log(`  ${version}: Java ${javaVersion} (${jdkPath})`);
+            } catch (e) {
+              console.log(`  ${version}: (${jdkPath})`);
+            }
+          }
+        });
+      }
+    } else if (args[1] === 'use' && args[2]) {
+      const version = args[2];
+      const jdkPath = path.join(fnvaDir, version);
+
+      if (!fs.existsSync(jdkPath)) {
+        console.error(`Java environment '${version}' not found`);
+        process.exit(1);
+      }
+
+      // 生成环境切换脚本
+      const envVars = {
+        JAVA_HOME: jdkPath
+      };
+
+      const script = generateSimpleScript(envVars, 'java', version);
+      console.log(script);
+    } else {
+      console.error('Usage: fnva java <list|use <version>>');
+      process.exit(1);
+    }
+  } else {
+    console.error(`Command '${args[0]}' not supported in Node.js mode`);
+    process.exit(1);
+  }
+}
+
 function run() {
   const binaryPath = buildBinaryPath();
 
   if (!binaryPath) {
+    if (process.env.FNVA_SKIP_NATIVE === '1') {
+      // 纯 Node.js 模式 - 实现基本的环境切换功能
+      const args = process.argv.slice(2);
+      handleNodeOnlyMode(args);
+      return;
+    }
+
     console.error('Error: fnva native binary not found.');
     console.error('');
     console.error("Please either:");
     console.error("  1) Run 'npm run build' (or 'npm run build:all') to produce platform binaries,");
     console.error("  2) Install a release package that includes the platforms directory, or");
     console.error("  3) Set FNVA_NATIVE_PATH to the full path of an existing fnva executable.");
+    console.error("  4) Set FNVA_SKIP_NATIVE=1 to use Node.js mode (limited functionality).");
     process.exit(1);
   }
 
