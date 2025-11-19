@@ -103,6 +103,43 @@ function hasSessionFlag(args) {
   return args.includes('--session');
 }
 
+function hasApplyFlag(args) {
+  return args.includes('--apply');
+}
+
+function hasAutoExecuteFlag(args) {
+  return args.includes('--auto');
+}
+
+function removeAutoFlag(args) {
+  const index = args.indexOf('--auto');
+  if (index > -1) {
+    return args.slice(0, index).concat(args.slice(index + 1));
+  }
+  return args;
+}
+
+function createTempScriptFile(script, envType, envName) {
+  try {
+    const os = require('os');
+    const fs = require('fs');
+    const path = require('path');
+
+    const tempDir = os.tmpdir();
+    const scriptFile = path.join(tempDir, `fnva_${envType}_${envName}_${Date.now()}.ps1`);
+
+    fs.writeFileSync(scriptFile, script, 'utf8');
+
+    console.log('');
+    console.log('💡 环境已切换到当前进程。要在新的 PowerShell 窗口中使用此环境，运行：');
+    console.log(`   ${scriptFile}`);
+    console.log('   或者: fnva', envType, 'use', envName, '--auto');
+
+  } catch (error) {
+    console.warn('⚠️  无法创建临时脚本文件:', error.message);
+  }
+}
+
 function parseEnvironmentScript(scriptContent) {
   if (!scriptContent || scriptContent.trim() === '') {
     return {};
@@ -120,10 +157,25 @@ function parseEnvironmentScript(scriptContent) {
     const trimmedLine = line.trim();
 
     // 解析 PowerShell 环境变量设置
-    if (trimmedLine.startsWith('$env:')) {
-      const match = trimmedLine.match(/\$env:(\w+)\s*=\s*"([^"]*)"/);
+    if (trimmedLine.includes('$env:')) {
+      // 匹配 $env:VARNAME = "value" 格式
+      let match = trimmedLine.match(/\$env:(\w+)\s*=\s*"([^"]*)"/);
       if (match) {
         envVars[match[1]] = match[2];
+        continue;
+      }
+
+      // 匹配 $env:VARNAME = 'value' 格式
+      match = trimmedLine.match(/\$env:(\w+)\s*=\s*'([^']*)'/);
+      if (match) {
+        envVars[match[1]] = match[2];
+        continue;
+      }
+
+      // 匹配 $env:VARNAME = value 格式（不带引号）
+      match = trimmedLine.match(/\$env:(\w+)\s*=\s*([^;]+)/);
+      if (match) {
+        envVars[match[1]] = match[2].trim().replace(/['"]/g, '');
       }
     }
 
@@ -133,12 +185,6 @@ function parseEnvironmentScript(scriptContent) {
       if (match) {
         envVars[match[1]] = match[2];
       }
-    }
-
-    // 解析不带引号的环境变量设置
-    const unquotedMatch = trimmedLine.match(/\$env:(\w+)\s*=\s*([^;]+)/);
-    if (unquotedMatch) {
-      envVars[unquotedMatch[1]] = unquotedMatch[2].trim();
     }
   }
 
@@ -167,6 +213,65 @@ function displaySuccessMessage(envType, envName, envVars) {
   }
 }
 
+function generateSimpleScript(envVars, envType, envName) {
+  const lines = [];
+
+  if (process.platform === 'win32') {
+    // Windows PowerShell
+    lines.push(`Write-Host "Switched to ${envType} environment: ${envName}" -ForegroundColor Green`);
+
+    if (envVars.JAVA_HOME) {
+      lines.push(`$env:JAVA_HOME = "${envVars.JAVA_HOME}"`);
+      // 对于 PATH，我们需要智能处理：移除旧的 Java 路径，添加新的
+      lines.push(`# Remove existing Java paths from PATH`);
+      lines.push(`$pathParts = $env:PATH -split ';'`);
+      lines.push(`$cleanPath = @()`);
+      lines.push(`foreach ($part in $pathParts) {`);
+      lines.push(`    if ($part -notmatch 'java' -and $part -notmatch 'jdk') {`);
+      lines.push(`        $cleanPath += $part`);
+      lines.push(`    }`);
+      lines.push(`}`);
+      lines.push(`$env:PATH = "${envVars.JAVA_HOME}\\bin;" + ($cleanPath -join ';')`);
+      lines.push(`Write-Host "JAVA_HOME: $env:JAVA_HOME" -ForegroundColor Yellow`);
+    }
+
+    if (envVars.ANTHROPIC_AUTH_TOKEN) {
+      lines.push(`$env:ANTHROPIC_AUTH_TOKEN = "${envVars.ANTHROPIC_AUTH_TOKEN}"`);
+      lines.push(`Write-Host "ANTHROPIC_AUTH_TOKEN: [已设置]" -ForegroundColor Yellow`);
+    }
+
+    if (envVars.OPENAI_API_KEY) {
+      lines.push(`$env:OPENAI_API_KEY = "${envVars.OPENAI_API_KEY}"`);
+      lines.push(`Write-Host "OPENAI_API_KEY: [已设置]" -ForegroundColor Yellow`);
+    }
+  } else {
+    // Unix-like systems
+    lines.push(`echo "Switched to ${envType} environment: ${envName}"`);
+
+    if (envVars.JAVA_HOME) {
+      lines.push(`export JAVA_HOME="${envVars.JAVA_HOME}"`);
+      // 对于 PATH，我们也需要智能处理
+      lines.push(`# Remove existing Java paths from PATH`);
+      lines.push(`echo $PATH | tr ':' '\\n' | grep -v java | grep -v jdk | tr '\\n' ':' | sed 's/:$//' > /tmp/clean_path`);
+      lines.push(`export PATH="${envVars.JAVA_HOME}/bin:$(cat /tmp/clean_path)"`);
+      lines.push(`rm -f /tmp/clean_path`);
+      lines.push(`echo "JAVA_HOME: $JAVA_HOME"`);
+    }
+
+    if (envVars.ANTHROPIC_AUTH_TOKEN) {
+      lines.push(`export ANTHROPIC_AUTH_TOKEN="${envVars.ANTHROPIC_AUTH_TOKEN}"`);
+      lines.push(`echo "ANTHROPIC_AUTH_TOKEN: [已设置]"`);
+    }
+
+    if (envVars.OPENAI_API_KEY) {
+      lines.push(`export OPENAI_API_KEY="${envVars.OPENAI_API_KEY}"`);
+      lines.push(`echo "OPENAI_API_KEY: [已设置]"`);
+    }
+  }
+
+  return lines.join('\n');
+}
+
 function run() {
   const binaryPath = buildBinaryPath();
 
@@ -180,7 +285,13 @@ function run() {
     process.exit(1);
   }
 
-  const args = process.argv.slice(2);
+  let args = process.argv.slice(2);
+
+  // 如果设置了 FNVA_AUTO_EXECUTE，则为环境切换命令启用自动执行
+  if (process.env.FNVA_AUTO_EXECUTE === '1' && isEnvironmentSwitchCommand(args) && !hasSessionFlag(args)) {
+    // 添加 --auto 标志来启用自动执行
+    args = args.concat('--auto');
+  }
   const isSwitchCommand = isEnvironmentSwitchCommand(args);
 
   if (isSwitchCommand) {
@@ -248,13 +359,45 @@ function run() {
             console.log(`📝 Script was: ${script}`);
           }
         } else {
-          console.log(`✅ Switched to ${envType} environment: ${envName}`);
-          if (process.stdout.isTTY) {
-            console.log('');
-            console.log('💡 在当前会话应用环境：');
-            console.log(`  fnva ${envType} use ${envName} --shell powershell | Invoke-Expression`);
+          // 检查是否使用了 --apply 参数
+          if (hasApplyFlag(args)) {
+            // 直接应用环境变量到当前进程
+            const envVars = parseEnvironmentScript(script);
+            applyEnvironmentVariables(envVars);
+            displaySuccessMessage(envType, envName, envVars);
           } else {
-            process.stdout.write(script);
+            // 在 Windows 中，智能处理环境设置
+            const envVars = parseEnvironmentScript(script);
+            const simpleScript = generateSimpleScript(envVars, envType, envName);
+
+            // 尝试自动执行（如果可能）
+            if (process.env.FNVA_AUTO_EXECUTE === '1') {
+              const os = require('os');
+              const fs = require('fs');
+              const path = require('path');
+              const { spawn } = require('child_process');
+
+              try {
+                const tempFile = path.join(os.tmpdir(), `fnva_auto_${Date.now()}.ps1`);
+                fs.writeFileSync(tempFile, simpleScript, 'utf8');
+
+                // 使用 PowerShell 执行脚本
+                spawn('powershell', ['-ExecutionPolicy', 'Bypass', '-File', tempFile], {
+                  stdio: 'inherit',
+                  shell: false
+                }).on('exit', () => {
+                  try { fs.unlinkSync(tempFile); } catch (_) {}
+                });
+
+                console.log('✅ 环境已自动切换');
+                return;
+              } catch (error) {
+                console.warn('⚠️  自动执行失败，回退到脚本输出');
+              }
+            }
+
+            // 默认输出脚本
+            process.stdout.write(simpleScript);
           }
         }
       } else {
