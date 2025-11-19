@@ -43,6 +43,11 @@ function buildBinaryPath() {
     return null;
   }
 
+  // 如果设置了 FNVA_AUTO_MODE，自动使用 Node.js 模式
+  if (process.env.FNVA_AUTO_MODE === '1') {
+    return null;
+  }
+
   const platform = resolvePlatform();
   const binaryCandidates = [];
 
@@ -379,7 +384,7 @@ function run() {
   const binaryPath = buildBinaryPath();
 
   if (!binaryPath) {
-    if (process.env.FNVA_SKIP_NATIVE === '1') {
+    if (process.env.FNVA_SKIP_NATIVE === '1' || process.env.FNVA_AUTO_MODE === '1') {
       // 纯 Node.js 模式 - 实现基本的环境切换功能
       const args = process.argv.slice(2);
       handleNodeOnlyMode(args);
