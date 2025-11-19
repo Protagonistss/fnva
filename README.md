@@ -29,14 +29,18 @@ yarn global add fnva
 # 使用 pnpm
 pnpm add -g fnva
 
-function fnva {
-  if ($args.Count -ge 2 -and ($args[0] -eq "java" -or $args[0] -eq "llm" -or $args[0] -eq "cc") -and $args[1] -eq "use") {
+function fnva-auto {
+  if ($args.Count -ge 2 -and ($args[0] -eq "java" -or $args[0] -eq "llm" -or $args[0] -eq "cc") -and ($args[1] -eq "use")) {
       $tempFile = "$env:TEMP\fnva_script_$(Get-Random).ps1"
-      & node bin\fnva.js $args | Out-File -FilePath $tempFile -Encoding UTF8
+
+      $cmd = '$env:FNVA_AUTO_MODE = "1"; fnva ' + ($args -join ' ') + ' | Out-File -FilePath "' + $tempFile + '" -Encoding UTF8'
+      Invoke-Expression $cmd
+
       & $tempFile
       Remove-Item $tempFile -ErrorAction SilentlyContinue
   } else {
-      & node bin\fnva.js $args
+      $cmd = '$env:FNVA_AUTO_MODE = "1"; fnva ' + ($args -join ' ')
+      Invoke-Expression $cmd
   }
 }
 ```
