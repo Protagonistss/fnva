@@ -314,27 +314,49 @@ function handleNodeOnlyMode(args) {
       } else {
         console.log('Available java environments:');
         versions.forEach(version => {
-          const jdkPath = path.join(fnvaDir, version);
-          if (fs.existsSync(path.join(jdkPath, 'release'))) {
-            try {
-              const releaseContent = fs.readFileSync(path.join(jdkPath, 'release'), 'utf8');
-              const versionMatch = releaseContent.match(/JAVA_VERSION="(.+)"/);
-              const javaVersion = versionMatch ? versionMatch[1].replace(/"/g, '') : 'Unknown';
-              console.log(`  ${version}: Java ${javaVersion} (${jdkPath})`);
-            } catch (e) {
-              console.log(`  ${version}: (${jdkPath})`);
+          const versionDir = path.join(fnvaDir, version);
+          const jdkSubdirs = fs.readdirSync(versionDir, { withFileTypes: true })
+            .filter(dirent => dirent.isDirectory())
+            .map(dirent => dirent.name);
+
+          if (jdkSubdirs.length > 0) {
+            const jdkSubdir = jdkSubdirs[0];
+            const fullJdkPath = path.join(versionDir, jdkSubdir);
+
+            if (fs.existsSync(path.join(fullJdkPath, 'release'))) {
+              try {
+                const releaseContent = fs.readFileSync(path.join(fullJdkPath, 'release'), 'utf8');
+                const versionMatch = releaseContent.match(/JAVA_VERSION="(.+)"/);
+                const javaVersion = versionMatch ? versionMatch[1].replace(/"/g, '') : 'Unknown';
+                console.log(`  ${version} (current): Java ${javaVersion} (${fullJdkPath})`);
+              } catch (e) {
+                console.log(`  ${version} (${fullJdkPath})`);
+              }
             }
           }
         });
       }
     } else if (args[1] === 'use' && args[2]) {
       const version = args[2];
-      const jdkPath = path.join(fnvaDir, version);
+      const versionDir = path.join(fnvaDir, version);
 
-      if (!fs.existsSync(jdkPath)) {
+      if (!fs.existsSync(versionDir)) {
         console.error(`Java environment '${version}' not found`);
         process.exit(1);
       }
+
+      // 查找实际的 JDK 目录
+      const jdkSubdirs = fs.readdirSync(versionDir, { withFileTypes: true })
+        .filter(dirent => dirent.isDirectory())
+        .map(dirent => dirent.name);
+
+      if (jdkSubdirs.length === 0) {
+        console.error(`No JDK installation found in ${versionDir}`);
+        process.exit(1);
+      }
+
+      const jdkPath = path.join(versionDir, jdkSubdirs[0]);
+      const jdkBinPath = path.join(jdkPath, 'bin');
 
       // 生成环境切换脚本
       const envVars = {
