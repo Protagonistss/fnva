@@ -208,9 +208,14 @@ function promptInstallation() {
 // 主程序
 if (require.main === module) {
   console.log('🔧 fnva shell 集成安装器');
+  console.log(`📍 Node.js 进程ID: ${process.pid}`);
+  console.log(`📂 工作目录: ${process.cwd()}`);
+  console.log(`🎯 参数: ${process.argv.join(' ')}`);
 
   if (process.argv.includes('--auto') || process.argv.includes('--yes')) {
-    installShellIntegration();
+    console.log('🚀 自动模式启动安装...');
+    const result = installShellIntegration();
+    console.log(`🏁 安装结果: ${result ? '成功' : '失败'}`);
   } else {
     promptInstallation();
   }
