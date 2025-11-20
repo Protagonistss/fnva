@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 /**
- * 检查platforms目录中二进制文件的权限
+ * 检查 platforms 目录中二进制文件的权限
  */
 function checkPermissions() {
   console.log('🔍 检查二进制文件权限...');
@@ -12,13 +12,14 @@ function checkPermissions() {
   const platformsDir = path.join(__dirname, '..', 'platforms');
 
   if (!fs.existsSync(platformsDir)) {
-    console.log('❌ platforms目录不存在');
+    console.log('❌ platforms 目录不存在');
     process.exit(1);
   }
 
   const platforms = fs.readdirSync(platformsDir);
   let allGood = true;
 
+  // 优先检查新的 platform-arch 目录结构
   for (const platform of platforms) {
     const platformDir = path.join(platformsDir, platform);
 
@@ -43,6 +44,22 @@ function checkPermissions() {
     }
   }
 
+  // 额外检查一次扁平结构: platforms/fnva
+  const flatBinaryName = process.platform === 'win32' ? 'fnva.exe' : 'fnva';
+  const flatBinaryPath = path.join(platformsDir, flatBinaryName);
+
+  if (fs.existsSync(flatBinaryPath)) {
+    const stats = fs.statSync(flatBinaryPath);
+    const hasExecPermission = (stats.mode & 0o111) !== 0;
+    const mode = stats.mode.toString(8).padStart(4, '0');
+
+    console.log(`   (legacy)/${flatBinaryName}: ${mode} ${hasExecPermission ? '✅' : '❌'}`);
+
+    if (!hasExecPermission && flatBinaryName !== 'fnva.exe') {
+      allGood = false;
+    }
+  }
+
   console.log(`\n${allGood ? '✅' : '❌'} 权限检查${allGood ? '通过' : '失败'}`);
 
   if (!allGood) {
@@ -57,3 +74,4 @@ if (require.main === module) {
 }
 
 module.exports = { checkPermissions };
+
