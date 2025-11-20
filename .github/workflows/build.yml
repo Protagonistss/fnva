@@ -278,7 +278,7 @@ jobs:
           path: platforms/
           merge-multiple: true
 
-      - name: Verify platforms for NPM
+      - name: Verify platforms for NPM and fix permissions
         run: |
           echo "Verifying platforms directory for NPM package..."
           echo "Platforms structure:"
@@ -288,6 +288,24 @@ jobs:
             echo "Warning: platforms directory not found"
             mkdir -p platforms
           fi
+
+          # Fix executable permissions for all Unix binaries (critical step!)
+          echo "Fixing executable permissions for NPM package..."
+          for binary in platforms/*/fnva; do
+            if [ -f "$binary" ]; then
+              echo "Setting executable permission: $binary"
+              chmod 755 "$binary"
+              # Verify the permission was set
+              if [ -x "$binary" ]; then
+                echo "✓ $binary is now executable"
+              else
+                echo "❌ Failed to make $binary executable"
+                exit 1
+              fi
+            fi
+          done
+
+          echo "All binary permissions fixed for NPM package"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -364,6 +382,33 @@ jobs:
             echo "Package size: $(du -h "$PACKAGE_FILE")"
             echo "Package info:"
             npm info --json . || echo "Could not get package info"
+
+            # Verify permissions are preserved in the package
+            echo "Verifying binary permissions in NPM package..."
+            TEMP_DIR=$(mktemp -d)
+            tar -xzf "$PACKAGE_FILE" -C "$TEMP_DIR"
+
+            PERMISSIONS_OK=true
+            for binary in "$TEMP_DIR"/package/platforms/*/fnva; do
+              if [ -f "$binary" ]; then
+                if [ -x "$binary" ]; then
+                  echo "✓ $(basename $(dirname "$binary"))/fnva has executable permission"
+                else
+                  echo "❌ $(basename $(dirname "$binary"))/fnva lacks executable permission"
+                  PERMISSIONS_OK=false
+                fi
+              fi
+            done
+
+            rm -rf "$TEMP_DIR"
+
+            if [ "$PERMISSIONS_OK" = true ]; then
+              echo "✅ All binaries have correct executable permissions"
+            else
+              echo "❌ Some binaries lack executable permissions"
+              echo "This may cause 'permission denied' errors for users"
+              exit 1
+            fi
           else
             echo "Error: Package file not found"
             exit 1
