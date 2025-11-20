@@ -67,7 +67,13 @@ build_target() {
     if [ -f "$source_binary" ]; then
         cp "$source_binary" "$output_dir/$binary_name"
         echo "✓ 成功构建: $output_dir/$binary_name"
-        
+
+        # 设置可执行权限（非Windows平台）
+        if [[ "$binary_name" != "*.exe" ]]; then
+            chmod +x "$output_dir/$binary_name"
+            echo "✓ 已设置可执行权限"
+        fi
+
         # 可选：压缩二进制文件（使用 strip）
         if command -v strip &> /dev/null && [[ "$binary_name" != "*.exe" ]]; then
             strip "$output_dir/$binary_name"

@@ -65,14 +65,20 @@ SOURCE_BINARY="$PROJECT_ROOT/target/$TARGET/release/$BINARY_NAME"
 if [ -f "$SOURCE_BINARY" ]; then
   cp "$SOURCE_BINARY" "$OUTPUT_DIR/$BINARY_NAME"
   echo "✓ 成功构建: $OUTPUT_DIR/$BINARY_NAME"
-  
+
+  # 设置可执行权限（仅非Windows平台）
+  if [[ "$BINARY_NAME" != "*.exe" ]]; then
+    chmod +x "$OUTPUT_DIR/$BINARY_NAME"
+    echo "✓ 已设置可执行权限"
+  fi
+
   # 优化二进制文件大小
   if command -v strip &> /dev/null; then
     strip "$OUTPUT_DIR/$BINARY_NAME"
     echo "✓ 已优化二进制文件大小"
   fi
-  
-  # 显示文件大小
+
+  # 显示文件大小和权限
   ls -lh "$OUTPUT_DIR/$BINARY_NAME"
 else
   echo "✗ 错误: 未找到构建产物: $SOURCE_BINARY"

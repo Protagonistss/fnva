@@ -37,6 +37,36 @@ else
         exit 1
     fi
 
+    # 本地环境: 验证二进制文件的可执行权限
+    echo "验证二进制文件权限..."
+    PERMISSION_ERROR_COUNT=0
+    for platform_dir in platforms/*/; do
+        if [ -d "$platform_dir" ]; then
+            BINARY_NAME="fnva"
+            if [[ "$platform_dir" == *"win32"* ]]; then
+                BINARY_NAME="fnva.exe"
+            fi
+
+            BINARY_PATH="$platform_dir/$BINARY_NAME"
+            if [ -f "$BINARY_PATH" ]; then
+                # 检查是否有可执行权限（非Windows文件）
+                if [[ "$BINARY_NAME" != "*.exe" ]] && [ ! -x "$BINARY_PATH" ]; then
+                    echo "⚠️  警告: $BINARY_PATH 缺少可执行权限"
+                    PERMISSION_ERROR_COUNT=$((PERMISSION_ERROR_COUNT + 1))
+                else
+                    echo "✓ $BINARY_PATH 权限正确"
+                fi
+            fi
+        fi
+    done
+
+    if [ $PERMISSION_ERROR_COUNT -gt 0 ]; then
+        echo "错误: 发现 $PERMISSION_ERROR_COUNT 个二进制文件缺少可执行权限"
+        echo "请运行以下命令修复权限:"
+        echo "  find platforms -name 'fnva' -type f -exec chmod +x {} \\;"
+        exit 1
+    fi
+
     # 本地环境: 提示用户确认
     read -p "确认发布版本 $VERSION? (y/N) " -n 1 -r
     echo

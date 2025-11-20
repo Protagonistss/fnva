@@ -431,7 +431,13 @@ function run() {
     });
 
     if (result.error) {
-      console.error(`Failed to execute fnva: ${result.error.message}`);
+      if (result.error.code === 'EACCES' && process.platform !== 'win32') {
+        console.error(`❌ Permission denied. The fnva binary is not executable.`);
+        console.error(`💡 To fix this, run: sudo chmod +x "${binaryPath}"`);
+        console.error(`   Or reinstall: npm install -g fnva --force`);
+      } else {
+        console.error(`Failed to execute fnva: ${result.error.message}`);
+      }
       process.exit(result.status ?? 1);
     }
 
@@ -541,7 +547,13 @@ function run() {
     });
 
     if (result.error) {
-      console.error(`Failed to execute fnva: ${result.error.message}`);
+      if (result.error.code === 'EACCES' && process.platform !== 'win32') {
+        console.error(`❌ Permission denied. The fnva binary is not executable.`);
+        console.error(`💡 To fix this, run: sudo chmod +x "${binaryPath}"`);
+        console.error(`   Or reinstall: npm install -g fnva --force`);
+      } else {
+        console.error(`Failed to execute fnva: ${result.error.message}`);
+      }
       process.exit(result.status ?? 1);
     }
 
