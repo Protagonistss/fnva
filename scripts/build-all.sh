@@ -70,8 +70,8 @@ build_target() {
 
         # 设置可执行权限（非Windows平台）
         if [[ "$binary_name" != "*.exe" ]]; then
-            chmod +x "$output_dir/$binary_name"
-            echo "✓ 已设置可执行权限"
+            chmod 755 "$output_dir/$binary_name"  # rwxr-xr-x, 明确设置权限
+            echo "✓ 已设置可执行权限 (755)"
         fi
 
         # 可选：压缩二进制文件（使用 strip）

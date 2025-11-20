@@ -68,8 +68,8 @@ if [ -f "$SOURCE_BINARY" ]; then
 
   # 设置可执行权限（仅非Windows平台）
   if [[ "$BINARY_NAME" != "*.exe" ]]; then
-    chmod +x "$OUTPUT_DIR/$BINARY_NAME"
-    echo "✓ 已设置可执行权限"
+    chmod 755 "$OUTPUT_DIR/$BINARY_NAME"  # rwxr-xr-x, 明确设置权限
+    echo "✓ 已设置可执行权限 (755)"
   fi
 
   # 优化二进制文件大小
