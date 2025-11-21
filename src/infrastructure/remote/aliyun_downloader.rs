@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use super::{download::download_to_bytes, platform::Platform, GitHubJavaDownloader};
+use super::java_downloader::{JavaDownloader, DownloadTarget, DownloadError};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AliyunDownloadEntry {
@@ -40,7 +41,53 @@ impl AliyunJavaDownloader {
 
     /// 从 GitHub 拉取版本列表并重写为阿里云镜像地址。
     pub async fn list_available_versions(&self) -> Result<Vec<AliyunJavaVersion>, String> {
+        let registry_only = crate::infrastructure::config::Config::load()
+            .map(|c| c.java_download_sources.registry_only)
+            .unwrap_or(false);
+        if let Ok(reg) = crate::remote::VersionRegistry::load() {
+            let mut versions = Vec::new();
+            for e in reg.list() {
+                let (minor, patch) = crate::remote::version_registry::split_version(&e.version);
+                let mut download_urls = HashMap::new();
+                let iter = e.assets_aliyun.as_ref().unwrap_or(&e.assets);
+                for (k, filename) in iter.iter() {
+                    let url = format!(
+                        "{}/{}/{}{}{}",
+                        self.base_url,
+                        e.major,
+                        e.tag_name,
+                        if e.tag_name.ends_with('/') { "" } else { "/" },
+                        filename
+                    );
+                    download_urls.insert(k.clone(), AliyunDownloadEntry { primary: url, fallback: None });
+                }
+                versions.push(AliyunJavaVersion {
+                    version: e.version.clone(),
+                    major: e.major,
+                    minor,
+                    patch,
+                    release_name: format!("Eclipse Temurin JDK {}", e.version),
+                    tag_name: e.tag_name.clone(),
+                    download_urls,
+                    is_lts: e.lts,
+                    published_at: "registry".to_string(),
+                });
+            }
+            return Ok(versions);
+        }
+        if registry_only { return Err("registry-only: version registry not found".to_string()); }
         println!("🛰️  正在从阿里云镜像构建 Java 版本列表...");
+
+        let ttl = crate::infrastructure::config::Config::load()
+            .map(|c| c.java_version_cache.ttl)
+            .unwrap_or(3600);
+        let cache = crate::remote::cache::VersionCacheManager::new()
+            .map_err(|e| format!("初始化缓存失败: {}", e))?
+            .with_ttl(ttl);
+        if let Ok(Some(cached)) = cache.load::<Vec<AliyunJavaVersion>>(&crate::remote::cache::CacheKeys::java_versions_aliyun()).await {
+            println!("📖 使用缓存的阿里云版本列表");
+            return Ok(cached);
+        }
 
         let github = GitHubJavaDownloader::new();
         let gh_versions = github.list_available_versions().await?;
@@ -84,6 +131,7 @@ impl AliyunJavaDownloader {
         }
 
         println!("✓ 构建完成，发现 {} 个可用版本", versions.len());
+        let _ = cache.save(&crate::remote::cache::CacheKeys::java_versions_aliyun(), &versions, None).await;
         Ok(versions)
     }
 
@@ -150,6 +198,39 @@ impl AliyunJavaDownloader {
 
     /// 版本解析（与 GitHub 下载器保持一致）。
     pub async fn find_version_by_spec(&self, spec: &str) -> Result<AliyunJavaVersion, String> {
+        let registry_only = crate::infrastructure::config::Config::load()
+            .map(|c| c.java_download_sources.registry_only)
+            .unwrap_or(false);
+        if let Ok(reg) = crate::remote::VersionRegistry::load() {
+            if let Some(e) = reg.find(spec) {
+                let (minor, patch) = crate::remote::version_registry::split_version(&e.version);
+                let mut download_urls = HashMap::new();
+                let iter = e.assets_aliyun.as_ref().unwrap_or(&e.assets);
+                for (k, filename) in iter.iter() {
+                    let url = format!(
+                        "{}/{}/{}{}{}",
+                        self.base_url,
+                        e.major,
+                        e.tag_name,
+                        if e.tag_name.ends_with('/') { "" } else { "/" },
+                        filename
+                    );
+                    download_urls.insert(k.clone(), AliyunDownloadEntry { primary: url, fallback: None });
+                }
+                return Ok(AliyunJavaVersion {
+                    version: e.version.clone(),
+                    major: e.major,
+                    minor,
+                    patch,
+                    release_name: format!("Eclipse Temurin JDK {}", e.version),
+                    tag_name: e.tag_name.clone(),
+                    download_urls,
+                    is_lts: e.lts,
+                    published_at: "registry".to_string(),
+                });
+            }
+        }
+        if registry_only { return Err("registry-only: version not found in registry".to_string()); }
         let versions = self.list_available_versions().await?;
 
         let spec_cleaned = spec.trim().to_lowercase()
@@ -224,6 +305,51 @@ impl AliyunJavaDownloader {
         }
 
         Err(format!("未找到版本: {}", spec))
+    }
+}
+
+impl JavaDownloader for AliyunJavaDownloader {
+    type Version = AliyunJavaVersion;
+
+    fn version_string(&self, version: &Self::Version) -> String {
+        version.version.clone()
+    }
+
+    fn list_available_versions(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<Self::Version>, DownloadError>> + Send + '_>> {
+        let fut = self.list_available_versions();
+        Box::pin(async move { fut.await.map_err(DownloadError::from) })
+    }
+
+    fn find_version_by_spec<'a, 'b>(&'a self, spec: &'b str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Self::Version, DownloadError>> + Send + 'a>> {
+        let spec_owned = spec.to_string();
+        Box::pin(async move { self.find_version_by_spec(&spec_owned).await.map_err(DownloadError::from) })
+    }
+
+    fn get_download_url<'a, 'b, 'c>(
+        &'a self,
+        version: &'b Self::Version,
+        platform: &'c Platform,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, DownloadError>> + Send + 'a>> {
+        let version_cloned = version.clone();
+        let platform_cloned = platform.clone();
+        Box::pin(async move { self.get_download_url(&version_cloned, &platform_cloned).await.map_err(DownloadError::from) })
+    }
+
+    fn download_java<'a, 'b, 'c>(
+        &'a self,
+        version: &'b Self::Version,
+        platform: &'c Platform,
+        progress_callback: Box<dyn Fn(u64, u64) + Send>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<DownloadTarget, DownloadError>> + Send + 'a>> {
+        let version_cloned = version.clone();
+        let platform_cloned = platform.clone();
+        Box::pin(async move {
+            let bytes = self
+                .download_java(&version_cloned, &platform_cloned, move |d, t| (progress_callback)(d, t))
+                .await
+                .map_err(DownloadError::from)?;
+            Ok(DownloadTarget::Bytes(bytes))
+        })
     }
 }
 

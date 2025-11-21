@@ -1,6 +1,7 @@
 use reqwest;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use super::java_downloader::{JavaDownloader, DownloadTarget, DownloadError};
 
 /// GitHub Java 发行版信息（从 jdk 仓库获取）
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,7 +54,51 @@ impl GitHubJavaDownloader {
 
     /// 获取可用的 Java 版本列表（从多个 Adoptium 仓库）
     pub async fn list_available_versions(&self) -> Result<Vec<GitHubJavaVersion>, String> {
+        let registry_only = crate::infrastructure::config::Config::load()
+            .map(|c| c.java_download_sources.registry_only)
+            .unwrap_or(false);
+        if let Ok(reg) = crate::remote::VersionRegistry::load() {
+            let mut result = Vec::new();
+            for e in reg.list() {
+                let (minor, patch) = crate::remote::version_registry::split_version(&e.version);
+                let mut download_urls = HashMap::new();
+                let iter = e.assets_github.as_ref().unwrap_or(&e.assets);
+                for (k, filename) in iter.iter() {
+                    let url = format!(
+                        "https://github.com/adoptium/temurin{}-binaries/releases/download/{}/{}",
+                        e.major,
+                        e.tag_name,
+                        filename
+                    );
+                    download_urls.insert(k.clone(), url);
+                }
+                result.push(GitHubJavaVersion {
+                    version: e.version.clone(),
+                    major: e.major,
+                    minor,
+                    patch,
+                    tag_name: e.tag_name.clone(),
+                    release_name: format!("Eclipse Temurin JDK {}", e.version),
+                    download_urls,
+                    is_lts: e.lts,
+                    published_at: "registry".to_string(),
+                });
+            }
+            return Ok(result);
+        }
+        if registry_only { return Err("registry-only: version registry not found".to_string()); }
         println!("🔍 正在从 GitHub 查询可用的 Java 版本...");
+
+        let ttl = crate::infrastructure::config::Config::load()
+            .map(|c| c.java_version_cache.ttl)
+            .unwrap_or(3600);
+        let cache = crate::remote::cache::VersionCacheManager::new()
+            .map_err(|e| format!("初始化缓存失败: {}", e))?
+            .with_ttl(ttl);
+        if let Ok(Some(cached)) = cache.load::<Vec<GitHubJavaVersion>>(&crate::remote::cache::CacheKeys::java_versions_github()).await {
+            println!("📖 使用缓存的 GitHub 版本列表");
+            return Ok(cached);
+        }
 
         // 尝试多个 Adoptium GitHub 仓库
         let repositories = vec![
@@ -122,6 +167,7 @@ impl GitHubJavaDownloader {
         });
 
         println!("✅ 找到 {} 个可用版本", all_versions.len());
+        let _ = cache.save(&crate::remote::cache::CacheKeys::java_versions_github(), &all_versions, None).await;
         Ok(all_versions)
     }
 
@@ -269,36 +315,43 @@ impl GitHubJavaDownloader {
         Some((os.to_string(), arch.to_string()))
     }
 
-    /// 获取当前系统信息
-    pub fn get_current_system_info() -> (String, String) {
-        let os = if cfg!(target_os = "windows") {
-            "windows"
-        } else if cfg!(target_os = "macos") {
-            "macos"
-        } else if cfg!(target_os = "linux") {
-            "linux"
-        } else {
-            "unknown"
-        };
-
-        let arch = if cfg!(target_arch = "x86_64") {
-            "x64"
-        } else if cfg!(target_arch = "aarch64") {
-            "aarch64"
-        } else if cfg!(target_arch = "x86") {
-            "x86"
-        } else {
-            "unknown"
-        };
-
-        (os.to_string(), arch.to_string())
-    }
 
     /// 根据版本规格查找版本
     pub async fn find_version_by_spec(
         &self,
         spec: &str
     ) -> Result<GitHubJavaVersion, String> {
+        let registry_only = crate::infrastructure::config::Config::load()
+            .map(|c| c.java_download_sources.registry_only)
+            .unwrap_or(false);
+        if let Ok(reg) = crate::remote::VersionRegistry::load() {
+            if let Some(e) = reg.find(spec) {
+                let (minor, patch) = crate::remote::version_registry::split_version(&e.version);
+                let mut download_urls = HashMap::new();
+                let iter = e.assets_github.as_ref().unwrap_or(&e.assets);
+                for (k, filename) in iter.iter() {
+                    let url = format!(
+                        "https://github.com/adoptium/temurin{}-binaries/releases/download/{}/{}",
+                        e.major,
+                        e.tag_name,
+                        filename
+                    );
+                    download_urls.insert(k.clone(), url);
+                }
+                return Ok(GitHubJavaVersion {
+                    version: e.version.clone(),
+                    major: e.major,
+                    minor,
+                    patch,
+                    tag_name: e.tag_name.clone(),
+                    release_name: format!("Eclipse Temurin JDK {}", e.version),
+                    download_urls,
+                    is_lts: e.lts,
+                    published_at: "registry".to_string(),
+                });
+            }
+        }
+        if registry_only { return Err("registry-only: version not found in registry".to_string()); }
         let versions = self.list_available_versions().await?;
 
         let spec_cleaned = spec.trim().to_lowercase()
@@ -405,5 +458,52 @@ impl GitHubJavaDownloader {
 impl Default for GitHubJavaDownloader {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl JavaDownloader for GitHubJavaDownloader {
+    type Version = GitHubJavaVersion;
+
+    fn version_string(&self, version: &Self::Version) -> String {
+        version.version.clone()
+    }
+
+    fn list_available_versions(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<Self::Version>, DownloadError>> + Send + '_>> {
+        let fut = self.list_available_versions();
+        Box::pin(async move { fut.await.map_err(DownloadError::from) })
+    }
+
+    fn find_version_by_spec<'a, 'b>(&'a self, spec: &'b str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Self::Version, DownloadError>> + Send + 'a>> {
+        let spec_owned = spec.to_string();
+        Box::pin(async move { self.find_version_by_spec(&spec_owned).await.map_err(DownloadError::from) })
+    }
+
+    fn get_download_url<'a, 'b, 'c>(
+        &'a self,
+        version: &'b Self::Version,
+        platform: &'c super::platform::Platform,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, DownloadError>> + Send + 'a>> {
+        let os = platform.os.clone();
+        let arch = platform.arch.clone();
+        let version_cloned = version.clone();
+        Box::pin(async move { self.get_download_url(&version_cloned, &os, &arch).await.map_err(DownloadError::from) })
+    }
+
+    fn download_java<'a, 'b, 'c>(
+        &'a self,
+        version: &'b Self::Version,
+        platform: &'c super::platform::Platform,
+        progress_callback: Box<dyn Fn(u64, u64) + Send>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<DownloadTarget, DownloadError>> + Send + 'a>> {
+        let os = platform.os.clone();
+        let arch = platform.arch.clone();
+        let version_cloned = version.clone();
+        Box::pin(async move {
+            let bytes = self
+                .download_java(&version_cloned, &os, &arch, move |d, t| (progress_callback)(d, t))
+                .await
+                .map_err(DownloadError::from)?;
+            Ok(DownloadTarget::Bytes(bytes))
+        })
     }
 }

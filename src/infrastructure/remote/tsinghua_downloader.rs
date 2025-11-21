@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use super::{download::download_to_bytes, platform::Platform};
+use super::java_downloader::{JavaDownloader, DownloadTarget, DownloadError};
 
 /// Mirror download entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,187 +40,46 @@ impl TsinghuaJavaDownloader {
         }
     }
 
-    /// Build mirror version list without caching (临时禁用缓存)
     pub async fn list_available_versions(&self) -> Result<Vec<TsinghuaJavaVersion>, String> {
-        println!("-> Fetching Java versions from Tsinghua mirror (cache disabled)...");
-
-        let mut versions = Vec::new();
-
-        // 1. 获取硬编码的稳定版本
-        println!("-> Loading hardcoded stable versions...");
-        let stable_versions = self.get_stable_versions();
-        versions.extend(stable_versions);
-
-        println!("<- Prepared {} stable versions", versions.len());
-
-        Ok(versions)
-    }
-
-    /// Get hardcoded stable versions for Tsinghua mirror
-    fn get_stable_versions(&self) -> Vec<TsinghuaJavaVersion> {
-        let mut versions = Vec::new();
-
-        // Helper struct for defining stable versions
-        struct StableDef {
-            version: &'static str,
-            major: u32,
-            is_lts: bool,
-            filename_map: Vec<(&'static str, &'static str)>, // (os-arch, filename)
-        }
-
-        let stable_defs = vec![
-            // Java 25 (Latest EA)
-            StableDef {
-                version: "25.0.1+8",
-                major: 25,
-                is_lts: false,
-                filename_map: vec![
-                    ("windows-x64", "OpenJDK25U-jdk_x64_windows_hotspot_25.0.1_8.zip"),
-                    ("linux-x64", "OpenJDK25U-jdk_x64_linux_hotspot_25.0.1_8.tar.gz"),
-                    ("linux-aarch64", "OpenJDK25U-jdk_aarch64_linux_hotspot_25.0.1_8.tar.gz"),
-                    ("macos-x64", "OpenJDK25U-jdk_x64_mac_hotspot_25.0.1_8.tar.gz"),
-                    ("macos-aarch64", "OpenJDK25U-jdk_aarch64_mac_hotspot_25.0.1_8.tar.gz"),
-                ],
-            },
-            // Java 21 (LTS)
-            StableDef {
-                version: "21.0.9+10",
-                major: 21,
-                is_lts: true,
-                filename_map: vec![
-                    ("windows-x64", "OpenJDK21U-jdk_x64_windows_hotspot_21.0.9_10.zip"),
-                    ("linux-x64", "OpenJDK21U-jdk_x64_linux_hotspot_21.0.9_10.tar.gz"),
-                    ("linux-aarch64", "OpenJDK21U-jdk_aarch64_linux_hotspot_21.0.9_10.tar.gz"),
-                    ("macos-x64", "OpenJDK21U-jdk_x64_mac_hotspot_21.0.9_10.tar.gz"),
-                    ("macos-aarch64", "OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.9_10.tar.gz"),
-                ],
-            },
-            // Java 20 (Non-LTS)
-            StableDef {
-                version: "20.0.2+9",
-                major: 20,
-                is_lts: false,
-                filename_map: vec![
-                    ("windows-x64", "OpenJDK20U-jdk_x64_windows_hotspot_20.0.2_9.zip"),
-                    ("linux-x64", "OpenJDK20U-jdk_x64_linux_hotspot_20.0.2_9.tar.gz"),
-                    ("linux-aarch64", "OpenJDK20U-jdk_aarch64_linux_hotspot_20.0.2_9.tar.gz"),
-                    ("macos-x64", "OpenJDK20U-jdk_x64_mac_hotspot_20.0.2_9.tar.gz"),
-                    ("macos-aarch64", "OpenJDK20U-jdk_aarch64_mac_hotspot_20.0.2_9.tar.gz"),
-                ],
-            },
-            // Java 19 (Non-LTS)
-            StableDef {
-                version: "19.0.2+7",
-                major: 19,
-                is_lts: false,
-                filename_map: vec![
-                    ("windows-x64", "OpenJDK19U-jdk_x64_windows_hotspot_19.0.2_7.zip"),
-                    ("linux-x64", "OpenJDK19U-jdk_x64_linux_hotspot_19.0.2_7.tar.gz"),
-                    ("linux-aarch64", "OpenJDK19U-jdk_aarch64_linux_hotspot_19.0.2_7.tar.gz"),
-                    ("macos-x64", "OpenJDK19U-jdk_x64_mac_hotspot_19.0.2_7.tar.gz"),
-                    ("macos-aarch64", "OpenJDK19U-jdk_aarch64_mac_hotspot_19.0.2_7.tar.gz"),
-                ],
-            },
-            // Java 18 (Non-LTS)
-            StableDef {
-                version: "18.0.2+9",
-                major: 18,
-                is_lts: false,
-                filename_map: vec![
-                    ("windows-x64", "OpenJDK18U-jdk_x64_windows_hotspot_18.0.2_9.zip"),
-                    ("linux-x64", "OpenJDK18U-jdk_x64_linux_hotspot_18.0.2_9.tar.gz"),
-                    ("linux-aarch64", "OpenJDK18U-jdk_aarch64_linux_hotspot_18.0.2_9.tar.gz"),
-                    ("macos-x64", "OpenJDK18U-jdk_x64_mac_hotspot_18.0.2_9.tar.gz"),
-                    ("macos-aarch64", "OpenJDK18U-jdk_aarch64_mac_hotspot_18.0.2_9.tar.gz"),
-                ],
-            },
-            // Java 17 (LTS)
-            StableDef {
-                version: "17.0.17+10",
-                major: 17,
-                is_lts: true,
-                filename_map: vec![
-                    ("windows-x64", "OpenJDK17U-jdk_x64_windows_hotspot_17.0.17_10.zip"),
-                    ("linux-x64", "OpenJDK17U-jdk_x64_linux_hotspot_17.0.17_10.tar.gz"),
-                    ("linux-aarch64", "OpenJDK17U-jdk_aarch64_linux_hotspot_17.0.17_10.tar.gz"),
-                    ("macos-x64", "OpenJDK17U-jdk_x64_mac_hotspot_17.0.17_10.tar.gz"),
-                    ("macos-aarch64", "OpenJDK17U-jdk_aarch64_mac_hotspot_17.0.17_10.tar.gz"),
-                ],
-            },
-            // Java 11 (LTS)
-            StableDef {
-                version: "11.0.29+7",
-                major: 11,
-                is_lts: true,
-                filename_map: vec![
-                    ("windows-x64", "OpenJDK11U-jdk_x64_windows_hotspot_11.0.29_7.zip"),
-                    ("linux-x64", "OpenJDK11U-jdk_x64_linux_hotspot_11.0.29_7.tar.gz"),
-                    ("linux-aarch64", "OpenJDK11U-jdk_aarch64_linux_hotspot_11.0.29_7.tar.gz"),
-                    ("macos-x64", "OpenJDK11U-jdk_x64_mac_hotspot_11.0.29_7.tar.gz"),
-                    ("macos-aarch64", "OpenJDK11U-jdk_aarch64_mac_hotspot_11.0.29_7.tar.gz"),
-                ],
-            },
-            // Java 8 (LTS)
-            StableDef {
-                version: "8u472b08",
-                major: 8,
-                is_lts: true,
-                filename_map: vec![
-                    ("windows-x64", "OpenJDK8U-jdk_x64_windows_hotspot_8u472b08.zip"),
-                    ("linux-x64", "OpenJDK8U-jdk_x64_linux_hotspot_8u472b08.tar.gz"),
-                    ("linux-aarch64", "OpenJDK8U-jdk_aarch64_linux_hotspot_8u472b08.tar.gz"),
-                    ("macos-x64", "OpenJDK8U-jdk_x64_mac_hotspot_8u472b08.tar.gz"),
-                    ("macos-aarch64", "OpenJDK8U-jdk_aarch64_mac_hotspot_8u472b08.tar.gz"),
-                ],
-            },
-        ];
-
-        for def in stable_defs {
-            let mut download_urls = HashMap::new();
-
-            for (key, filename) in def.filename_map {
-                let (os, arch) = key.split_once('-').unwrap();
-                // Map "macos" key to "mac" in URL path if needed (consistent with logic)
-                // Here key is "macos-x64", so os="macos". URL path should use "mac".
-                let mirror_os = match os {
-                    "macos" => "mac",
-                    other => other,
-                };
-
-                let url = format!(
-                    "{}/{}/jdk/{}/{}/{}",
-                    self.base_url,
-                    def.major,
-                    arch,
-                    mirror_os,
-                    filename
-                );
-
-                download_urls.insert(
-                    key.to_string(),
-                    TsinghuaDownloadEntry {
-                        primary: url,
-                        fallback: None,
-                    },
-                );
+        if let Ok(reg) = crate::remote::VersionRegistry::load() {
+            let mut versions = Vec::new();
+            for e in reg.list() {
+                let (minor, patch) = crate::remote::version_registry::split_version(&e.version);
+                let mut download_urls = HashMap::new();
+                let iter = e.assets_tsinghua.as_ref().unwrap_or(&e.assets);
+                for (k, filename) in iter.iter() {
+                    let parts: Vec<&str> = k.split('-').collect();
+                    let os = parts.get(0).cloned().unwrap_or("");
+                    let arch = parts.get(1).cloned().unwrap_or("");
+                    let mirror_os = if os == "macos" { "mac" } else { os };
+                    let url = format!(
+                        "{}/{}/jdk/{}/{}{}{}",
+                        self.base_url,
+                        e.major,
+                        arch,
+                        mirror_os,
+                        if mirror_os.ends_with('/') { "" } else { "/" },
+                        filename
+                    );
+                    download_urls.insert(k.clone(), TsinghuaDownloadEntry { primary: url, fallback: None });
+                }
+                versions.push(TsinghuaJavaVersion {
+                    version: e.version.clone(),
+                    major: e.major,
+                    minor,
+                    patch,
+                    release_name: format!("Eclipse Temurin JDK {}", e.version),
+                    tag_name: e.tag_name.clone(),
+                    download_urls,
+                    is_lts: e.lts,
+                    published_at: "registry".to_string(),
+                });
             }
-
-            versions.push(TsinghuaJavaVersion {
-                version: def.version.to_string(),
-                major: def.major,
-                minor: Some(0), // Simplified
-                patch: Some(0), // Simplified
-                release_name: format!("Eclipse Temurin JDK {} ({})", def.version,
-                    if def.is_lts { "LTS" } else { "Non-LTS" }),
-                tag_name: format!("jdk-{}", def.version),
-                download_urls,
-                is_lts: def.is_lts,
-                published_at: "Stable".to_string(),
-            });
+            return Ok(versions);
         }
-
-        versions
+        Err("Version registry not found".to_string())
     }
+
 
     /// Get download URL for platform with mirror-first and GitHub fallback
     pub async fn get_download_url(
@@ -282,8 +142,41 @@ impl TsinghuaJavaDownloader {
         Ok(data)
     }
 
-    /// Find version by spec (using GitHub metadata to mirror)
     pub async fn find_version_by_spec(&self, spec: &str) -> Result<TsinghuaJavaVersion, String> {
+        if let Ok(reg) = crate::remote::VersionRegistry::load() {
+            if let Some(e) = reg.find(spec) {
+                let (minor, patch) = crate::remote::version_registry::split_version(&e.version);
+                let mut download_urls = HashMap::new();
+                let iter = e.assets_tsinghua.as_ref().unwrap_or(&e.assets);
+                for (k, filename) in iter.iter() {
+                    let parts: Vec<&str> = k.split('-').collect();
+                    let os = parts.get(0).cloned().unwrap_or("");
+                    let arch = parts.get(1).cloned().unwrap_or("");
+                    let mirror_os = if os == "macos" { "mac" } else { os };
+                    let url = format!(
+                        "{}/{}/jdk/{}/{}{}{}",
+                        self.base_url,
+                        e.major,
+                        arch,
+                        mirror_os,
+                        if mirror_os.ends_with('/') { "" } else { "/" },
+                        filename
+                    );
+                    download_urls.insert(k.clone(), TsinghuaDownloadEntry { primary: url, fallback: None });
+                }
+                return Ok(TsinghuaJavaVersion {
+                    version: e.version.clone(),
+                    major: e.major,
+                    minor,
+                    patch,
+                    release_name: format!("Eclipse Temurin JDK {}", e.version),
+                    tag_name: e.tag_name.clone(),
+                    download_urls,
+                    is_lts: e.lts,
+                    published_at: "registry".to_string(),
+                });
+            }
+        }
         let versions = self.list_available_versions().await?;
 
         let spec_cleaned = spec.trim().to_lowercase()
@@ -360,6 +253,51 @@ impl TsinghuaJavaDownloader {
     }
 }
 
+impl JavaDownloader for TsinghuaJavaDownloader {
+    type Version = TsinghuaJavaVersion;
+
+    fn version_string(&self, version: &Self::Version) -> String {
+        version.version.clone()
+    }
+
+    fn list_available_versions(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<Self::Version>, DownloadError>> + Send + '_>> {
+        let fut = self.list_available_versions();
+        Box::pin(async move { fut.await.map_err(DownloadError::from) })
+    }
+
+    fn find_version_by_spec<'a, 'b>(&'a self, spec: &'b str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Self::Version, DownloadError>> + Send + 'a>> {
+        let spec_owned = spec.to_string();
+        Box::pin(async move { self.find_version_by_spec(&spec_owned).await.map_err(DownloadError::from) })
+    }
+
+    fn get_download_url<'a, 'b, 'c>(
+        &'a self,
+        version: &'b Self::Version,
+        platform: &'c Platform,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, DownloadError>> + Send + 'a>> {
+        let version_cloned = version.clone();
+        let platform_cloned = platform.clone();
+        Box::pin(async move { self.get_download_url(&version_cloned, &platform_cloned).await.map_err(DownloadError::from) })
+    }
+
+    fn download_java<'a, 'b, 'c>(
+        &'a self,
+        version: &'b Self::Version,
+        platform: &'c Platform,
+        progress_callback: Box<dyn Fn(u64, u64) + Send>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<DownloadTarget, DownloadError>> + Send + 'a>> {
+        let version_cloned = version.clone();
+        let platform_cloned = platform.clone();
+        Box::pin(async move {
+            let bytes = self
+                .download_java(&version_cloned, &platform_cloned, move |d, t| (progress_callback)(d, t))
+                .await
+                .map_err(DownloadError::from)?;
+            Ok(DownloadTarget::Bytes(bytes))
+        })
+    }
+}
+
 impl Default for TsinghuaJavaDownloader {
     fn default() -> Self {
         Self::new()
@@ -383,8 +321,7 @@ mod tests {
 
                 // 测试稳定版本
                 let stable_versions = downloader.get_stable_versions();
-                println!("✅ 内置稳定版本数量: {}", stable_versions.len());
-                assert!(!stable_versions.is_empty(), "应该有内置稳定版本");
+                        // 取消硬编码稳定版本，改为使用配置驱动
 
                 // 测试版本解析
                 let test_specs = ["21", "17", "11", "25", "20", "lts"];

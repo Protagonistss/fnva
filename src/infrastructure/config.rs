@@ -48,6 +48,12 @@ pub struct JavaDownloadSources {
     /// 自定义下载源列表
     #[serde(default)]
     pub sources: Vec<JavaDownloadSourceConfig>,
+    /// 是否仅使用公共版本列表（禁用动态查询）
+    #[serde(default = "default_registry_only")]
+    pub registry_only: bool,
+    /// 自定义公共版本列表路径（可选）
+    #[serde(default)]
+    pub java_versions_path: Option<String>,
 }
 
 fn default_primary_source() -> String {
@@ -72,6 +78,8 @@ pub struct JavaDownloadSourceConfig {
 fn default_priority() -> u32 {
     10
 }
+
+fn default_registry_only() -> bool { false }
 
 /// Java 版本缓存配置
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -226,6 +234,8 @@ impl Config {
             primary: "tsinghua".to_string(),
             fallback: vec!["aliyun".to_string(), "github".to_string()],
             sources: Vec::new(),
+            registry_only: false,
+            java_versions_path: None,
         },
             java_version_cache: JavaVersionCache::default(),
             current_java_env: None,

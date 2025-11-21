@@ -1,0 +1,167 @@
+[[versions]]
+version = "21.0.9"
+major = 21
+lts = true
+tag_name = "jdk-21.0.9+10"
+[versions.assets]
+windows-x64 = "OpenJDK21U-jdk_x64_windows_hotspot_21.0.9_10.zip"
+linux-x64 = "OpenJDK21U-jdk_x64_linux_hotspot_21.0.9_10.tar.gz"
+linux-aarch64 = "OpenJDK21U-jdk_aarch64_linux_hotspot_21.0.9_10.tar.gz"
+macos-x64 = "OpenJDK21U-jdk_x64_mac_hotspot_21.0.9_10.tar.gz"
+macos-aarch64 = "OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.9_10.tar.gz"
+[versions.assets_github]
+windows-x64 = "OpenJDK21U-jdk_x64_windows_hotspot_21.0.9_10.zip"
+linux-x64 = "OpenJDK21U-jdk_x64_linux_hotspot_21.0.9_10.tar.gz"
+linux-aarch64 = "OpenJDK21U-jdk_aarch64_linux_hotspot_21.0.9_10.tar.gz"
+macos-x64 = "OpenJDK21U-jdk_x64_mac_hotspot_21.0.9_10.tar.gz"
+macos-aarch64 = "OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.9_10.tar.gz"
+[versions.assets_aliyun]
+windows-x64 = "OpenJDK21U-jdk_x64_windows_hotspot_21.0.9_10.zip"
+linux-x64 = "OpenJDK21U-jdk_x64_linux_hotspot_21.0.9_10.tar.gz"
+linux-aarch64 = "OpenJDK21U-jdk_aarch64_linux_hotspot_21.0.9_10.tar.gz"
+macos-x64 = "OpenJDK21U-jdk_x64_mac_hotspot_21.0.9_10.tar.gz"
+macos-aarch64 = "OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.9_10.tar.gz"
+[versions.assets_tsinghua]
+windows-x64 = "OpenJDK21U-jdk_x64_windows_hotspot_21.0.9_10.zip"
+linux-x64 = "OpenJDK21U-jdk_x64_linux_hotspot_21.0.9_10.tar.gz"
+linux-aarch64 = "OpenJDK21U-jdk_aarch64_linux_hotspot_21.0.9_10.tar.gz"
+macos-x64 = "OpenJDK21U-jdk_x64_mac_hotspot_21.0.9_10.tar.gz"
+macos-aarch64 = "OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.9_10.tar.gz"
+
+[[versions]]
+version = "17.0.17"
+major = 17
+lts = true
+tag_name = "jdk-17.0.17+10"
+[versions.assets]
+windows-x64 = "OpenJDK17U-jdk_x64_windows_hotspot_17.0.17_10.zip"
+linux-x64 = "OpenJDK17U-jdk_x64_linux_hotspot_17.0.17_10.tar.gz"
+linux-aarch64 = "OpenJDK17U-jdk_aarch64_linux_hotspot_17.0.17_10.tar.gz"
+macos-x64 = "OpenJDK17U-jdk_x64_mac_hotspot_17.0.17_10.tar.gz"
+macos-aarch64 = "OpenJDK17U-jdk_aarch64_mac_hotspot_17.0.17_10.tar.gz"
+[versions.assets_github]
+windows-x64 = "OpenJDK17U-jdk_x64_windows_hotspot_17.0.17_10.zip"
+linux-x64 = "OpenJDK17U-jdk_x64_linux_hotspot_17.0.17_10.tar.gz"
+linux-aarch64 = "OpenJDK17U-jdk_aarch64_linux_hotspot_17.0.17_10.tar.gz"
+macos-x64 = "OpenJDK17U-jdk_x64_mac_hotspot_17.0.17_10.tar.gz"
+macos-aarch64 = "OpenJDK17U-jdk_aarch64_mac_hotspot_17.0.17_10.tar.gz"
+[versions.assets_aliyun]
+windows-x64 = "OpenJDK17U-jdk_x64_windows_hotspot_17.0.17_10.zip"
+linux-x64 = "OpenJDK17U-jdk_x64_linux_hotspot_17.0.17_10.tar.gz"
+linux-aarch64 = "OpenJDK17U-jdk_aarch64_linux_hotspot_17.0.17_10.tar.gz"
+macos-x64 = "OpenJDK17U-jdk_x64_mac_hotspot_17.0.17_10.tar.gz"
+macos-aarch64 = "OpenJDK17U-jdk_aarch64_mac_hotspot_17.0.17_10.tar.gz"
+[versions.assets_tsinghua]
+windows-x64 = "OpenJDK17U-jdk_x64_windows_hotspot_17.0.17_10.zip"
+linux-x64 = "OpenJDK17U-jdk_x64_linux_hotspot_17.0.17_10.tar.gz"
+linux-aarch64 = "OpenJDK17U-jdk_aarch64_linux_hotspot_17.0.17_10.tar.gz"
+macos-x64 = "OpenJDK17U-jdk_x64_mac_hotspot_17.0.17_10.tar.gz"
+macos-aarch64 = "OpenJDK17U-jdk_aarch64_mac_hotspot_17.0.17_10.tar.gz"
+
+[[versions]]
+version = "25.0.1+8"
+major = 25
+lts = false
+tag_name = "jdk-25.0.1+8"
+[versions.assets]
+windows-x64 = "OpenJDK25U-jdk_x64_windows_hotspot_25.0.1_8.zip"
+linux-x64 = "OpenJDK25U-jdk_x64_linux_hotspot_25.0.1_8.tar.gz"
+linux-aarch64 = "OpenJDK25U-jdk_aarch64_linux_hotspot_25.0.1_8.tar.gz"
+macos-x64 = "OpenJDK25U-jdk_x64_mac_hotspot_25.0.1_8.tar.gz"
+macos-aarch64 = "OpenJDK25U-jdk_aarch64_mac_hotspot_25.0.1_8.tar.gz"
+[versions.assets_tsinghua]
+windows-x64 = "OpenJDK25U-jdk_x64_windows_hotspot_25.0.1_8.zip"
+linux-x64 = "OpenJDK25U-jdk_x64_linux_hotspot_25.0.1_8.tar.gz"
+linux-aarch64 = "OpenJDK25U-jdk_aarch64_linux_hotspot_25.0.1_8.tar.gz"
+macos-x64 = "OpenJDK25U-jdk_x64_mac_hotspot_25.0.1_8.tar.gz"
+macos-aarch64 = "OpenJDK25U-jdk_aarch64_mac_hotspot_25.0.1_8.tar.gz"
+
+[[versions]]
+version = "20.0.2+9"
+major = 20
+lts = false
+tag_name = "jdk-20.0.2+9"
+[versions.assets]
+windows-x64 = "OpenJDK20U-jdk_x64_windows_hotspot_20.0.2_9.zip"
+linux-x64 = "OpenJDK20U-jdk_x64_linux_hotspot_20.0.2_9.tar.gz"
+linux-aarch64 = "OpenJDK20U-jdk_aarch64_linux_hotspot_20.0.2_9.tar.gz"
+macos-x64 = "OpenJDK20U-jdk_x64_mac_hotspot_20.0.2_9.tar.gz"
+macos-aarch64 = "OpenJDK20U-jdk_aarch64_mac_hotspot_20.0.2_9.tar.gz"
+[versions.assets_tsinghua]
+windows-x64 = "OpenJDK20U-jdk_x64_windows_hotspot_20.0.2_9.zip"
+linux-x64 = "OpenJDK20U-jdk_x64_linux_hotspot_20.0.2_9.tar.gz"
+linux-aarch64 = "OpenJDK20U-jdk_aarch64_linux_hotspot_20.0.2_9.tar.gz"
+macos-x64 = "OpenJDK20U-jdk_x64_mac_hotspot_20.0.2_9.tar.gz"
+macos-aarch64 = "OpenJDK20U-jdk_aarch64_mac_hotspot_20.0.2_9.tar.gz"
+
+[[versions]]
+version = "19.0.2+7"
+major = 19
+lts = false
+tag_name = "jdk-19.0.2+7"
+[versions.assets]
+windows-x64 = "OpenJDK19U-jdk_x64_windows_hotspot_19.0.2_7.zip"
+linux-x64 = "OpenJDK19U-jdk_x64_linux_hotspot_19.0.2_7.tar.gz"
+linux-aarch64 = "OpenJDK19U-jdk_aarch64_linux_hotspot_19.0.2_7.tar.gz"
+macos-x64 = "OpenJDK19U-jdk_x64_mac_hotspot_19.0.2_7.tar.gz"
+macos-aarch64 = "OpenJDK19U-jdk_aarch64_mac_hotspot_19.0.2_7.tar.gz"
+[versions.assets_tsinghua]
+windows-x64 = "OpenJDK19U-jdk_x64_windows_hotspot_19.0.2_7.zip"
+linux-x64 = "OpenJDK19U-jdk_x64_linux_hotspot_19.0.2_7.tar.gz"
+linux-aarch64 = "OpenJDK19U-jdk_aarch64_linux_hotspot_19.0.2_7.tar.gz"
+macos-x64 = "OpenJDK19U-jdk_x64_mac_hotspot_19.0.2_7.tar.gz"
+macos-aarch64 = "OpenJDK19U-jdk_aarch64_mac_hotspot_19.0.2_7.tar.gz"
+
+[[versions]]
+version = "18.0.2+9"
+major = 18
+lts = false
+tag_name = "jdk-18.0.2+9"
+[versions.assets]
+windows-x64 = "OpenJDK18U-jdk_x64_windows_hotspot_18.0.2_9.zip"
+linux-x64 = "OpenJDK18U-jdk_x64_linux_hotspot_18.0.2_9.tar.gz"
+linux-aarch64 = "OpenJDK18U-jdk_aarch64_linux_hotspot_18.0.2_9.tar.gz"
+macos-x64 = "OpenJDK18U-jdk_x64_mac_hotspot_18.0.2_9.tar.gz"
+macos-aarch64 = "OpenJDK18U-jdk_aarch64_mac_hotspot_18.0.2_9.tar.gz"
+[versions.assets_tsinghua]
+windows-x64 = "OpenJDK18U-jdk_x64_windows_hotspot_18.0.2_9.zip"
+linux-x64 = "OpenJDK18U-jdk_x64_linux_hotspot_18.0.2_9.tar.gz"
+linux-aarch64 = "OpenJDK18U-jdk_aarch64_linux_hotspot_18.0.2_9.tar.gz"
+macos-x64 = "OpenJDK18U-jdk_x64_mac_hotspot_18.0.2_9.tar.gz"
+macos-aarch64 = "OpenJDK18U-jdk_aarch64_mac_hotspot_18.0.2_9.tar.gz"
+
+[[versions]]
+version = "11.0.29+7"
+major = 11
+lts = true
+tag_name = "jdk-11.0.29+7"
+[versions.assets]
+windows-x64 = "OpenJDK11U-jdk_x64_windows_hotspot_11.0.29_7.zip"
+linux-x64 = "OpenJDK11U-jdk_x64_linux_hotspot_11.0.29_7.tar.gz"
+linux-aarch64 = "OpenJDK11U-jdk_aarch64_linux_hotspot_11.0.29_7.tar.gz"
+macos-x64 = "OpenJDK11U-jdk_x64_mac_hotspot_11.0.29_7.tar.gz"
+macos-aarch64 = "OpenJDK11U-jdk_aarch64_mac_hotspot_11.0.29_7.tar.gz"
+[versions.assets_tsinghua]
+windows-x64 = "OpenJDK11U-jdk_x64_windows_hotspot_11.0.29_7.zip"
+linux-x64 = "OpenJDK11U-jdk_x64_linux_hotspot_11.0.29_7.tar.gz"
+linux-aarch64 = "OpenJDK11U-jdk_aarch64_linux_hotspot_11.0.29_7.tar.gz"
+macos-x64 = "OpenJDK11U-jdk_x64_mac_hotspot_11.0.29_7.tar.gz"
+macos-aarch64 = "OpenJDK11U-jdk_aarch64_mac_hotspot_11.0.29_7.tar.gz"
+
+[[versions]]
+version = "8u472b08"
+major = 8
+lts = true
+tag_name = "jdk8u472-b08"
+[versions.assets]
+windows-x64 = "OpenJDK8U-jdk_x64_windows_hotspot_8u472b08.zip"
+linux-x64 = "OpenJDK8U-jdk_x64_linux_hotspot_8u472b08.tar.gz"
+linux-aarch64 = "OpenJDK8U-jdk_aarch64_linux_hotspot_8u472b08.tar.gz"
+macos-x64 = "OpenJDK8U-jdk_x64_mac_hotspot_8u472b08.tar.gz"
+macos-aarch64 = "OpenJDK8U-jdk_aarch64_mac_hotspot_8u472b08.tar.gz"
+[versions.assets_tsinghua]
+windows-x64 = "OpenJDK8U-jdk_x64_windows_hotspot_8u472b08.zip"
+linux-x64 = "OpenJDK8U-jdk_x64_linux_hotspot_8u472b08.tar.gz"
+linux-aarch64 = "OpenJDK8U-jdk_aarch64_linux_hotspot_8u472b08.tar.gz"
+macos-x64 = "OpenJDK8U-jdk_x64_mac_hotspot_8u472b08.tar.gz"
+macos-aarch64 = "OpenJDK8U-jdk_aarch64_mac_hotspot_8u472b08.tar.gz"

@@ -53,3 +53,5 @@ coverage/
 # 调试文件
 *.dSYM/
 
+.trae/*
+

@@ -33,20 +33,36 @@ impl JavaInstaller {
             ).await;
         }
 
-        // 从repositories配置中读取Java下载器设置
-        let downloader_type = config.repositories.java.downloader.clone();
+        let primary = config.repositories.java.downloader.clone();
+        let mut chain = Vec::new();
+        chain.push(primary);
+        chain.extend(config.repositories.java.fallback.clone());
 
-        println!("📋 使用下载器: {}", downloader_type);
+        println!("📋 下载源优先级链: {}", chain.join(" -> "));
 
-        match downloader_type.as_str() {
-            "github" => Self::install_with_github_downloader(version_spec, config, auto_switch).await,
-            "aliyun" => Self::install_with_aliyun_downloader(version_spec, config, auto_switch).await,
-            "tsinghua" => Self::install_with_tsinghua_downloader(version_spec, config, auto_switch).await,
-            _ => {
-                println!("⚠️  未知的下载器类型: '{}', 使用默认清华镜像", downloader_type);
-                Self::install_with_tsinghua_downloader(version_spec, config, auto_switch).await
+        let mut last_err: Option<String> = None;
+        for source in chain {
+            let res = match source.as_str() {
+                "github" => Self::install_with_github_downloader(version_spec, config, auto_switch).await,
+                "aliyun" => Self::install_with_aliyun_downloader(version_spec, config, auto_switch).await,
+                "tsinghua" => Self::install_with_tsinghua_downloader(version_spec, config, auto_switch).await,
+                _ => {
+                    println!("⚠️  未知的下载器类型: '{}' , 跳过", source);
+                    continue;
+                }
+            };
+
+            match res {
+                Ok(java_home) => return Ok(java_home),
+                Err(e) => {
+                    println!("↩️  源 '{}' 失败: {}", source, e);
+                    last_err = Some(e);
+                    continue;
+                }
             }
         }
+
+        Err(last_err.unwrap_or_else(|| "所有下载源均失败".to_string()))
     }
 
   
@@ -183,6 +199,57 @@ impl JavaInstaller {
         Ok(java_home.to_string())
     }
 
+    
+
+    async fn download_and_install_generic<D: crate::remote::JavaDownloader>(
+        downloader: &D,
+        version_info: &D::Version,
+        platform: &crate::remote::Platform,
+        env_name: &str,
+    ) -> Result<String, String> {
+        let temp_dir = TempDir::new().map_err(|e| format!("创建临时目录失败: {}", e))?;
+        let pb = crate::infrastructure::installer::utils::create_progress_bar();
+        let pb_clone = pb.clone();
+        let target = downloader
+            .download_java(
+                version_info,
+                platform,
+                Box::new(move |downloaded, total| {
+                    if total > 0 {
+                        if pb_clone.length() != Some(total) {
+                            pb_clone.set_length(total);
+                        }
+                        pb_clone.set_position(downloaded);
+                    }
+                }),
+            )
+            .await
+            .map_err(|e| format!("下载失败: {:?}", e))?;
+        pb.finish_with_message("下载完成");
+
+        let extension = platform.archive_ext();
+        let file_name = format!("OpenJDK-{}-{}.{}", downloader.version_string(version_info), platform.os, extension);
+        let file_path = temp_dir.path().join(&file_name);
+
+        match target {
+            crate::remote::DownloadTarget::Bytes(data) => {
+                tokio::fs::write(&file_path, data).await.map_err(|e| format!("写入文件失败: {}", e))?
+            }
+            crate::remote::DownloadTarget::File(p) => {
+                let from = std::path::Path::new(&p);
+                tokio::fs::copy(from, &file_path).await.map_err(|e| format!("复制文件失败: {}", e))?;
+            }
+        }
+
+        let java_home = Self::install_archive(&file_path, &downloader.version_string(version_info), env_name).await?;
+
+        if !crate::utils::validate_java_home(&java_home) {
+            return Err("安装验证失败".to_string());
+        }
+
+        Ok(java_home)
+    }
+
     /// 从阿里云下载和安装 Java
     async fn download_and_install_from_aliyun(
         downloader: &crate::remote::AliyunJavaDownloader,
@@ -190,61 +257,7 @@ impl JavaInstaller {
         platform: &crate::remote::Platform,
         env_name: &str,
     ) -> Result<String, String> {
-        // 创建临时目录
-        let temp_dir = TempDir::new()
-            .map_err(|e| format!("创建临时目录失败: {}", e))?;
-
-        // 设置进度条
-        let pb = ProgressBar::new(0);
-        pb.set_style(
-            ProgressStyle::default_bar()
-                .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta}) {percent}%")
-                .unwrap()
-                .progress_chars("#>-")
-        );
-
-        // 下载数据
-        let data = downloader.download_java(version_info, platform, |downloaded, total| {
-            if total > 0 {
-                if pb.length() != Some(total) {
-                    pb.set_length(total);
-                }
-                pb.set_position(downloaded);
-            }
-        }).await?;
-
-        pb.finish_with_message("下载完成");
-
-        // 确定文件扩展名
-        let extension = if platform.os == "windows" {
-            "zip"
-        } else {
-            "tar.gz"
-        };
-
-        let file_name = format!("OpenJDK-{}-{}.{}", version_info.version, platform.os, extension);
-        let file_path = temp_dir.path().join(&file_name);
-
-        // 写入文件
-        tokio::fs::write(&file_path, data).await
-            .map_err(|e| format!("写入文件失败: {}", e))?;
-
-        println!("📦 正在安装...");
-
-        
-        // 根据文件类型进行安装
-        let java_home = if extension == "zip" {
-            Self::install_archive(&file_path, &version_info.version, env_name).await?
-        } else {
-            Self::install_archive(&file_path, &version_info.version, env_name).await?
-        };
-
-        // 验证安装
-        if !crate::utils::validate_java_home(&java_home) {
-            return Err("安装验证失败".to_string());
-        }
-
-        Ok(java_home)
+        Self::download_and_install_generic(downloader, version_info, platform, env_name).await
     }
 
     /// 从清华镜像下载和安装 Java
@@ -254,53 +267,7 @@ impl JavaInstaller {
         platform: &crate::remote::Platform,
         env_name: &str,
     ) -> Result<String, String> {
-        let temp_dir = TempDir::new()
-            .map_err(|e| format!("创建临时目录失败: {}", e))?;
-
-        let pb = ProgressBar::new(0);
-        pb.set_style(
-            ProgressStyle::default_bar()
-                .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta}) {percent}%")
-                .unwrap()
-                .progress_chars("#>-")
-        );
-
-        let data = downloader.download_java(version_info, platform, |downloaded, total| {
-            if total > 0 {
-                if pb.length() != Some(total) {
-                    pb.set_length(total);
-                }
-                pb.set_position(downloaded);
-            }
-        }).await?;
-
-        pb.finish_with_message("下载完成");
-
-        let extension = if platform.os == "windows" {
-            "zip"
-        } else {
-            "tar.gz"
-        };
-
-        let file_name = format!("OpenJDK-{}-{}.{}", version_info.version, platform.os, extension);
-        let file_path = temp_dir.path().join(&file_name);
-
-        tokio::fs::write(&file_path, data).await
-            .map_err(|e| format!("写入文件失败: {}", e))?;
-
-        println!("📦 正在安装...");
-
-        let java_home = if extension == "zip" {
-            Self::install_archive(&file_path, &version_info.version, env_name).await?
-        } else {
-            Self::install_archive(&file_path, &version_info.version, env_name).await?
-        };
-
-        if !crate::utils::validate_java_home(&java_home) {
-            return Err("安装验证失败".to_string());
-        }
-
-        Ok(java_home)
+        Self::download_and_install_generic(downloader, version_info, platform, env_name).await
     }
 
     /// 从 GitHub 下载和安装 Java（保留旧方法以维持兼容性）
@@ -310,63 +277,7 @@ impl JavaInstaller {
         platform: &crate::remote::Platform,
         env_name: &str,
     ) -> Result<String, String> {
-        // 创建临时目录
-        let temp_dir = TempDir::new()
-            .map_err(|e| format!("创建临时目录失败: {}", e))?;
-
-        // 设置进度条
-        let pb = ProgressBar::new(0);
-        pb.set_style(
-            ProgressStyle::default_bar()
-                .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta}) {percent}%")
-                .unwrap()
-                .progress_chars("#>-")
-        );
-
-        // 下载数据
-        let data = downloader.download_java(version_info, &platform.os, &platform.arch, |downloaded, total| {
-            if total > 0 {
-                if pb.length() != Some(total) {
-                    pb.set_length(total);
-                }
-                pb.set_position(downloaded);
-            }
-        }).await?;
-
-        pb.finish_with_message("下载完成");
-
-        // 确定文件扩展名
-        let extension = if platform.os == "windows" {
-            "zip"
-        } else if platform.os == "macos" {
-            "tar.gz"
-        } else {
-            "tar.gz"
-        };
-
-        let file_name = format!("OpenJDK-{}-{}.{}", version_info.version, platform.os, extension);
-        let file_path = temp_dir.path().join(&file_name);
-
-        // 写入文件
-        tokio::fs::write(&file_path, data).await
-            .map_err(|e| format!("写入文件失败: {}", e))?;
-
-        println!("📦 正在安装...");
-
-        
-        // 根据文件类型进行安装
-        let java_home = if extension == "zip" {
-            Self::install_archive(&file_path, &version_info.version, env_name).await?
-        } else {
-            Self::install_archive(&file_path, &version_info.version, env_name).await?
-        };
-
-        // 验证安装
-        if !crate::utils::validate_java_home(&java_home) {
-            return Err("安装验证失败".to_string());
-        }
-
-        Ok(java_home)
+        Self::download_and_install_generic(downloader, version_info, platform, env_name).await
     }
 
     /// 安装压缩包（跨平台）
@@ -384,9 +295,9 @@ impl JavaInstaller {
 
         // 解压文件
         if archive_path.to_str().unwrap().ends_with(".zip") {
-            Self::extract_zip(archive_path, &java_home)?;
+            crate::infrastructure::installer::utils::extract_zip(archive_path, &java_home)?;
         } else {
-            Self::extract_tar_gz(archive_path, &java_home)?;
+            crate::infrastructure::installer::utils::extract_tar_gz(archive_path, &java_home)?;
         }
 
         // 查找实际的 JAVA_HOME（可能在子目录中）
@@ -394,60 +305,6 @@ impl JavaInstaller {
         Ok(actual_home)
     }
 
-    /// 解压 ZIP 文件
-    fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<(), String> {
-        let file = fs::File::open(zip_path)
-            .map_err(|e| format!("打开 ZIP 文件失败: {}", e))?;
-
-        let mut archive = zip::ZipArchive::new(file)
-            .map_err(|e| format!("读取 ZIP 文件失败: {}", e))?;
-
-        for i in 0..archive.len() {
-            let mut file = archive.by_index(i)
-                .map_err(|e| format!("读取 ZIP 文件项失败: {}", e))?;
-
-            let outpath = dest_dir.join(file.mangled_name());
-
-            if file.name().ends_with('/') {
-                fs::create_dir_all(&outpath)
-                    .map_err(|e| format!("创建目录失败: {}", e))?;
-            } else {
-                if let Some(p) = outpath.parent() {
-                    if !p.exists() {
-                        fs::create_dir_all(p)
-                            .map_err(|e| format!("创建父目录失败: {}", e))?;
-                    }
-                }
-
-                let mut outfile = fs::File::create(&outpath)
-                    .map_err(|e| format!("创建文件失败: {}", e))?;
-
-                std::io::copy(&mut file, &mut outfile)
-                    .map_err(|e| format!("写入文件失败: {}", e))?;
-            }
-        }
-
-        Ok(())
-    }
-
-    /// 解压 tar.gz 文件
-    fn extract_tar_gz(tar_path: &Path, dest_dir: &Path) -> Result<(), String> {
-        let output = Command::new("tar")
-            .args([
-                "-xzf", tar_path.to_str().unwrap(),
-                "-C", dest_dir.to_str().unwrap(),
-                "--strip-components=1"
-            ])
-            .output()
-            .map_err(|e| format!("执行解压命令失败: {}", e))?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("解压失败: {}", stderr));
-        }
-
-        Ok(())
-    }
 
     /// 查找已安装的 Java 目录
     fn find_installed_java(install_dir: &Path) -> Result<String, String> {
