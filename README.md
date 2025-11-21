@@ -487,7 +487,7 @@ description = "AnyCC 代理服务"
 # 仓库配置
 [repositories]
 java = [
-    "https://mirrors.aliyun.com/eclipse/temurin-compliance/temurin",
+    "https://mirrors.tuna.tsinghua.edu.cn/Adoptium",
     "https://api.adoptium.net/v3"
 ]
 maven = [
@@ -495,6 +495,8 @@ maven = [
     "https://search.maven.org/solrsearch/select"
 ]
 ```
+
+> Java downloads default to the Tsinghua Adoptium mirror (https://mirrors.tuna.tsinghua.edu.cn/Adoptium). For fully stable setups, manually maintain versions in ~/.fnva/config.toml [[java_environments]] and JAVA_HOME.
 
 ### 常用命令速查
 

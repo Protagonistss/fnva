@@ -1,5 +1,9 @@
 use crate::config::{Config, LlmEnvironment, resolve_env_var};
-use crate::platform::{generate_env_command, detect_shell, ShellType};
+use crate::infrastructure::shell::platform::{
+    detect_shell,
+    generate_env_command,
+    ShellType,
+};
 use std::collections::HashMap;
 
 /// LLM 环境管理器

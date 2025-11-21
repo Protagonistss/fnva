@@ -32,6 +32,13 @@ impl RepositoryManager {
     pub fn get_default_java_repositories() -> Vec<RepositoryConfig> {
         vec![
             RepositoryConfig {
+                name: "Tsinghua Mirror".to_string(),
+                url: "https://mirrors.tuna.tsinghua.edu.cn/Adoptium".to_string(),
+                repo_type: RepositoryType::Java,
+                enabled: true,
+                priority: 0,
+            },
+            RepositoryConfig {
                 name: "Adoptium".to_string(),
                 url: "https://api.adoptium.net/v3".to_string(),
                 repo_type: RepositoryType::Java,

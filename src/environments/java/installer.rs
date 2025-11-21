@@ -41,9 +41,10 @@ impl JavaInstaller {
         match downloader_type.as_str() {
             "github" => Self::install_with_github_downloader(version_spec, config, auto_switch).await,
             "aliyun" => Self::install_with_aliyun_downloader(version_spec, config, auto_switch).await,
+            "tsinghua" => Self::install_with_tsinghua_downloader(version_spec, config, auto_switch).await,
             _ => {
-                println!("⚠️  未知的下载器类型: '{}', 使用阿里云下载器", downloader_type);
-                Self::install_with_aliyun_downloader(version_spec, config, auto_switch).await
+                println!("⚠️  未知的下载器类型: '{}', 使用默认清华镜像", downloader_type);
+                Self::install_with_tsinghua_downloader(version_spec, config, auto_switch).await
             }
         }
     }
@@ -60,11 +61,11 @@ impl JavaInstaller {
         // 尝试从自定义名称中解析版本，如果失败则使用最新版本
         let java_version = match downloader.find_version_by_spec(version_spec).await {
             Ok(version) => {
-                println!("📋 解析到版本: {} ({})", version.version, version.release_name);
+                println!("解析到版本: {} ({})", version.version, version.release_name);
                 version
             }
             Err(_) => {
-                println!("⚠️  无法从 '{}' 解析版本，使用最新版本", version_spec);
+                println!("无法从 '{}' 解析版本，使用最新版本", version_spec);
                 // 获取最新版本
                 downloader.list_available_versions().await?
                     .into_iter()
@@ -73,11 +74,11 @@ impl JavaInstaller {
             }
         };
 
-        println!("📦 使用GitHub下载器: {}", java_version.release_name);
+        println!("使用GitHub下载器: {}", java_version.release_name);
 
-        let (os, arch) = crate::remote::GitHubJavaDownloader::get_current_system_info();
+        let platform = crate::remote::Platform::current();
         // 恢复使用用户输入的原始格式
-        let java_home = Self::download_and_install_from_github(&downloader, &java_version, &os, &arch, version_spec).await?;
+        let java_home = Self::download_and_install_from_github(&downloader, &java_version, &platform, version_spec).await?;
         Self::complete_installation_simple(version_spec, config, auto_switch, &java_home, &java_version.version, &java_version.release_name).await
     }
 
@@ -89,15 +90,13 @@ impl JavaInstaller {
     ) -> Result<String, String> {
         let downloader = crate::remote::AliyunJavaDownloader::new();
 
-        // 尝试从自定义名称中解析版本，如果失败则使用最新版本
         let java_version = match downloader.find_version_by_spec(version_spec).await {
             Ok(version) => {
-                println!("📋 解析到版本: {} ({})", version.version, version.release_name);
+                println!("解析到版本: {} ({})", version.version, version.release_name);
                 version
             }
             Err(_) => {
-                println!("⚠️  无法从 '{}' 解析版本，使用最新版本", version_spec);
-                // 获取最新版本
+                println!("无法从 '{}' 解析版本，使用最新版本", version_spec);
                 downloader.list_available_versions().await?
                     .into_iter()
                     .next()
@@ -105,15 +104,42 @@ impl JavaInstaller {
             }
         };
 
-        println!("📦 使用阿里云下载器: {}", java_version.release_name);
+        println!("使用阿里云下载器: {}", java_version.release_name);
 
-        let (os, arch) = crate::remote::AliyunJavaDownloader::get_current_system_info();
-        // 恢复使用用户输入的原始格式
-        let java_home = Self::download_and_install_from_aliyun(&downloader, &java_version, &os, &arch, version_spec).await?;
+        let platform = crate::remote::Platform::current();
+        let java_home = Self::download_and_install_from_aliyun(&downloader, &java_version, &platform, version_spec).await?;
         Self::complete_installation_simple(version_spec, config, auto_switch, &java_home, &java_version.version, &java_version.release_name).await
     }
 
-    
+    /// 使用清华镜像下载器安装Java
+    async fn install_with_tsinghua_downloader(
+        version_spec: &str,
+        config: &mut Config,
+        auto_switch: bool,
+    ) -> Result<String, String> {
+        let downloader = crate::remote::TsinghuaJavaDownloader::new();
+
+        let java_version = match downloader.find_version_by_spec(version_spec).await {
+            Ok(version) => {
+                println!("解析到版本: {} ({})", version.version, version.release_name);
+                version
+            }
+            Err(_) => {
+                println!("无法从 '{}' 解析版本，使用最新版本", version_spec);
+                downloader.list_available_versions().await?
+                    .into_iter()
+                    .next()
+                    .ok_or("没有可用的 Java 版本".to_string())?
+            }
+        };
+
+        println!("使用清华镜像下载器: {}", java_version.release_name);
+
+        let platform = crate::remote::Platform::current();
+        let java_home = Self::download_and_install_from_tsinghua(&downloader, &java_version, &platform, version_spec).await?;
+        Self::complete_installation_simple(version_spec, config, auto_switch, &java_home, &java_version.version, &java_version.release_name).await
+    }
+
     /// 完成安装流程（简单下载器）
     async fn complete_installation_simple(
         version_spec: &str,
@@ -161,8 +187,7 @@ impl JavaInstaller {
     async fn download_and_install_from_aliyun(
         downloader: &crate::remote::AliyunJavaDownloader,
         version_info: &crate::remote::AliyunJavaVersion,
-        os: &str,
-        arch: &str,
+        platform: &crate::remote::Platform,
         env_name: &str,
     ) -> Result<String, String> {
         // 创建临时目录
@@ -179,7 +204,7 @@ impl JavaInstaller {
         );
 
         // 下载数据
-        let data = downloader.download_java(version_info, os, arch, |downloaded, total| {
+        let data = downloader.download_java(version_info, platform, |downloaded, total| {
             if total > 0 {
                 if pb.length() != Some(total) {
                     pb.set_length(total);
@@ -191,13 +216,13 @@ impl JavaInstaller {
         pb.finish_with_message("下载完成");
 
         // 确定文件扩展名
-        let extension = if os == "windows" {
+        let extension = if platform.os == "windows" {
             "zip"
         } else {
             "tar.gz"
         };
 
-        let file_name = format!("OpenJDK-{}-{}.{}", version_info.version, os, extension);
+        let file_name = format!("OpenJDK-{}-{}.{}", version_info.version, platform.os, extension);
         let file_path = temp_dir.path().join(&file_name);
 
         // 写入文件
@@ -222,12 +247,67 @@ impl JavaInstaller {
         Ok(java_home)
     }
 
+    /// 从清华镜像下载和安装 Java
+    async fn download_and_install_from_tsinghua(
+        downloader: &crate::remote::TsinghuaJavaDownloader,
+        version_info: &crate::remote::TsinghuaJavaVersion,
+        platform: &crate::remote::Platform,
+        env_name: &str,
+    ) -> Result<String, String> {
+        let temp_dir = TempDir::new()
+            .map_err(|e| format!("创建临时目录失败: {}", e))?;
+
+        let pb = ProgressBar::new(0);
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta}) {percent}%")
+                .unwrap()
+                .progress_chars("#>-")
+        );
+
+        let data = downloader.download_java(version_info, platform, |downloaded, total| {
+            if total > 0 {
+                if pb.length() != Some(total) {
+                    pb.set_length(total);
+                }
+                pb.set_position(downloaded);
+            }
+        }).await?;
+
+        pb.finish_with_message("下载完成");
+
+        let extension = if platform.os == "windows" {
+            "zip"
+        } else {
+            "tar.gz"
+        };
+
+        let file_name = format!("OpenJDK-{}-{}.{}", version_info.version, platform.os, extension);
+        let file_path = temp_dir.path().join(&file_name);
+
+        tokio::fs::write(&file_path, data).await
+            .map_err(|e| format!("写入文件失败: {}", e))?;
+
+        println!("📦 正在安装...");
+
+        let java_home = if extension == "zip" {
+            Self::install_archive(&file_path, &version_info.version, env_name).await?
+        } else {
+            Self::install_archive(&file_path, &version_info.version, env_name).await?
+        };
+
+        if !crate::utils::validate_java_home(&java_home) {
+            return Err("安装验证失败".to_string());
+        }
+
+        Ok(java_home)
+    }
+
     /// 从 GitHub 下载和安装 Java（保留旧方法以维持兼容性）
     async fn download_and_install_from_github(
         downloader: &crate::remote::GitHubJavaDownloader,
         version_info: &crate::remote::GitHubJavaVersion,
-        os: &str,
-        arch: &str,
+        platform: &crate::remote::Platform,
         env_name: &str,
     ) -> Result<String, String> {
         // 创建临时目录
@@ -244,7 +324,7 @@ impl JavaInstaller {
         );
 
         // 下载数据
-        let data = downloader.download_java(version_info, os, arch, |downloaded, total| {
+        let data = downloader.download_java(version_info, &platform.os, &platform.arch, |downloaded, total| {
             if total > 0 {
                 if pb.length() != Some(total) {
                     pb.set_length(total);
@@ -256,15 +336,15 @@ impl JavaInstaller {
         pb.finish_with_message("下载完成");
 
         // 确定文件扩展名
-        let extension = if os == "windows" {
+        let extension = if platform.os == "windows" {
             "zip"
-        } else if os == "macos" {
+        } else if platform.os == "macos" {
             "tar.gz"
         } else {
             "tar.gz"
         };
 
-        let file_name = format!("OpenJDK-{}-{}.{}", version_info.version, os, extension);
+        let file_name = format!("OpenJDK-{}-{}.{}", version_info.version, platform.os, extension);
         let file_path = temp_dir.path().join(&file_name);
 
         // 写入文件
@@ -439,7 +519,106 @@ impl JavaInstaller {
                     ));
                 }
             }
-            "aliyun" | _ => {
+            "tsinghua" => {
+                let downloader = crate::remote::TsinghuaJavaDownloader::new();
+                let versions = downloader.list_available_versions().await?;
+
+                // 简化显示：按主版本号分组，每行显示多个版本
+                use std::collections::HashMap;
+                let mut versions_by_major: HashMap<u32, Vec<String>> = HashMap::new();
+
+                for version in &versions {
+                    let version_str = if version.is_lts {
+                        format!("{}*", version.version) // 用 * 标记 LTS 版本
+                    } else {
+                        version.version.to_string()
+                    };
+                    versions_by_major.entry(version.major).or_insert_with(Vec::new).push(version_str);
+                }
+
+                // 按主版本号降序排列
+                let mut major_versions: Vec<_> = versions_by_major.keys().cloned().collect();
+                major_versions.sort_by(|a, b| b.cmp(a));
+
+                result.push("🌟 所有可用版本 (清华源，带*的为LTS版本):".to_string());
+                result.push("".to_string());
+
+                for major in major_versions.iter().take(15) { // 显示前15个主版本
+                    let versions_for_major = &versions_by_major[major];
+                    let mut line = format!("Java {}: ", major);
+
+                    // 每行显示多个版本，最多8个
+                    for (i, version) in versions_for_major.iter().take(8).enumerate() {
+                        if i > 0 && i % 4 == 0 {
+                            result.push(line.clone());
+                            line = format!("        ");
+                        }
+                        line.push_str(&format!("{:<12}", version));
+                    }
+                    result.push(line);
+
+                    if versions_for_major.len() > 8 {
+                        result.push(format!("        ... 还有 {} 个版本", versions_for_major.len() - 8));
+                    }
+                }
+
+                // 添加统计信息
+                let total_versions: usize = versions.iter().count();
+                let lts_count: usize = versions.iter().filter(|v| v.is_lts).count();
+                result.push("".to_string());
+                result.push(format!("📊 总计: {} 个版本，其中 {} 个LTS版本", total_versions, lts_count));
+            }
+            "aliyun" => {
+                let downloader = crate::remote::AliyunJavaDownloader::new();
+                let versions = downloader.list_available_versions().await?;
+
+                // 简化显示：按主版本号分组，每行显示多个版本
+                use std::collections::HashMap;
+                let mut versions_by_major: HashMap<u32, Vec<String>> = HashMap::new();
+
+                for version in &versions {
+                    let version_str = if version.is_lts {
+                        format!("{}*", version.version) // 用 * 标记 LTS 版本
+                    } else {
+                        version.version.to_string()
+                    };
+                    versions_by_major.entry(version.major).or_insert_with(Vec::new).push(version_str);
+                }
+
+                // 按主版本号降序排列
+                let mut major_versions: Vec<_> = versions_by_major.keys().cloned().collect();
+                major_versions.sort_by(|a, b| b.cmp(a));
+
+                result.push("🌟 所有可用版本 (阿里云源，带*的为LTS版本):".to_string());
+                result.push("".to_string());
+
+                for major in major_versions.iter().take(15) { // 显示前15个主版本
+                    let versions_for_major = &versions_by_major[major];
+                    let mut line = format!("Java {}: ", major);
+
+                    // 每行显示多个版本，最多8个
+                    for (i, version) in versions_for_major.iter().take(8).enumerate() {
+                        if i > 0 && i % 4 == 0 {
+                            result.push(line.clone());
+                            line = format!("        ");
+                        }
+                        line.push_str(&format!("{:<12}", version));
+                    }
+                    result.push(line);
+
+                    if versions_for_major.len() > 8 {
+                        result.push(format!("        ... 还有 {} 个版本", versions_for_major.len() - 8));
+                    }
+                }
+
+                // 添加统计信息
+                let total_versions: usize = versions.iter().count();
+                let lts_count: usize = versions.iter().filter(|v| v.is_lts).count();
+                result.push("".to_string());
+                result.push(format!("📊 总计: {} 个版本，其中 {} 个LTS版本", total_versions, lts_count));
+            }
+            _ => {
+                // Fallback to aliyun for unknown downloader types
                 let downloader = crate::remote::AliyunJavaDownloader::new();
                 let versions = downloader.list_available_versions().await?;
 

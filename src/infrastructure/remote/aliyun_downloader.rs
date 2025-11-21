@@ -2,7 +2,15 @@ use reqwest;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// 阿里云镜像 Java 版本信息
+use super::{download::download_to_bytes, platform::Platform, GitHubJavaDownloader};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AliyunDownloadEntry {
+    pub primary: String,
+    pub fallback: Option<String>,
+}
+
+/// 阿里云 Java 版本信息，下载 URL 为镜像地址，带 GitHub 兜底。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AliyunJavaVersion {
     pub version: String,
@@ -10,20 +18,19 @@ pub struct AliyunJavaVersion {
     pub minor: Option<u32>,
     pub patch: Option<u32>,
     pub release_name: String,
-    pub download_urls: HashMap<String, String>, // os -> download_url
+    pub tag_name: String,
+    pub download_urls: HashMap<String, AliyunDownloadEntry>, // os-arch -> download_url
     pub is_lts: bool,
-    pub file_size: u64,
-    pub publish_date: String,
+    pub published_at: String,
 }
 
-/// 阿里云镜像 Java 下载器
+/// 阿里云镜像下载器：基于 GitHub 版本信息构造镜像 URL，并在镜像失效时自动回退。
 pub struct AliyunJavaDownloader {
     client: reqwest::Client,
     base_url: String,
 }
 
 impl AliyunJavaDownloader {
-    /// 创建新的阿里云 Java 下载器
     pub fn new() -> Self {
         Self {
             client: reqwest::Client::new(),
@@ -31,395 +38,186 @@ impl AliyunJavaDownloader {
         }
     }
 
-    /// 获取可用的 Java 版本列表
+    /// 从 GitHub 拉取版本列表并重写为阿里云镜像地址。
     pub async fn list_available_versions(&self) -> Result<Vec<AliyunJavaVersion>, String> {
-        println!("🔍 正在从阿里云镜像查询可用的 Java 版本...");
+        println!("🛰️  正在从阿里云镜像构建 Java 版本列表...");
 
+        let github = GitHubJavaDownloader::new();
+        let gh_versions = github.list_available_versions().await?;
         let mut versions = Vec::new();
 
-        // 预定义的版本信息（基于阿里云镜像的已知可用版本）
-        let known_versions = vec![
-            // 最新版本
-            ("23.0.1", 23, "jdk-23.0.1+11", false, "2024-10-15"),
-            ("22.0.2", 22, "jdk-22.0.2+9", false, "2024-07-16"),
-            ("22.0.1", 22, "jdk-22.0.1+8", false, "2024-04-16"),
-            ("21.0.9", 21, "jdk-21.0.9+10", true, "2024-10-20"),
-            ("21.0.8", 21, "jdk-21.0.8+9", true, "2024-07-16"),
-            ("21.0.7", 21, "jdk-21.0.7+6", true, "2024-04-16"),
-            ("21.0.6", 21, "jdk-21.0.6+7", true, "2024-04-16"),
-            ("21.0.5", 21, "jdk-21.0.5+11", true, "2024-04-16"),
-            ("21.0.4", 21, "jdk-21.0.4+7", true, "2024-04-16"),
-            ("21.0.3", 21, "jdk-21.0.3+9", true, "2024-04-16"),
-            ("21.0.2", 21, "jdk-21.0.2+13", true, "2024-04-16"),
-            ("21.0.1", 21, "jdk-21.0.1+12", true, "2024-04-16"),
-            ("21.0.0", 21, "jdk-21.0.0+35", true, "2024-04-16"),
-            ("20.0.2", 20, "jdk-20.0.2+9", false, "2023-07-16"),
-            ("20.0.1", 20, "jdk-20.0.1+9", false, "2023-04-16"),
-            ("20.0.0", 20, "jdk-20.0.0+36", false, "2023-03-16"),
-            ("19.0.2", 19, "jdk-19.0.2+7", false, "2022-10-16"),
-            ("19.0.1", 19, "jdk-19.0.1+10", false, "2022-07-16"),
-            ("19.0.0", 19, "jdk-19.0.0+36", false, "2022-09-16"),
-            ("18.0.2", 18, "jdk-18.0.2+9", false, "2022-08-16"),
-            ("18.0.1", 18, "jdk-18.0.1+10", false, "2022-04-16"),
-            ("18.0.0", 18, "jdk-18.0.0+36", false, "2022-03-16"),
-            ("17.0.13", 17, "jdk-17.0.13+11", true, "2024-10-18"),
-            ("17.0.12", 17, "jdk-17.0.12+7", true, "2024-07-16"),
-            ("17.0.11", 17, "jdk-17.0.11+9", true, "2024-04-16"),
-            ("17.0.10", 17, "jdk-17.0.10+8", true, "2024-04-16"),
-            ("17.0.9", 17, "jdk-17.0.9+9.1", true, "2024-04-16"),
-            ("17.0.8", 17, "jdk-17.0.8+7", true, "2024-04-16"),
-            ("17.0.7", 17, "jdk-17.0.7+7", true, "2024-04-16"),
-            ("17.0.6", 17, "jdk-17.0.6+10", true, "2024-04-16"),
-            ("17.0.5", 17, "jdk-17.0.5+8", true, "2024-04-16"),
-            ("17.0.4", 17, "jdk-17.0.4+8", true, "2024-04-16"),
-            ("17.0.3", 17, "jdk-17.0.3+7", true, "2024-04-16"),
-            ("17.0.2", 17, "jdk-17.0.2+8", true, "2024-04-16"),
-            ("17.0.1", 17, "jdk-17.0.1+12", true, "2024-04-16"),
-            ("17.0.0", 17, "jdk-17.0.0+35", true, "2024-04-16"),
-            ("16.0.2", 16, "jdk-16.0.2+7", false, "2021-10-16"),
-            ("16.0.1", 16, "jdk-16.0.1+9", false, "2021-07-16"),
-            ("16.0.0", 16, "jdk-16.0.0+36", false, "2021-06-16"),
-            ("15.0.10", 15, "jdk-15.0.10+18", false, "2021-07-16"),
-            ("15.0.9", 15, "jdk-15.0.9+6", false, "2021-07-16"),
-            ("15.0.8", 15, "jdk-15.0.8+5", false, "2021-07-16"),
-            ("15.0.7", 15, "jdk-15.0.7+3", false, "2021-07-16"),
-            ("15.0.6", 15, "jdk-15.0.6+6", false, "2021-07-16"),
-            ("15.0.5", 15, "jdk-15.0.5+5", false, "2021-07-16"),
-            ("15.0.4", 15, "jdk-15.0.4+2", false, "2021-07-16"),
-            ("15.0.3", 15, "jdk-15.0.3+4", false, "2021-07-16"),
-            ("15.0.2", 15, "jdk-15.0.2+7", false, "2021-07-16"),
-            ("15.0.1", 15, "jdk-15.0.1+10", false, "2021-07-16"),
-            ("15.0.0", 15, "jdk-15.0.0+36", false, "2021-07-16"),
-            ("14.0.2", 14, "jdk-14.0.2+12", false, "2020-07-16"),
-            ("14.0.1", 14, "jdk-14.0.1+7", false, "2020-07-16"),
-            ("14.0.0", 14, "jdk-14.0.0+36", false, "2020-07-16"),
-            ("13.0.14", 13, "jdk-13.0.14+5", false, "2020-07-16"),
-            ("13.0.13", 13, "jdk-13.0.13+10", false, "2020-07-16"),
-            ("13.0.12", 13, "jdk-13.0.12+4", false, "2020-07-16"),
-            ("13.0.11", 13, "jdk-13.0.11+5", false, "2020-07-16"),
-            ("13.0.10", 13, "jdk-13.0.10+8", false, "2020-07-16"),
-            ("13.0.9", 13, "jdk-13.0.9+3", false, "2020-07-16"),
-            ("13.0.8", 13, "jdk-13.0.8+11", false, "2020-07-16"),
-            ("13.0.7", 13, "jdk-13.0.7+5", false, "2020-07-16"),
-            ("13.0.6", 13, "jdk-13.0.6+4", false, "2020-07-16"),
-            ("13.0.5", 13, "jdk-13.0.5+8", false, "2020-07-16"),
-            ("13.0.4", 13, "jdk-13.0.4+8", false, "2020-07-16"),
-            ("13.0.3", 13, "jdk-13.0.3+3", false, "2020-07-16"),
-            ("13.0.2", 13, "jdk-13.0.2+8", false, "2020-07-16"),
-            ("13.0.1", 13, "jdk-13.0.1+9", false, "2020-07-16"),
-            ("13.0.0", 13, "jdk-13.0.0+33", false, "2020-07-16"),
-            ("12.0.2", 12, "jdk-12.0.2+10", false, "2019-07-16"),
-            ("12.0.1", 12, "jdk-12.0.1+12", false, "2019-07-16"),
-            ("12.0.0", 12, "jdk-12.0.0+33", false, "2019-07-16"),
-            ("11.0.25", 11, "jdk-11.0.25+9", true, "2024-10-15"),
-            ("11.0.24", 11, "jdk-11.0.24+8", true, "2024-07-16"),
-            ("11.0.23", 11, "jdk-11.0.23+9", true, "2024-04-16"),
-            ("11.0.22", 11, "jdk-11.0.22+7", true, "2024-04-16"),
-            ("11.0.21", 11, "jdk-11.0.21+9", true, "2024-04-16"),
-            ("11.0.20", 11, "jdk-11.0.20+8", true, "2024-04-16"),
-            ("11.0.19", 11, "jdk-11.0.19+9", true, "2024-04-16"),
-            ("11.0.18", 11, "jdk-11.0.18+10", true, "2024-04-16"),
-            ("11.0.17", 11, "jdk-11.0.17+8", true, "2024-04-16"),
-            ("11.0.16", 11, "jdk-11.0.16+8", true, "2024-04-16"),
-            ("11.0.15", 11, "jdk-11.0.15+10", true, "2024-04-16"),
-            ("11.0.14", 11, "jdk-11.0.14+9", true, "2024-04-16"),
-            ("11.0.13", 11, "jdk-11.0.13+8", true, "2024-04-16"),
-            ("11.0.12", 11, "jdk-11.0.12+7", true, "2024-04-16"),
-            ("11.0.11", 11, "jdk-11.0.11+9", true, "2024-04-16"),
-            ("8.0.422", 8, "jdk8u422-b05", true, "2024-10-15"),
-            ("8.0.412", 8, "jdk8u412-b08", true, "2024-07-16"),
-            ("8.0.402", 8, "jdk8u402-b06", true, "2024-04-16"),
-            ("8.0.392", 8, "jdk8u392-b08", true, "2024-04-16"),
-            ("8.0.382", 8, "jdk8u382-b05", true, "2024-04-16"),
-            ("8.0.372", 8, "jdk8u372-b07", true, "2024-04-16"),
-            ("8.0.362", 8, "jdk8u362-b09", true, "2024-04-16"),
-            ("8.0.352", 8, "jdk8u352-b08", true, "2024-04-16"),
-            ("8.0.342", 8, "jdk8u342-b07", true, "2024-04-16"),
-            ("8.0.332", 8, "jdk8u332-b09", true, "2024-04-16"),
-            ("8.0.322", 8, "jdk8u322-b06", true, "2024-04-16"),
-            ("8.0.312", 8, "jdk8u312-b07", true, "2024-04-16"),
-            ("8.0.302", 8, "jdk8u302-b08", true, "2024-04-16"),
-            ("8.0.292", 8, "jdk8u292-b10", true, "2024-04-16"),
-            ("8.0.282", 8, "jdk8u282-b08", true, "2024-04-16"),
-        ];
+        for v in gh_versions {
+            let mut download_urls = HashMap::new();
+            let tag_plain = v.tag_name.replace("%2B", "+").replace("%2b", "+");
 
-        for (version_str, major, release_name, is_lts, publish_date) in known_versions {
-            let mut version_info = AliyunJavaVersion {
-                version: version_str.to_string(),
-                major,
-                minor: Self::parse_minor(version_str),
-                patch: Self::parse_patch(version_str),
-                release_name: release_name.to_string(),
-                download_urls: HashMap::new(),
-                is_lts,
-                file_size: 0,
-                publish_date: publish_date.to_string(),
-            };
+            for (key, url) in v.download_urls.iter() {
+                if let Some(filename) = url.split('/').last() {
+                    let mirror_url = format!(
+                        "{}/{}/{}{}{}",
+                        self.base_url,
+                        v.major,
+                        tag_plain,
+                        if tag_plain.ends_with('/') { "" } else { "/" },
+                        filename
+                    );
+                    download_urls.insert(
+                        key.clone(),
+                        AliyunDownloadEntry {
+                            primary: mirror_url,
+                            fallback: Some(url.clone()),
+                        },
+                    );
+                }
+            }
 
-            // 生成各平台的下载链接
-            self.generate_download_urls(&mut version_info, version_str, release_name);
-
-            versions.push(version_info);
+            versions.push(AliyunJavaVersion {
+                version: v.version.clone(),
+                major: v.major,
+                minor: v.minor,
+                patch: v.patch,
+                release_name: v.release_name.clone(),
+                tag_name: v.tag_name.clone(),
+                download_urls,
+                is_lts: v.is_lts,
+                published_at: v.published_at.clone(),
+            });
         }
 
-        println!("✅ 找到 {} 个可用版本", versions.len());
+        println!("✓ 构建完成，发现 {} 个可用版本", versions.len());
         Ok(versions)
     }
 
-    /// 生成下载链接
-    fn generate_download_urls(&self, version_info: &mut AliyunJavaVersion, version: &str, release_name: &str) {
-        let (os, arch) = Self::get_current_system_info();
-
-        // 生成阿里云镜像的下载链接
-        // 阿里云的URL格式: https://mirrors.aliyun.com/eclipse/temurin-compliance/temurin/{major}/{release_name}/{filename}
-        let download_url = format!(
-            "{}/{}/{}",
-            self.base_url,
-            version_info.major,
-            release_name
-        );
-
-        // 根据操作系统和架构生成文件名
-        let filename = self.get_aliyun_filename_dynamic(version_info.major, version, release_name, &os, &arch);
-        let full_download_url = format!("{}/{}", download_url, filename);
-
-        
-        version_info.download_urls.insert(format!("{}-{}", os, arch), full_download_url);
-    }
-
-    /// 动态生成阿里云文件名
-    fn get_aliyun_filename_dynamic(&self, major: u32, version: &str, release_name: &str, os: &str, arch: &str) -> String {
-        let os_name = match (os, arch) {
-            ("windows", "x64") => "x64_windows",
-            ("windows", "aarch64") => "aarch64_windows",
-            ("linux", "x64") => "x64_linux",
-            ("linux", "aarch64") => "aarch64_linux",
-            ("macos", "x64") => "x64_mac",
-            ("macos", "aarch64") => "aarch64_mac",
-            _ => "x64_windows", // 默认值
-        };
-
-        // 根据版本号生成正确的文件名格式
-        if major >= 9 {
-            // Java 9+ 使用新的命名规则
-            // 正确格式: OpenJDK11U-jdk_x64_windows_hotspot_11.0.25_9.zip
-            // 从 release_name 获取构建号，格式如 "jdk-11.0.25+9"
-            let build_number = if release_name.contains('+') {
-                // 提取构建号 "jdk-11.0.25+9" -> "_9"
-                let parts: Vec<&str> = release_name.split('+').collect();
-                if parts.len() > 1 {
-                    format!("_{}", parts[1])
-                } else {
-                    String::new()
-                }
-            } else {
-                String::new()
-            };
-            format!("OpenJDK{}U-jdk_{}_hotspot_{}{}.zip", major, os_name, version, build_number)
-        } else {
-            // Java 8 使用特殊的命名规则
-            // 正确格式: OpenJDK8U-jdk_x64_windows_hotspot_8u422b05.zip
-            // 从 release_name 提取版本信息，格式如 "jdk8u422-b05" -> "8u422b05"
-            let version_formatted = if release_name.contains('u') {
-                // 如果是 "jdk8u422-b05" 格式，转换为 "8u422b05"
-                release_name.replace("jdk", "").replace("-", "")
-            } else {
-                // 使用默认版本
-                "8u422b05".to_string()
-            };
-            format!("OpenJDK8U-jdk_{}_hotspot_{}.zip", os_name, version_formatted)
-        }
-    }
-
-    /// 根据操作系统和架构获取下载链接
+    /// 按平台获取下载 URL，优先阿里云镜像，不通时回退 GitHub。
     pub async fn get_download_url(
         &self,
         version: &AliyunJavaVersion,
-        os: &str,
-        arch: &str
+        platform: &Platform,
     ) -> Result<String, String> {
-        let key = format!("{}-{}", os, arch);
+        let key = platform.key();
 
-        if let Some(url) = version.download_urls.get(&key) {
-            return Ok(url.clone());
+        if let Some(entry) = version.download_urls.get(&key) {
+            return self.pick_available_url(entry).await;
         }
 
-        // 尝试匹配相似的配置
-        for (platform_key, url) in &version.download_urls {
-            if platform_key.starts_with(os) {
-                println!("⚠️  使用相似的架构: {} -> {}", platform_key, key);
-                return Ok(url.clone());
+        // 允许同 OS 任意架构兜底
+        for (platform_key, entry) in version.download_urls.iter() {
+            if platform_key.starts_with(&platform.os) {
+                println!("⚠️  使用邻近平台包: {} -> {}", platform_key, key);
+                return self.pick_available_url(entry).await;
             }
         }
 
-        Err(format!("未找到适合 {}-{} 的下载链接", os, arch))
+        Err(format!("未找到匹配 {} 的下载地址", key))
     }
 
-    /// 下载指定版本的 Java
+    async fn pick_available_url(&self, entry: &AliyunDownloadEntry) -> Result<String, String> {
+        // 优先阿里云镜像，可用即返回
+        if self.is_url_available(&entry.primary).await {
+            return Ok(entry.primary.clone());
+        }
+
+        if let Some(fallback) = &entry.fallback {
+            println!("↩️  镜像不可用，回退 GitHub");
+            return Ok(fallback.clone());
+        }
+
+        Err("镜像与备用地址均不可用".to_string())
+    }
+
+    async fn is_url_available(&self, url: &str) -> bool {
+        match self.client.head(url).send().await {
+            Ok(resp) => resp.status().is_success(),
+            Err(_) => false,
+        }
+    }
+
+    /// 下载指定版本。
     pub async fn download_java(
         &self,
         version: &AliyunJavaVersion,
-        os: &str,
-        arch: &str,
+        platform: &Platform,
         progress_callback: impl Fn(u64, u64),
     ) -> Result<Vec<u8>, String> {
-        let download_url = self.get_download_url(version, os, arch).await?;
+        let download_url = self.get_download_url(version, platform).await?;
 
-        println!("📥 正在从阿里云镜像下载 Java {}...", version.version);
-        println!("🔗 下载地址: {}", download_url);
+        println!("⬇️  下载 Java {}...", version.version);
+        println!("📥 地址: {}", download_url);
 
-        let response = self.client
-            .get(&download_url)
-            .header("User-Agent", "fnva/0.0.5")
-            .send()
-            .await
-            .map_err(|e| format!("下载请求失败: {}", e))?;
-
-        if !response.status().is_success() {
-            return Err(format!("下载失败: {}", response.status()));
-        }
-
-        let total_size = response.content_length().unwrap_or(0);
-        let mut downloaded = 0u64;
-        let mut data = Vec::new();
-
-        let mut stream = response.bytes_stream();
-        use futures_util::StreamExt;
-
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|e| format!("下载流错误: {}", e))?;
-            data.extend_from_slice(&chunk);
-            downloaded += chunk.len() as u64;
-            progress_callback(downloaded, total_size);
-        }
-
-        println!("✅ 下载完成，大小: {} MB", data.len() / (1024 * 1024));
+        let data = download_to_bytes(&self.client, &download_url, progress_callback).await?;
+        println!("✓ 下载完成，大小: {} MB", data.len() / (1024 * 1024));
         Ok(data)
     }
 
-    /// 获取当前系统信息
-    pub fn get_current_system_info() -> (String, String) {
-        let os = if cfg!(target_os = "windows") {
-            "windows"
-        } else if cfg!(target_os = "macos") {
-            "macos"
-        } else if cfg!(target_os = "linux") {
-            "linux"
-        } else {
-            "unknown"
-        };
-
-        let arch = if cfg!(target_arch = "x86_64") {
-            "x64"
-        } else if cfg!(target_arch = "aarch64") {
-            "aarch64"
-        } else if cfg!(target_arch = "x86") {
-            "x86"
-        } else {
-            "unknown"
-        };
-
-        (os.to_string(), arch.to_string())
-    }
-
-    /// 根据版本规格查找版本
-    pub async fn find_version_by_spec(
-        &self,
-        spec: &str
-    ) -> Result<AliyunJavaVersion, String> {
+    /// 版本解析（与 GitHub 下载器保持一致）。
+    pub async fn find_version_by_spec(&self, spec: &str) -> Result<AliyunJavaVersion, String> {
         let versions = self.list_available_versions().await?;
 
         let spec_cleaned = spec.trim().to_lowercase()
-            .replace("v", "")      // 移除 v 前缀
-            .replace("jdk", "")    // 移除 jdk 前缀
-            .replace("java", "")   // 移除 java 前缀
-            .trim()                // 清理前后空格
+            .replace("v", "")
+            .replace("jdk", "")
+            .replace("java", "")
+            .trim()
             .to_string();
 
         if spec_cleaned == "lts" || spec_cleaned == "latest-lts" {
-            // 返回最新的 LTS 版本
-            for version in versions {
+            for version in &versions {
                 if version.is_lts {
-                    return Ok(version);
+                    return Ok(version.clone());
                 }
             }
             return Err("未找到 LTS 版本".to_string());
         } else if spec_cleaned == "latest" || spec_cleaned == "newest" {
-            // 返回最新版本
             return versions.into_iter().next()
                 .ok_or("未找到可用版本".to_string());
         }
 
-        // 尝试解析为主版本号或完整版本号
+        // 数字前缀认为是版本号
         let parts: Vec<&str> = spec_cleaned.split('.').filter(|p| !p.is_empty()).collect();
-        
         if !parts.is_empty() && parts[0].parse::<u32>().is_ok() {
             if parts.len() == 1 {
-                // 主版本号输入（如 "8"）- LTS优先策略
                 let major = parts[0].parse::<u32>().unwrap();
-                
-                // 首先查找该主版本的LTS版本，按版本号倒序（最新版本优先）
+
                 let mut lts_versions: Vec<&AliyunJavaVersion> = versions.iter()
                     .filter(|v| v.major == major && v.is_lts)
                     .collect();
-                
-                // 按版本号排序（从新到旧）
-                lts_versions.sort_by(|a, b| {
-                    let a_parts: Vec<&str> = a.version.split('.').collect();
-                    let b_parts: Vec<&str> = b.version.split('.').collect();
-                    b_parts.cmp(&a_parts) // 倒序
-                });
-                
+                lts_versions.sort_by(|a, b| b.version.cmp(&a.version));
                 if let Some(latest_lts) = lts_versions.first() {
                     return Ok((**latest_lts).clone());
                 }
-                
-                // 如果没有LTS版本，返回该主版本的最新版本
+
                 let mut major_versions: Vec<&AliyunJavaVersion> = versions.iter()
                     .filter(|v| v.major == major)
                     .collect();
-                
-                // 按版本号排序（从新到旧）
-                major_versions.sort_by(|a, b| {
-                    let a_parts: Vec<&str> = a.version.split('.').collect();
-                    let b_parts: Vec<&str> = b.version.split('.').collect();
-                    b_parts.cmp(&a_parts) // 倒序
-                });
-                
+                major_versions.sort_by(|a, b| b.version.cmp(&a.version));
                 if let Some(latest) = major_versions.first() {
                     return Ok((**latest).clone());
                 }
-                
+
                 return Err(format!("未找到 Java {}", major));
             } else {
-                // 完整版本号输入（如 "8.0.2"）- 精确匹配优先
                 let full_version = parts.join(".");
-                
-                // 首先尝试精确匹配
                 for version in &versions {
                     if version.version == full_version ||
-                       version.version.replace('-', ".") == full_version ||
+                       version.tag_name.contains(&full_version) ||
                        version.release_name.to_lowercase().contains(&full_version) {
                         return Ok(version.clone());
                     }
                 }
-                
-                // 精确匹配失败，尝试主版本匹配
+
                 let major = parts[0].parse::<u32>().unwrap();
                 for version in &versions {
                     if version.major == major {
                         return Ok(version.clone());
                     }
                 }
-                
+
                 return Err(format!("未找到版本: {}", spec));
             }
         }
 
-        // 尝试直接字符串匹配（向后兼容）
         for version in versions {
             if version.version == spec_cleaned ||
-               version.version == spec_cleaned.replace('-', ".") ||
+               version.tag_name == spec_cleaned ||
                version.release_name.to_lowercase().contains(&spec_cleaned) {
                 return Ok(version);
             }
@@ -427,33 +225,81 @@ impl AliyunJavaDownloader {
 
         Err(format!("未找到版本: {}", spec))
     }
-
-    /// 解析次版本号
-    fn parse_minor(version: &str) -> Option<u32> {
-        version.split('.').nth(1).and_then(|s| s.parse().ok())
-    }
-
-    /// 解析补丁版本号
-    fn parse_patch(version: &str) -> Option<u32> {
-        version.split('.').nth(2).and_then(|s| s.parse().ok())
-    }
-
-    /// 检查版本是否可用
-    pub async fn check_version_availability(&self, version: &AliyunJavaVersion, os: &str, arch: &str) -> bool {
-        if let Ok(url) = self.get_download_url(version, os, arch).await {
-            // 发送 HEAD 请求检查文件是否存在
-            match self.client.head(&url).send().await {
-                Ok(response) => response.status().is_success(),
-                Err(_) => false,
-            }
-        } else {
-            false
-        }
-    }
 }
 
 impl Default for AliyunJavaDownloader {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_get_download_url_fallback() {
+        let downloader = AliyunJavaDownloader::new();
+        let mut download_urls = HashMap::new();
+        download_urls.insert(
+            "windows-x64".to_string(),
+            AliyunDownloadEntry {
+                primary: "http://127.0.0.1:9/unavailable".to_string(), // 端口 9 通常无服务，触发回退
+                fallback: Some("https://example.com/fallback.zip".to_string()),
+            },
+        );
+
+        let version = AliyunJavaVersion {
+            version: "17.0.0".to_string(),
+            major: 17,
+            minor: Some(0),
+            patch: Some(0),
+            release_name: "jdk-17.0.0".to_string(),
+            tag_name: "jdk-17.0.0".to_string(),
+            download_urls,
+            is_lts: true,
+            published_at: "2024-01-01".to_string(),
+        };
+
+        let platform = Platform {
+            os: "windows".to_string(),
+            arch: "x64".to_string(),
+        };
+
+        let url = downloader.get_download_url(&version, &platform).await.unwrap();
+        assert_eq!(url, "https://example.com/fallback.zip");
+    }
+
+    #[tokio::test]
+    async fn test_aliyun_downloader_real_functionality() {
+        println!("🛰️  测试阿里云镜像下载器实际功能...");
+        let downloader = AliyunJavaDownloader::new();
+
+        // 测试获取版本列表
+        match downloader.list_available_versions().await {
+            Ok(versions) => {
+                println!("✅ 阿里云版本列表获取成功，共 {} 个版本", versions.len());
+                assert!(!versions.is_empty(), "版本列表不应为空");
+
+                // 测试版本解析
+                let test_specs = ["21", "17", "lts"];
+                for spec in test_specs {
+                    match downloader.find_version_by_spec(spec).await {
+                        Ok(version) => {
+                            println!("✅ 阿里云版本解析 '{}' -> Java {}", spec, version.version);
+                            assert!(!version.version.is_empty());
+                            assert!(version.major > 0);
+                        }
+                        Err(e) => {
+                            println!("⚠️  阿里云版本解析 '{}' 失败: {}", spec, e);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                println!("❌ 阿里云版本列表获取失败: {}", e);
+                // 不标记为测试失败，因为可能是网络问题
+            }
+        }
     }
 }

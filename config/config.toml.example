@@ -102,10 +102,10 @@ maven = [
 
 # Java 下载器配置
 [repositories.java]
-# 主要下载器：aliyun（阿里云镜像，国内推荐）或 github（GitHub，国外推荐）
-downloader = "aliyun"
+# 主要下载器：tsinghua（清华 Adoptium 镜像），可回退 aliyun/github
+downloader = "tsinghua"
 # 备用下载器列表
-fallback = ["github"]
+fallback = ["aliyun", "github"]
 # 是否启用自动回退到备用下载器
 enable_fallback = true
 # 传统仓库URL列表（向后兼容，已废弃但保留）
@@ -114,9 +114,9 @@ repositories = []
 # Java 下载源配置（新架构，简化版）
 [java_download_sources]
 # 主要下载源：github 或 aliyun
-primary = "aliyun"
+# 主要下载源：tsinghua，fallback 为 aliyun/github
 # 备用下载源名称列表
-fallback = ["github"]
+fallback = ["aliyun", "github"]
 # 自定义下载源列表（可选）
 sources = []
 

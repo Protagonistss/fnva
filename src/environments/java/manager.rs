@@ -1,5 +1,10 @@
 use crate::config::{Config, JavaEnvironment};
-use crate::platform::{generate_env_command, generate_path_command, detect_shell, ShellType};
+use crate::infrastructure::shell::platform::{
+    detect_shell,
+    generate_env_command,
+    generate_path_command,
+    ShellType,
+};
 use crate::utils::validate_java_home;
 use std::path::PathBuf;
 use which::which;

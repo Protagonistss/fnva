@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::platform::ShellType;
+use crate::infrastructure::shell::platform::ShellType;
 use std::path::PathBuf;
 
 /// Shell Hook 管理器

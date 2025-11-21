@@ -51,7 +51,7 @@ pub struct JavaDownloadSources {
 }
 
 fn default_primary_source() -> String {
-    "aliyun".to_string() // 默认使用阿里云镜像（国内更快）
+    "tsinghua".to_string() // 默认使用清华镜像，避免被限流
 }
 
 /// Java 下载源配置项
@@ -120,15 +120,15 @@ pub struct JavaDownloaderConfig {
 
 fn default_java_downloader() -> JavaDownloaderConfig {
     JavaDownloaderConfig {
-        downloader: "aliyun".to_string(),
-        fallback: vec!["github".to_string()],
+        downloader: "tsinghua".to_string(),
+        fallback: vec!["aliyun".to_string(), "github".to_string()],
         enable_fallback: true,
         repositories: default_java_repositories(),
     }
 }
 
 fn default_java_downloader_type() -> String {
-    "aliyun".to_string()
+    "tsinghua".to_string()
 }
 
 fn default_java_fallback_enabled() -> bool {
@@ -218,15 +218,15 @@ impl Config {
             java_environments: Vec::new(),
             llm_environments: Vec::new(),
             cc_environments: Vec::new(),
-            repositories: Repositories {
-                java: default_java_downloader(),
-                maven: default_maven_repositories(),
-            },
-            java_download_sources: JavaDownloadSources {
-                primary: "aliyun".to_string(),
-                fallback: vec!["github".to_string()],
-                sources: Vec::new(),
-            },
+        repositories: Repositories {
+            java: default_java_downloader(),
+            maven: default_maven_repositories(),
+        },
+        java_download_sources: JavaDownloadSources {
+            primary: "tsinghua".to_string(),
+            fallback: vec!["aliyun".to_string(), "github".to_string()],
+            sources: Vec::new(),
+        },
             java_version_cache: JavaVersionCache::default(),
             current_java_env: None,
             default_java_env: None,
