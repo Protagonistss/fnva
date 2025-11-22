@@ -15,6 +15,7 @@ pub enum DownloadError {
     NotFound,
     Invalid(String),
     Io(String),
+    VersionParse,
 }
 
 impl fmt::Display for DownloadError {
@@ -24,6 +25,7 @@ impl fmt::Display for DownloadError {
             DownloadError::NotFound => write!(f, "Resource not found"),
             DownloadError::Invalid(msg) => write!(f, "Invalid data: {}", msg),
             DownloadError::Io(msg) => write!(f, "IO error: {}", msg),
+            DownloadError::VersionParse => write!(f, "Version parse error"),
         }
     }
 }

@@ -2,16 +2,19 @@ use indicatif::{ProgressBar, ProgressStyle};
 use std::fs;
 use std::path::Path;
 use crate::infrastructure::remote::UnifiedJavaVersion;
+use crate::error::{AppError, safe_path_to_str};
 
-pub fn create_progress_bar() -> ProgressBar {
+pub fn create_progress_bar() -> Result<ProgressBar, AppError> {
     let pb = ProgressBar::new(0);
     pb.set_style(
         ProgressStyle::default_bar()
             .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta}) {percent}%")
-            .unwrap()
+            .map_err(|e| AppError::Internal {
+                message: format!("创建进度条样式失败: {}", e)
+            })?
             .progress_chars("#>-")
     );
-    pb
+    Ok(pb)
 }
 
 pub fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<(), String> {
@@ -36,8 +39,13 @@ pub fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<(), String> {
 }
 
 pub fn extract_tar_gz(tar_path: &Path, dest_dir: &Path) -> Result<(), String> {
+    let tar_path_str = safe_path_to_str(tar_path)
+        .map_err(|e| format!("路径转换失败: {}", e))?;
+    let dest_dir_str = safe_path_to_str(dest_dir)
+        .map_err(|e| format!("目标路径转换失败: {}", e))?;
+
     let output = std::process::Command::new("tar")
-        .args(["-xzf", tar_path.to_str().unwrap(), "-C", dest_dir.to_str().unwrap(), "--strip-components=1"])
+        .args(["-xzf", tar_path_str, "-C", dest_dir_str, "--strip-components=1"])
         .output()
         .map_err(|e| format!("执行解压命令失败: {}", e))?;
     if !output.status.success() {
@@ -77,7 +85,7 @@ pub fn pick_best_version(versions: Vec<UnifiedJavaVersion>, spec: &str) -> Resul
     if !parts.is_empty() && parts[0].parse::<u32>().is_ok() {
         if parts.len() == 1 {
             // 主版本号输入（如 "8"）- LTS优先策略
-            let major = parts[0].parse::<u32>().unwrap();
+            let major = parts[0].parse::<u32>().map_err(|_| crate::remote::DownloadError::VersionParse)?;
             
             // 首先查找该主版本的LTS版本，按版本号倒序（最新版本优先）
             let mut lts_versions: Vec<UnifiedJavaVersion> = versions.iter()
@@ -127,7 +135,7 @@ pub fn pick_best_version(versions: Vec<UnifiedJavaVersion>, spec: &str) -> Resul
             }
             
             // 精确匹配失败，尝试主版本匹配
-            let major = parts[0].parse::<u32>().unwrap();
+            let major = parts[0].parse::<u32>().map_err(|_| crate::remote::DownloadError::VersionParse)?;
             for version in &versions {
                 if version.major == major {
                     return Ok(version.clone());
