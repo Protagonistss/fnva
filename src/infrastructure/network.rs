@@ -37,10 +37,7 @@ impl NetworkTester {
         ];
 
         for (name, address) in test_urls {
-            match tokio::time::timeout(
-                Duration::from_secs(5),
-                TcpStream::connect(address)
-            ).await {
+            match tokio::time::timeout(Duration::from_secs(5), TcpStream::connect(address)).await {
                 Ok(Ok(_)) => {
                     println!("  ✅ {}: 连接成功", name);
                 }
@@ -66,8 +63,14 @@ impl NetworkTester {
             .map_err(|e| format!("创建客户端失败: {}", e))?;
 
         let test_urls = vec![
-            ("官方 API", "https://api.adoptium.net/v3/info/available_releases"),
-            ("备用 API", "https://api.adoptopenjdk.net/v3/info/available_releases"),
+            (
+                "官方 API",
+                "https://api.adoptium.net/v3/info/available_releases",
+            ),
+            (
+                "备用 API",
+                "https://api.adoptopenjdk.net/v3/info/available_releases",
+            ),
         ];
 
         for (name, url) in test_urls {
@@ -122,11 +125,7 @@ impl NetworkTester {
     async fn test_dns_resolution() -> Result<(), String> {
         println!("\n🔍 测试 DNS 解析...");
 
-        let hosts = vec![
-            "github.com",
-            "api.adoptium.net",
-            "api.adoptopenjdk.net",
-        ];
+        let hosts = vec!["github.com", "api.adoptium.net", "api.adoptopenjdk.net"];
 
         for host in hosts {
             match tokio::net::lookup_host(format!("{}:443", host)).await {
@@ -176,9 +175,7 @@ impl NetworkTester {
                     Err(format!("服务器返回错误: {}", response.status()))
                 }
             }
-            Err(e) => {
-                Err(format!("请求失败: {}", e))
-            }
+            Err(e) => Err(format!("请求失败: {}", e)),
         }
     }
 

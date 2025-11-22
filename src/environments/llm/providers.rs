@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// LLM 提供商接口（对象安全）
@@ -258,19 +258,15 @@ impl ProviderFactory {
 
     /// 获取所有支持的提供商
     pub fn get_supported_providers() -> Vec<&'static str> {
-        vec![
-            "openai",
-            "anthropic",
-            "azure-openai",
-            "google-gemini",
-        ]
+        vec!["openai", "anthropic", "azure-openai", "google-gemini"]
     }
 
     /// 验证提供商名称
     pub fn validate_provider(provider_name: &str) -> Result<(), String> {
         if Self::get_supported_providers()
             .iter()
-            .any(|&p| p == provider_name.to_lowercase().as_str()) {
+            .any(|&p| p == provider_name.to_lowercase().as_str())
+        {
             Ok(())
         } else {
             Err(format!(

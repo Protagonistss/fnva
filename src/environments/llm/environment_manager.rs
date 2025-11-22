@@ -1,8 +1,8 @@
-use std::collections::HashMap;
-use crate::core::environment_manager::{EnvironmentManager, EnvironmentType, DynEnvironment};
+use crate::core::environment_manager::{DynEnvironment, EnvironmentManager, EnvironmentType};
+use crate::infrastructure::shell::ScriptGenerator;
 use crate::infrastructure::shell::ShellType;
-use crate::infrastructure::shell::script_builder::ScriptBuilder;
 use serde_json;
+use std::collections::HashMap;
 
 /// LLM 环境管理器
 pub struct LlmEnvironmentManager {
@@ -18,7 +18,10 @@ impl LlmEnvironmentManager {
 
         // 从配置文件加载 LLM 环境
         if let Err(e) = manager.load_from_config() {
-            eprintln!("Warning: Failed to load LLM environments from config: {}", e);
+            eprintln!(
+                "Warning: Failed to load LLM environments from config: {}",
+                e
+            );
         }
 
         manager
@@ -85,24 +88,29 @@ impl EnvironmentManager for LlmEnvironmentManager {
         let config: serde_json::Value = serde_json::from_str(config_str)
             .map_err(|e| format!("Failed to parse config: {}", e))?;
 
-        let provider = config.get("provider")
+        let provider = config
+            .get("provider")
             .and_then(|v| v.as_str())
             .unwrap_or("openai");
 
-        let api_key = config.get("api_key")
+        let api_key = config
+            .get("api_key")
             .and_then(|v| v.as_str())
             .ok_or("Missing api_key in config")?;
 
-        let base_url = config.get("base_url")
+        let base_url = config
+            .get("base_url")
             .and_then(|v| v.as_str())
             .unwrap_or("https://api.openai.com/v1");
 
-        let model = config.get("model")
+        let model = config
+            .get("model")
             .and_then(|v| v.as_str())
             .unwrap_or("gpt-3.5-turbo");
 
         let default_desc = format!("LLM: {} ({})", name, model);
-        let description = config.get("description")
+        let description = config
+            .get("description")
             .and_then(|v| v.as_str())
             .unwrap_or(&default_desc);
 
@@ -129,10 +137,13 @@ impl EnvironmentManager for LlmEnvironmentManager {
     }
 
     fn use_env(&mut self, name: &str, shell_type: Option<ShellType>) -> Result<String, String> {
-        let llm_env = self.environments.get(name)
+        let llm_env = self
+            .environments
+            .get(name)
             .ok_or_else(|| format!("LLM environment '{}' not found", name))?;
 
-        let shell_type = shell_type.unwrap_or_else(crate::infrastructure::shell::platform::detect_shell);
+        let shell_type =
+            shell_type.unwrap_or_else(crate::infrastructure::shell::platform::detect_shell);
 
         // Create config for script generation
         let mut config = serde_json::json!({
@@ -159,15 +170,15 @@ impl EnvironmentManager for LlmEnvironmentManager {
             config["anthropic_auth_token"] = serde_json::Value::String(auth_token);
             config["anthropic_base_url"] = serde_json::Value::String(base_url);
             config["api_timeout_ms"] = serde_json::Value::String("3000000".to_string());
-            config["claude_code_disable_nonessential_traffic"] = serde_json::Value::Number(serde_json::Number::from(1));
+            config["claude_code_disable_nonessential_traffic"] =
+                serde_json::Value::Number(serde_json::Number::from(1));
         }
 
-        ScriptBuilder::build_switch_script(
-            EnvironmentType::Llm,
-            name,
-            &config,
-            shell_type
-        )
+        let generator = ScriptGenerator::new().map_err(|e| e.to_string())?;
+        match generator.generate_switch_script(EnvironmentType::Llm, name, &config, Some(shell_type)) {
+            Ok(script) => Ok(script),
+            Err(e) => Err(format!("Failed to generate script: {}", e)),
+        }
     }
 
     fn get_current(&self) -> Result<Option<String>, String> {
@@ -191,7 +202,7 @@ impl EnvironmentManager for LlmEnvironmentManager {
         // "Scan" for LLM environments by checking Anthropic environment variables
         if let (Ok(auth_token), Ok(base_url)) = (
             std::env::var("ANTHROPIC_AUTH_TOKEN"),
-            std::env::var("ANTHROPIC_BASE_URL")
+            std::env::var("ANTHROPIC_BASE_URL"),
         ) {
             let llm_env = LlmEnvironment {
                 name: "anthropic-detected".to_string(),
@@ -199,7 +210,8 @@ impl EnvironmentManager for LlmEnvironmentManager {
                 description: "Detected Anthropic environment from system variables".to_string(),
                 api_key: auth_token,
                 base_url: base_url,
-                model: std::env::var("ANTHROPIC_MODEL").unwrap_or_else(|_| "claude-3-sonnet-20240229".to_string()),
+                model: std::env::var("ANTHROPIC_MODEL")
+                    .unwrap_or_else(|_| "claude-3-sonnet-20240229".to_string()),
             };
             result.push(DynEnvironment {
                 name: llm_env.name.clone(),
@@ -247,7 +259,7 @@ impl LlmEnvironment {
                 // For Anthropic, check ANTHROPIC_AUTH_TOKEN and ANTHROPIC_BASE_URL
                 if let (Ok(current_token), Ok(current_base_url)) = (
                     std::env::var("ANTHROPIC_AUTH_TOKEN"),
-                    std::env::var("ANTHROPIC_BASE_URL")
+                    std::env::var("ANTHROPIC_BASE_URL"),
                 ) {
                     // Compare both token and base URL
                     let env_token = self.resolve_env_var(&self.api_key);
@@ -258,7 +270,7 @@ impl LlmEnvironment {
                     false
                 }
             }
-            _ => false // Currently only support Anthropic detection
+            _ => false, // Currently only support Anthropic detection
         }
     }
 

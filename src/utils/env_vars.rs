@@ -7,7 +7,8 @@ pub struct EnvVarUtils;
 impl EnvVarUtils {
     /// 获取环境变量，处理变量引用
     pub fn get_with_expansion(var_name: &str) -> Result<String, String> {
-        let value = env::var(var_name).map_err(|_| format!("Environment variable '{}' not found", var_name))?;
+        let value = env::var(var_name)
+            .map_err(|_| format!("Environment variable '{}' not found", var_name))?;
         Ok(Self::expand_variables(&value))
     }
 
@@ -112,11 +113,28 @@ impl EnvVarUtils {
     /// 检查是否是系统关键环境变量
     fn is_system_variable(key: &str) -> bool {
         let system_vars = [
-            "PATH", "HOME", "USER", "USERNAME", "USERPROFILE", "TEMP", "TMP",
-            "COMSPEC", "OS", "PROCESSOR_ARCHITECTURE", "NUMBER_OF_PROCESSORS",
-            "COMPUTERNAME", "SystemRoot", "ProgramFiles", "ProgramFiles(x86)",
-            "CommonProgramFiles", "CommonProgramFiles(x86)", "ProgramData",
-            "LOCALAPPDATA", "APPDATA", "HOMEDRIVE", "HOMEPATH"
+            "PATH",
+            "HOME",
+            "USER",
+            "USERNAME",
+            "USERPROFILE",
+            "TEMP",
+            "TMP",
+            "COMSPEC",
+            "OS",
+            "PROCESSOR_ARCHITECTURE",
+            "NUMBER_OF_PROCESSORS",
+            "COMPUTERNAME",
+            "SystemRoot",
+            "ProgramFiles",
+            "ProgramFiles(x86)",
+            "CommonProgramFiles",
+            "CommonProgramFiles(x86)",
+            "ProgramData",
+            "LOCALAPPDATA",
+            "APPDATA",
+            "HOMEDRIVE",
+            "HOMEPATH",
         ];
 
         system_vars.iter().any(|&var| var.eq_ignore_ascii_case(key))
@@ -124,7 +142,11 @@ impl EnvVarUtils {
 
     /// 获取 PATH 变量的所有路径
     pub fn get_paths() -> Vec<String> {
-        let path_separator = if cfg!(target_os = "windows") { ';' } else { ':' };
+        let path_separator = if cfg!(target_os = "windows") {
+            ';'
+        } else {
+            ':'
+        };
 
         env::var("PATH")
             .unwrap_or_default()
@@ -135,7 +157,11 @@ impl EnvVarUtils {
 
     /// 添加路径到 PATH
     pub fn add_to_path(path: &str, position: PathPosition) -> Result<(), String> {
-        let path_separator = if cfg!(target_os = "windows") { ';' } else { ':' };
+        let path_separator = if cfg!(target_os = "windows") {
+            ';'
+        } else {
+            ':'
+        };
 
         let mut paths = Self::get_paths();
 
@@ -161,7 +187,11 @@ impl EnvVarUtils {
 
     /// 从 PATH 移除路径
     pub fn remove_from_path(path: &str) -> Result<(), String> {
-        let path_separator = if cfg!(target_os = "windows") { ';' } else { ':' };
+        let path_separator = if cfg!(target_os = "windows") {
+            ';'
+        } else {
+            ':'
+        };
 
         let paths: Vec<String> = Self::get_paths()
             .into_iter()
@@ -176,7 +206,11 @@ impl EnvVarUtils {
 
     /// 清理 PATH 中的重复项
     pub fn clean_path() -> Result<(), String> {
-        let path_separator = if cfg!(target_os = "windows") { ';' } else { ':' };
+        let path_separator = if cfg!(target_os = "windows") {
+            ';'
+        } else {
+            ':'
+        };
 
         let mut seen = std::collections::HashSet::new();
         let cleaned_paths: Vec<String> = Self::get_paths()
@@ -205,7 +239,10 @@ impl EnvVarUtils {
 
         // 环境变量名称只能包含字母、数字和下划线
         if !name.chars().all(|c| c.is_alphanumeric() || c == '_') {
-            return Err("Environment variable name can only contain letters, numbers and underscores".to_string());
+            return Err(
+                "Environment variable name can only contain letters, numbers and underscores"
+                    .to_string(),
+            );
         }
 
         // 不能以数字开头
@@ -218,7 +255,8 @@ impl EnvVarUtils {
 
     /// 获取环境变量的详细信息
     pub fn get_info(key: &str) -> Result<EnvVarInfo, String> {
-        let value = env::var(key).map_err(|_| format!("Environment variable '{}' not found", key))?;
+        let value =
+            env::var(key).map_err(|_| format!("Environment variable '{}' not found", key))?;
 
         Ok(EnvVarInfo {
             name: key.to_string(),
@@ -305,8 +343,14 @@ mod tests {
     #[test]
     fn test_expand_variables() {
         env::set_var("TEST_VAR", "test_value");
-        assert_eq!(EnvVarUtils::expand_variables("prefix_${TEST_VAR}_suffix"), "prefix_test_value_suffix");
-        assert_eq!(EnvVarUtils::expand_variables("no_variables"), "no_variables");
+        assert_eq!(
+            EnvVarUtils::expand_variables("prefix_${TEST_VAR}_suffix"),
+            "prefix_test_value_suffix"
+        );
+        assert_eq!(
+            EnvVarUtils::expand_variables("no_variables"),
+            "no_variables"
+        );
 
         // 测试不存在的变量
         assert_eq!(EnvVarUtils::expand_variables("${NON_EXISTENT}"), "");
@@ -316,7 +360,11 @@ mod tests {
     #[test]
     fn test_path_operations() {
         let original_path = EnvVarUtils::get_paths();
-        let original_path_str = original_path.join(if cfg!(target_os = "windows") { ";" } else { ":" });
+        let original_path_str = original_path.join(if cfg!(target_os = "windows") {
+            ";"
+        } else {
+            ":"
+        });
 
         // 添加路径
         let test_path = "/test/path";
@@ -332,7 +380,7 @@ mod tests {
         let paths_before_clean = EnvVarUtils::get_paths();
         EnvVarUtils::clean_path().unwrap();
         let paths_after_clean = EnvVarUtils::get_paths();
-        
+
         // 验证清理后路径数量不超过之前（去除重复）
         assert!(paths_after_clean.len() <= paths_before_clean.len());
 

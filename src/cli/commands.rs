@@ -1,6 +1,6 @@
-use clap::{Parser, Subcommand};
 use crate::core::environment_manager::EnvironmentType;
 use crate::infrastructure::shell::ShellType;
+use clap::{Parser, Subcommand};
 
 /// fnva CLI 应用程序
 #[derive(Parser)]

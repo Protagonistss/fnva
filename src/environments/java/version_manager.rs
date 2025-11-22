@@ -1,6 +1,6 @@
+use crate::infrastructure::remote::remote_manager::AdoptiumAvailableResponse;
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
-use crate::infrastructure::remote::remote_manager::AdoptiumAvailableResponse;
 
 /// Java 版本信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,7 +40,8 @@ impl JavaVersion {
             return Err(format!("无效的版本格式: {}", semver));
         }
 
-        let major = version_parts[0].parse::<u32>()
+        let major = version_parts[0]
+            .parse::<u32>()
             .map_err(|_| format!("无效的主版本号: {}", version_parts[0]))?;
 
         let minor = version_parts.get(1).and_then(|s| s.parse::<u32>().ok());
@@ -91,7 +92,11 @@ pub struct VersionCache {
 
 impl VersionCache {
     /// 创建新的缓存
-    pub fn new(versions: Vec<JavaVersion>, available_response: AdoptiumAvailableResponse, ttl: u64) -> Self {
+    pub fn new(
+        versions: Vec<JavaVersion>,
+        available_response: AdoptiumAvailableResponse,
+        ttl: u64,
+    ) -> Self {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -120,39 +125,44 @@ impl VersionCache {
 
     /// 获取最新 LTS 版本
     pub fn get_latest_lts(&self) -> Option<&JavaVersion> {
-        self.versions.iter()
+        self.versions
+            .iter()
             .filter(|v| v.is_lts)
-            .max_by(|a, b| {
-                match (a.minor, b.minor) {
-                    (Some(a_min), Some(b_min)) => a_min.cmp(&b_min),
-                    _ => a.major.cmp(&b.major),
-                }
+            .max_by(|a, b| match (a.minor, b.minor) {
+                (Some(a_min), Some(b_min)) => a_min.cmp(&b_min),
+                _ => a.major.cmp(&b.major),
             })
     }
 
     /// 获取最新版本
     pub fn get_latest(&self) -> Option<&JavaVersion> {
-        self.versions.iter()
-            .max_by(|a, b| {
-                match (a.major.cmp(&b.major), a.minor.cmp(&b.minor), a.patch.cmp(&b.patch)) {
-                    (std::cmp::Ordering::Equal, std::cmp::Ordering::Equal, std::cmp::Ordering::Equal) => std::cmp::Ordering::Equal,
-                    (std::cmp::Ordering::Equal, std::cmp::Ordering::Equal, patch_cmp) => patch_cmp,
-                    (std::cmp::Ordering::Equal, minor_cmp, _) => minor_cmp,
-                    (major_cmp, _, _) => major_cmp,
-                }
-            })
+        self.versions.iter().max_by(|a, b| {
+            match (
+                a.major.cmp(&b.major),
+                a.minor.cmp(&b.minor),
+                a.patch.cmp(&b.patch),
+            ) {
+                (
+                    std::cmp::Ordering::Equal,
+                    std::cmp::Ordering::Equal,
+                    std::cmp::Ordering::Equal,
+                ) => std::cmp::Ordering::Equal,
+                (std::cmp::Ordering::Equal, std::cmp::Ordering::Equal, patch_cmp) => patch_cmp,
+                (std::cmp::Ordering::Equal, minor_cmp, _) => minor_cmp,
+                (major_cmp, _, _) => major_cmp,
+            }
+        })
     }
 
     /// 根据主版本号查找版本
     pub fn find_by_major(&self, major: u32) -> Vec<&JavaVersion> {
-        self.versions.iter()
-            .filter(|v| v.major == major)
-            .collect()
+        self.versions.iter().filter(|v| v.major == major).collect()
     }
 
     /// 查找精确匹配的版本
     pub fn find_exact(&self, version: &str) -> Option<&JavaVersion> {
-        self.versions.iter()
+        self.versions
+            .iter()
             .find(|v| v.version == version || v.semver == version)
     }
 }
@@ -187,9 +197,11 @@ impl VersionManager {
             if cleaned.contains('-') {
                 let parts: Vec<&str> = cleaned.split('-').collect();
                 if parts.len() == 2 {
-                    let start = parts[0].parse::<u32>()
+                    let start = parts[0]
+                        .parse::<u32>()
                         .map_err(|_| format!("无效的起始版本: {}", parts[0]))?;
-                    let end = parts[1].parse::<u32>()
+                    let end = parts[1]
+                        .parse::<u32>()
                         .map_err(|_| format!("无效的结束版本: {}", parts[1]))?;
                     Ok(VersionSpec::Range(start, end))
                 } else {
@@ -197,7 +209,8 @@ impl VersionManager {
                 }
             } else if cleaned.ends_with('+') {
                 let base_version = cleaned.trim_end_matches('+');
-                let major = base_version.parse::<u32>()
+                let major = base_version
+                    .parse::<u32>()
                     .map_err(|_| format!("无效的版本号: {}", base_version))?;
                 Ok(VersionSpec::Range(major, 999)) // 999 表示无上限
             } else {
@@ -261,9 +274,12 @@ impl VersionManager {
         }
 
         // 按版本号排序
-        versions.sort_by(|a, b| b.major.cmp(&a.major)
-            .then(b.minor.cmp(&a.minor))
-            .then(b.patch.cmp(&a.patch)));
+        versions.sort_by(|a, b| {
+            b.major
+                .cmp(&a.major)
+                .then(b.minor.cmp(&a.minor))
+                .then(b.patch.cmp(&a.patch))
+        });
 
         // 创建缓存（TTL 为 1 小时）
         let cache = VersionCache::new(versions, available, 3600);
@@ -278,7 +294,12 @@ impl VersionManager {
         // 这里可以调用更详细的 API 来获取版本信息
         // 暂时使用基本版本信息
         let is_lts = [8, 11, 17, 21].contains(&major);
-        let version = JavaVersion::new(format!("{}.0.0", major), major, format!("{}.0.0+0", major), is_lts);
+        let version = JavaVersion::new(
+            format!("{}.0.0", major),
+            major,
+            format!("{}.0.0+0", major),
+            is_lts,
+        );
         Ok(version)
     }
 
@@ -288,7 +309,8 @@ impl VersionManager {
 
         match spec {
             VersionSpec::Major(major) => {
-                let matches: Vec<JavaVersion> = versions.iter()
+                let matches: Vec<JavaVersion> = versions
+                    .iter()
                     .filter(|v| v.major == *major)
                     .cloned()
                     .collect();
@@ -301,22 +323,25 @@ impl VersionManager {
                 Ok(matches[0].clone())
             }
             VersionSpec::Exact(version) => {
-                if let Some(found) = versions.iter()
-                    .find(|v| v.version == *version || v.semver == *version) {
+                if let Some(found) = versions
+                    .iter()
+                    .find(|v| v.version == *version || v.semver == *version)
+                {
                     Ok(found.clone())
                 } else {
                     Err(format!("未找到版本: {}", version))
                 }
             }
             VersionSpec::LatestLts => {
-                if let Some(lts) = versions.iter()
-                    .filter(|v| v.is_lts)
-                    .max_by(|a, b| {
-                        match (a.minor, b.minor) {
+                if let Some(lts) =
+                    versions
+                        .iter()
+                        .filter(|v| v.is_lts)
+                        .max_by(|a, b| match (a.minor, b.minor) {
                             (Some(a_min), Some(b_min)) => a_min.cmp(&b_min),
                             _ => a.major.cmp(&b.major),
-                        }
-                    }) {
+                        })
+                {
                     Ok(lts.clone())
                 } else {
                     Err("未找到 LTS 版本".to_string())
@@ -324,8 +349,14 @@ impl VersionManager {
             }
             VersionSpec::Latest => {
                 if let Some(latest) = versions.iter().max_by(|a, b| {
-                    match (a.major.cmp(&b.major), a.minor.cmp(&b.minor), a.patch.cmp(&b.patch)) {
-                        (std::cmp::Ordering::Equal, std::cmp::Ordering::Equal, patch_cmp) => patch_cmp,
+                    match (
+                        a.major.cmp(&b.major),
+                        a.minor.cmp(&b.minor),
+                        a.patch.cmp(&b.patch),
+                    ) {
+                        (std::cmp::Ordering::Equal, std::cmp::Ordering::Equal, patch_cmp) => {
+                            patch_cmp
+                        }
                         (std::cmp::Ordering::Equal, minor_cmp, _) => minor_cmp,
                         (major_cmp, _, _) => major_cmp,
                     }
@@ -336,7 +367,8 @@ impl VersionManager {
                 }
             }
             VersionSpec::Range(start, end) => {
-                let matches: Vec<JavaVersion> = versions.iter()
+                let matches: Vec<JavaVersion> = versions
+                    .iter()
                     .filter(|v| v.major >= *start && v.major <= *end)
                     .cloned()
                     .collect();
@@ -360,7 +392,8 @@ impl VersionManager {
             if let Ok(requested_major) = requested.parse::<u32>() {
                 for available in &cache.available_releases {
                     let diff = (*available as i32 - requested_major as i32).abs();
-                    if diff <= 2 && diff != 0 { // 相差不超过 2 个版本
+                    if diff <= 2 && diff != 0 {
+                        // 相差不超过 2 个版本
                         suggestions.push(format!("Java {}", available));
                     }
                 }
@@ -413,14 +446,38 @@ mod tests {
 
     #[test]
     fn test_parse_version_spec() {
-        assert_eq!(VersionManager::parse_version_spec("21").unwrap(), VersionSpec::Major(21));
-        assert_eq!(VersionManager::parse_version_spec("v21").unwrap(), VersionSpec::Major(21));
-        assert_eq!(VersionManager::parse_version_spec("jdk21").unwrap(), VersionSpec::Major(21));
-        assert_eq!(VersionManager::parse_version_spec("lts").unwrap(), VersionSpec::LatestLts);
-        assert_eq!(VersionManager::parse_version_spec("latest").unwrap(), VersionSpec::Latest);
-        assert_eq!(VersionManager::parse_version_spec("8-11").unwrap(), VersionSpec::Range(8, 11));
-        assert_eq!(VersionManager::parse_version_spec("17+").unwrap(), VersionSpec::Range(17, 999));
-        assert_eq!(VersionManager::parse_version_spec("11.0.15").unwrap(), VersionSpec::Exact("11.0.15".to_string()));
+        assert_eq!(
+            VersionManager::parse_version_spec("21").unwrap(),
+            VersionSpec::Major(21)
+        );
+        assert_eq!(
+            VersionManager::parse_version_spec("v21").unwrap(),
+            VersionSpec::Major(21)
+        );
+        assert_eq!(
+            VersionManager::parse_version_spec("jdk21").unwrap(),
+            VersionSpec::Major(21)
+        );
+        assert_eq!(
+            VersionManager::parse_version_spec("lts").unwrap(),
+            VersionSpec::LatestLts
+        );
+        assert_eq!(
+            VersionManager::parse_version_spec("latest").unwrap(),
+            VersionSpec::Latest
+        );
+        assert_eq!(
+            VersionManager::parse_version_spec("8-11").unwrap(),
+            VersionSpec::Range(8, 11)
+        );
+        assert_eq!(
+            VersionManager::parse_version_spec("17+").unwrap(),
+            VersionSpec::Range(17, 999)
+        );
+        assert_eq!(
+            VersionManager::parse_version_spec("11.0.15").unwrap(),
+            VersionSpec::Exact("11.0.15".to_string())
+        );
     }
 
     #[test]

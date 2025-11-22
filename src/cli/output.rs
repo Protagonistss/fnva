@@ -57,14 +57,18 @@ impl OutputFormatter {
         match format {
             OutputFormat::Text => {
                 if result.success {
-                    Ok(format!("Successfully switched to {}: {}\n", result.env_type, result.name))
+                    Ok(format!(
+                        "Successfully switched to {}: {}\n",
+                        result.env_type, result.name
+                    ))
                 } else {
-                    Ok(format!("Failed to switch to {}: {}\n", result.env_type, result.name))
+                    Ok(format!(
+                        "Failed to switch to {}: {}\n",
+                        result.env_type, result.name
+                    ))
                 }
             }
-            OutputFormat::Json => {
-                Ok(serde_json::to_string_pretty(result).unwrap())
-            }
+            OutputFormat::Json => Ok(serde_json::to_string_pretty(result).unwrap()),
         }
     }
 

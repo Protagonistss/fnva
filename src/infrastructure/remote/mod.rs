@@ -1,29 +1,29 @@
-pub mod repositories;
-pub mod remote_manager;
-pub mod github_downloader;
 pub mod aliyun_downloader;
-pub mod platform;
-pub mod download;
-pub mod tsinghua_downloader;
 pub mod cache;
+pub mod download;
+pub mod github_downloader;
 pub mod java_downloader;
-pub mod version_registry;
 pub mod mirror_utils;
+pub mod platform;
+pub mod remote_manager;
+pub mod repositories;
+pub mod tsinghua_downloader;
+pub mod version_registry;
 
-pub use repositories::*;
-pub use remote_manager::*;
 pub use platform::Platform;
+pub use remote_manager::*;
+pub use repositories::*;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 // 具体类型导出以保持API可用性
-pub use remote_manager::{RemoteManager, JavaVersionInfo, MavenVersionInfo, MavenArtifactInfo};
-pub use github_downloader::{GitHubJavaDownloader, GitHubJavaRelease, GitHubAsset};
 pub use aliyun_downloader::AliyunJavaDownloader;
+pub use github_downloader::{GitHubAsset, GitHubJavaDownloader, GitHubJavaRelease};
+pub use java_downloader::{DownloadError, DownloadTarget, JavaDownloader};
+pub use remote_manager::{JavaVersionInfo, MavenArtifactInfo, MavenVersionInfo, RemoteManager};
 pub use tsinghua_downloader::TsinghuaJavaDownloader;
-pub use java_downloader::{JavaDownloader, DownloadTarget, DownloadError};
-pub use version_registry::{VersionRegistry, RegistryEntry};
+pub use version_registry::{RegistryEntry, VersionRegistry};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DownloadSource {

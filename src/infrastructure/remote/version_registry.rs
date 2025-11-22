@@ -30,7 +30,9 @@ impl VersionRegistry {
         // 1. Config explicit path
         if let Ok(cfg) = crate::infrastructure::config::Config::load() {
             if let Some(path) = cfg.java_download_sources.java_versions_path.as_ref() {
-                if let Ok(Some(reg)) = try_read_toml(Ok(PathBuf::from(path))) { return Ok(reg); }
+                if let Ok(Some(reg)) = try_read_toml(Ok(PathBuf::from(path))) {
+                    return Ok(reg);
+                }
             }
         }
 
@@ -43,14 +45,18 @@ impl VersionRegistry {
 
         // 3. User home
         if let Some(p) = dirs::home_dir().map(|d| d.join(".fnva").join("java_versions.toml")) {
-            if let Ok(Some(reg)) = try_read_toml(Ok(p)) { return Ok(reg); }
+            if let Ok(Some(reg)) = try_read_toml(Ok(p)) {
+                return Ok(reg);
+            }
         }
 
         // 4. Executable dir config
         if let Ok(exe) = std::env::current_exe() {
             if let Some(dir) = exe.parent() {
                 let p = dir.join("config").join("java_versions.toml");
-                if let Ok(Some(reg)) = try_read_toml(Ok(p)) { return Ok(reg); }
+                if let Ok(Some(reg)) = try_read_toml(Ok(p)) {
+                    return Ok(reg);
+                }
             }
         }
 
@@ -69,7 +75,12 @@ impl VersionRegistry {
     }
 
     pub fn find(&self, spec: &str) -> Option<RegistryEntry> {
-        let cleaned = spec.trim().to_lowercase().replace("v", "").replace("jdk", "").replace("java", "");
+        let cleaned = spec
+            .trim()
+            .to_lowercase()
+            .replace("v", "")
+            .replace("jdk", "")
+            .replace("java", "");
         if cleaned == "lts" || cleaned == "latest-lts" {
             let mut lts: Vec<&RegistryEntry> = self.versions.iter().filter(|v| v.lts).collect();
             lts.sort_by(|a, b| b.major.cmp(&a.major));
@@ -81,12 +92,15 @@ impl VersionRegistry {
             return all.first().cloned().cloned();
         }
         if let Ok(m) = cleaned.parse::<u32>() {
-            let mut same: Vec<&RegistryEntry> = self.versions.iter().filter(|v| v.major == m).collect();
+            let mut same: Vec<&RegistryEntry> =
+                self.versions.iter().filter(|v| v.major == m).collect();
             same.sort_by(|a, b| b.version.cmp(&a.version));
             return same.first().cloned().cloned();
         }
         for v in &self.versions {
-            if v.version.to_lowercase().starts_with(&cleaned) || v.tag_name.to_lowercase().contains(&cleaned) {
+            if v.version.to_lowercase().starts_with(&cleaned)
+                || v.tag_name.to_lowercase().contains(&cleaned)
+            {
                 return Some(v.clone());
             }
         }

@@ -7,7 +7,8 @@ pub struct ShellIntegration;
 impl ShellIntegration {
     /// 生成环境切换脚本
     pub fn generate_env_script(config: &Config, env_name: &str) -> Result<String, String> {
-        let env = config.get_java_env(env_name)
+        let env = config
+            .get_java_env(env_name)
             .ok_or_else(|| format!("Java 环境 '{}' 不存在", env_name))?;
 
         // 验证 Java Home 路径
@@ -21,8 +22,7 @@ impl ShellIntegration {
             .join(".fnva");
 
         // 确保目录存在
-        std::fs::create_dir_all(&script_dir)
-            .map_err(|e| format!("创建脚本目录失败: {}", e))?;
+        std::fs::create_dir_all(&script_dir).map_err(|e| format!("创建脚本目录失败: {}", e))?;
 
         let powershell_script = script_dir.join("fnva-env.ps1");
         let batch_script = script_dir.join("fnva-env.bat");
@@ -83,16 +83,15 @@ impl ShellIntegration {
 
         // 当前激活环境（从配置读取）
         if let Some(current) = &config.current_java_env {
-            script_content.push_str(&format!(
-                "$CurrentEnv = \"{}\"\n\n",
-                current
-            ));
+            script_content.push_str(&format!("$CurrentEnv = \"{}\"\n\n", current));
         }
 
         // 确定目标环境
-        script_content.push_str("$TargetEnv = if ($EnvName -eq \"\") { $CurrentEnv } else { $EnvName }\n");
+        script_content
+            .push_str("$TargetEnv = if ($EnvName -eq \"\") { $CurrentEnv } else { $EnvName }\n");
         script_content.push_str("if (!$TargetEnv) {\n");
-        script_content.push_str("    Write-Error \"No environment specified and no current environment\"\n");
+        script_content
+            .push_str("    Write-Error \"No environment specified and no current environment\"\n");
         script_content.push_str("    exit 1\n");
         script_content.push_str("}\n\n");
 
@@ -102,7 +101,8 @@ impl ShellIntegration {
         script_content.push_str("    Write-Error \"Java environment not found: $TargetEnv\"\n");
         script_content.push_str("    Write-Host \"Available Java environments:\"\n");
         script_content.push_str("    $JavaEnvironments.Keys | ForEach-Object {\n");
-        script_content.push_str("        Write-Host \"  - $($_): $($JavaEnvironments[$_].java_home)\"\n");
+        script_content
+            .push_str("        Write-Host \"  - $($_): $($JavaEnvironments[$_].java_home)\"\n");
         script_content.push_str("    }\n");
         script_content.push_str("    exit 1\n");
         script_content.push_str("}\n\n");
@@ -129,10 +129,13 @@ impl ShellIntegration {
         script_content.push_str("$javaExe = Join-Path $binPath \"java.exe\"\n");
         script_content.push_str("if (Test-Path $javaExe) {\n");
         script_content.push_str("    Write-Host \"Successfully switched to Java environment: $TargetEnv\" -ForegroundColor Green\n");
-        script_content.push_str("    Write-Host \"JAVA_HOME: $env:JAVA_HOME\" -ForegroundColor Yellow\n");
+        script_content
+            .push_str("    Write-Host \"JAVA_HOME: $env:JAVA_HOME\" -ForegroundColor Yellow\n");
         script_content.push_str("    try {\n");
         script_content.push_str("        $version = & $javaExe --version 2>&1\n");
-        script_content.push_str("        Write-Host \"Java version: $($version[0])\" -ForegroundColor Cyan\n");
+        script_content.push_str(
+            "        Write-Host \"Java version: $($version[0])\" -ForegroundColor Cyan\n",
+        );
         script_content.push_str("    } catch {\n");
         script_content.push_str("        Write-Warning \"Cannot verify Java version\"\n");
         script_content.push_str("    }\n");
@@ -164,33 +167,31 @@ impl ShellIntegration {
 
         // 如果没有目标环境，提示错误
         script_content.push_str("if \"%TARGET_ENV%\"==\"\" (\n");
-        script_content.push_str("    echo Error: No environment specified and no current environment\n");
+        script_content
+            .push_str("    echo Error: No environment specified and no current environment\n");
         script_content.push_str("    exit /b 1\n");
         script_content.push_str(")\n\n");
 
         // 环境配置（简化版，只支持当前环境）
-        let target_env = if !env_name.is_empty() { env_name } else if let Some(current) = &config.current_java_env { current } else { return Err("No available environment".to_string()); };
+        let target_env = if !env_name.is_empty() {
+            env_name
+        } else if let Some(current) = &config.current_java_env {
+            current
+        } else {
+            return Err("No available environment".to_string());
+        };
 
         if let Some(env) = config.get_java_env(target_env) {
             // 简化的批处理脚本，专注于环境变量设置
-            script_content.push_str(&format!(
-                "set \"JAVA_HOME={}\"\n",
-                env.java_home
-            ));
-            script_content.push_str(&format!(
-                "set \"PATH={}\\bin;%PATH%\"\n",
-                env.java_home
-            ));
+            script_content.push_str(&format!("set \"JAVA_HOME={}\"\n", env.java_home));
+            script_content.push_str(&format!("set \"PATH={}\\bin;%PATH%\"\n", env.java_home));
 
             // 输出和验证
             script_content.push_str(&format!(
                 "echo Successfully switched to Java environment: {}\n",
                 target_env
             ));
-            script_content.push_str(&format!(
-                "echo JAVA_HOME: {}\n",
-                env.java_home
-            ));
+            script_content.push_str(&format!("echo JAVA_HOME: {}\n", env.java_home));
             script_content.push_str(&format!(
                 "if exist \"{}\\bin\\java.exe\" (\n",
                 env.java_home
@@ -275,7 +276,8 @@ if (Test-Path $fnvaScript) {
     Write-Host "💡 使用 'fnva jdk21' 切换 Java 环境" -ForegroundColor Cyan
 } else {
     Write-Warning "fnva 环境脚本不存在，请先运行: fnva java shell-install"
-}"#.to_string();
+}"#
+        .to_string();
 
         Ok(script_content)
     }
@@ -299,7 +301,8 @@ if exist "%fnvaScript%" (
     echo 💡 使用 'fnva jdk21' 切换 Java 环境
 ) else (
     echo 警告: fnva 环境脚本不存在，请先运行: fnva java shell-install
-)"#.to_string();
+)"#
+        .to_string();
 
         Ok(script_content)
     }
@@ -308,7 +311,8 @@ if exist "%fnvaScript%" (
     pub fn create_command_wrapper(env_name: &str) -> Result<String, String> {
         let mut config = Config::load()?;
 
-        let env = config.get_java_env(env_name)
+        let env = config
+            .get_java_env(env_name)
             .ok_or_else(|| format!("Java 环境 '{}' 不存在", env_name))?
             .clone(); // 提前克隆以避免借用冲突
 
@@ -337,10 +341,7 @@ if exist "%fnvaScript%" (
             \n\
             💡 提示: 环境变量已在当前会话中生效\n\
             🔄 重新打开终端将自动激活此环境",
-            env_name,
-            env.description,
-            env.java_home,
-            bin_path
+            env_name, env.description, env.java_home, bin_path
         ))
     }
 }

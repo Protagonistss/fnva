@@ -1,9 +1,9 @@
-use std::collections::HashMap;
-use crate::core::environment_manager::{EnvironmentManager, EnvironmentType, DynEnvironment};
-use crate::infrastructure::shell::ShellType;
-use crate::infrastructure::shell::script_builder::ScriptBuilder;
-use serde_json;
+use crate::core::environment_manager::{DynEnvironment, EnvironmentManager, EnvironmentType};
 use crate::infrastructure::config::CcEnvironment as ConfigCcEnvironment;
+use crate::infrastructure::shell::ScriptGenerator;
+use crate::infrastructure::shell::ShellType;
+use serde_json;
+use std::collections::HashMap;
 
 /// CC (Claude Code) 环境管理器
 pub struct CcEnvironmentManager {
@@ -86,24 +86,26 @@ impl EnvironmentManager for CcEnvironmentManager {
         let config: serde_json::Value = serde_json::from_str(config_str)
             .map_err(|e| format!("Failed to parse config: {}", e))?;
 
-        let provider = config.get("provider")
+        let provider = config
+            .get("provider")
             .and_then(|v| v.as_str())
             .unwrap_or("anthropic");
 
-        let api_key = config.get("api_key")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let api_key = config.get("api_key").and_then(|v| v.as_str()).unwrap_or("");
 
-        let base_url = config.get("base_url")
+        let base_url = config
+            .get("base_url")
             .and_then(|v| v.as_str())
             .ok_or("Missing base_url in config")?;
 
-        let model = config.get("model")
+        let model = config
+            .get("model")
             .and_then(|v| v.as_str())
             .unwrap_or("claude-3-sonnet-20240229");
 
         let default_desc = format!("CC: {} ({})", name, model);
-        let description = config.get("description")
+        let description = config
+            .get("description")
             .and_then(|v| v.as_str())
             .unwrap_or(&default_desc);
 
@@ -130,10 +132,13 @@ impl EnvironmentManager for CcEnvironmentManager {
     }
 
     fn use_env(&mut self, name: &str, shell_type: Option<ShellType>) -> Result<String, String> {
-        let cc_env = self.environments.get(name)
+        let cc_env = self
+            .environments
+            .get(name)
             .ok_or_else(|| format!("CC environment '{}' not found", name))?;
 
-        let shell_type = shell_type.unwrap_or_else(crate::infrastructure::shell::platform::detect_shell);
+        let shell_type =
+            shell_type.unwrap_or_else(crate::infrastructure::shell::platform::detect_shell);
 
         // Create config for script generation
         let mut config = serde_json::json!({
@@ -160,41 +165,45 @@ impl EnvironmentManager for CcEnvironmentManager {
             config["anthropic_auth_token"] = serde_json::Value::String(auth_token);
             config["anthropic_base_url"] = serde_json::Value::String(base_url);
             config["api_timeout_ms"] = serde_json::Value::String("3000000".to_string());
-            config["claude_code_disable_nonessential_traffic"] = serde_json::Value::Number(serde_json::Number::from(1));
+            config["claude_code_disable_nonessential_traffic"] =
+                serde_json::Value::Number(serde_json::Number::from(1));
 
             // Add environment-specific model configuration
             match name {
                 "glmcc" => {
-                    config["anthropic_default_sonnet_model"] = serde_json::Value::String("glm-4.6".to_string());
+                    config["anthropic_default_sonnet_model"] =
+                        serde_json::Value::String("glm-4.6".to_string());
                 }
                 "anycc" => {
-                    config["anthropic_default_sonnet_model"] = serde_json::Value::String("claude-sonnet-4-5".to_string());
+                    config["anthropic_default_sonnet_model"] =
+                        serde_json::Value::String("claude-sonnet-4-5".to_string());
                 }
                 "kimicc" => {
-                    config["anthropic_default_sonnet_model"] = serde_json::Value::String("kimi-k2-turbo-preview".to_string());
+                    config["anthropic_default_sonnet_model"] =
+                        serde_json::Value::String("kimi-k2-turbo-preview".to_string());
                 }
                 _ => {
                     // For other environments, use the model specified in config
                     if !cc_env.model.is_empty() {
-                        config["anthropic_default_sonnet_model"] = serde_json::Value::String(cc_env.model.clone());
+                        config["anthropic_default_sonnet_model"] =
+                            serde_json::Value::String(cc_env.model.clone());
                     }
                 }
             }
         }
 
-        ScriptBuilder::build_switch_script(
-            EnvironmentType::Cc,
-            name,
-            &config,
-            shell_type
-        )
+        let generator = ScriptGenerator::new().map_err(|e| e.to_string())?;
+        match generator.generate_switch_script(EnvironmentType::Cc, name, &config, Some(shell_type)) {
+            Ok(script) => Ok(script),
+            Err(e) => Err(format!("Failed to generate script: {}", e)),
+        }
     }
 
     fn get_current(&self) -> Result<Option<String>, String> {
         // Check environment variables to determine current CC
         if let (Ok(auth_token), Ok(base_url)) = (
             std::env::var("ANTHROPIC_AUTH_TOKEN"),
-            std::env::var("ANTHROPIC_BASE_URL")
+            std::env::var("ANTHROPIC_BASE_URL"),
         ) {
             // Try to identify which environment based on variables
             for (name, cc_env) in &self.environments {
@@ -215,7 +224,7 @@ impl EnvironmentManager for CcEnvironmentManager {
         // "Scan" for CC environments by checking Anthropic environment variables
         if let (Ok(auth_token), Ok(base_url)) = (
             std::env::var("ANTHROPIC_AUTH_TOKEN"),
-            std::env::var("ANTHROPIC_BASE_URL")
+            std::env::var("ANTHROPIC_BASE_URL"),
         ) {
             let cc_env = ConfigCcEnvironment {
                 name: "cc-detected".to_string(),
@@ -223,7 +232,8 @@ impl EnvironmentManager for CcEnvironmentManager {
                 description: "Detected CC environment from system variables".to_string(),
                 api_key: auth_token,
                 base_url: base_url,
-                model: std::env::var("ANTHROPIC_MODEL").unwrap_or_else(|_| "claude-3-sonnet-20240229".to_string()),
+                model: std::env::var("ANTHROPIC_MODEL")
+                    .unwrap_or_else(|_| "claude-3-sonnet-20240229".to_string()),
             };
             result.push(DynEnvironment {
                 name: cc_env.name.clone(),
@@ -261,7 +271,7 @@ impl ConfigCcEnvironment {
                 // For Anthropic, check ANTHROPIC_AUTH_TOKEN and ANTHROPIC_BASE_URL
                 if let (Ok(current_token), Ok(current_base_url)) = (
                     std::env::var("ANTHROPIC_AUTH_TOKEN"),
-                    std::env::var("ANTHROPIC_BASE_URL")
+                    std::env::var("ANTHROPIC_BASE_URL"),
                 ) {
                     // Compare both token and base URL
                     let env_token = self.resolve_env_var(&self.api_key);
@@ -272,7 +282,7 @@ impl ConfigCcEnvironment {
                     false
                 }
             }
-            _ => false // Currently only support Anthropic detection
+            _ => false, // Currently only support Anthropic detection
         }
     }
 

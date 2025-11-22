@@ -106,7 +106,7 @@ impl ValidationUtils {
 
         // 检查是否是环境变量引用格式
         if api_key.starts_with("${") && api_key.ends_with('}') {
-            let var_name = &api_key[2..api_key.len()-1];
+            let var_name = &api_key[2..api_key.len() - 1];
             if var_name.is_empty() {
                 return Err("Environment variable name cannot be empty".to_string());
             }
@@ -139,7 +139,10 @@ impl ValidationUtils {
             }
 
             // 允许数字和一些常见的后缀
-            if !part.chars().all(|c| c.is_ascii_digit() || c == '-' || c == '_') {
+            if !part
+                .chars()
+                .all(|c| c.is_ascii_digit() || c == '-' || c == '_')
+            {
                 return Err("Version contains invalid characters".to_string());
             }
         }

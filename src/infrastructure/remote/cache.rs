@@ -1,7 +1,7 @@
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
-use serde::{Deserialize, Serialize};
 use tokio::fs as async_fs;
 
 /// 缓存条目
@@ -50,8 +50,7 @@ impl VersionCacheManager {
         let cache_dir = home_dir.join(".fnva").join("cache");
 
         // 确保缓存目录存在
-        fs::create_dir_all(&cache_dir)
-            .map_err(|e| format!("创建缓存目录失败: {}", e))?;
+        fs::create_dir_all(&cache_dir).map_err(|e| format!("创建缓存目录失败: {}", e))?;
 
         Ok(Self {
             cache_dir,
@@ -70,12 +69,17 @@ impl VersionCacheManager {
     }
 
     /// 保存缓存到文件
-    pub async fn save<T: Serialize>(&self, key: &str, data: T, ttl: Option<u64>) -> Result<(), String> {
+    pub async fn save<T: Serialize>(
+        &self,
+        key: &str,
+        data: T,
+        ttl: Option<u64>,
+    ) -> Result<(), String> {
         let ttl = ttl.unwrap_or(self.default_ttl);
         let entry = CacheEntry::new(data, ttl);
 
-        let json = serde_json::to_string_pretty(&entry)
-            .map_err(|e| format!("序列化缓存失败: {}", e))?;
+        let json =
+            serde_json::to_string_pretty(&entry).map_err(|e| format!("序列化缓存失败: {}", e))?;
 
         let file_path = self.cache_file_path(key);
         async_fs::write(&file_path, json)
@@ -99,13 +103,20 @@ impl VersionCacheManager {
             .await
             .map_err(|e| format!("读取缓存文件失败: {}", e))?;
 
-        let entry: CacheEntry<T> = serde_json::from_str(&json)
-            .map_err(|e| format!("反序列化缓存失败: {}", e))?;
+        let entry: CacheEntry<T> =
+            serde_json::from_str(&json).map_err(|e| format!("反序列化缓存失败: {}", e))?;
 
         if entry.is_valid() {
-            println!("📖 使用缓存: {} (剩余时间: {}分钟)",
+            println!(
+                "📖 使用缓存: {} (剩余时间: {}分钟)",
                 key,
-                (entry.ttl - (SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() - entry.timestamp)) / 60
+                (entry.ttl
+                    - (SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs()
+                        - entry.timestamp))
+                    / 60
             );
             Ok(Some(entry.data))
         } else {
@@ -130,16 +141,20 @@ impl VersionCacheManager {
             .await
             .map_err(|e| format!("读取缓存目录失败: {}", e))?;
 
-        while let Some(entry) = entries.next_entry().await
+        while let Some(entry) = entries
+            .next_entry()
+            .await
             .map_err(|e| format!("遍历缓存目录失败: {}", e))?
         {
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("json") {
                 let json = async_fs::read_to_string(&path).await;
                 if let Ok(json) = json {
-                    if let Ok(entry) = serde_json::from_str::<CacheEntry<serde_json::Value>>(&json) {
+                    if let Ok(entry) = serde_json::from_str::<CacheEntry<serde_json::Value>>(&json)
+                    {
                         if entry.is_expired() {
-                            async_fs::remove_file(&path).await
+                            async_fs::remove_file(&path)
+                                .await
                                 .map_err(|e| format!("删除过期缓存文件失败: {}", e))?;
                             removed_count += 1;
                         }
@@ -161,11 +176,9 @@ impl VersionCacheManager {
             return Ok(());
         }
 
-        fs::remove_dir_all(&self.cache_dir)
-            .map_err(|e| format!("清除缓存目录失败: {}", e))?;
+        fs::remove_dir_all(&self.cache_dir).map_err(|e| format!("清除缓存目录失败: {}", e))?;
 
-        fs::create_dir_all(&self.cache_dir)
-            .map_err(|e| format!("重新创建缓存目录失败: {}", e))?;
+        fs::create_dir_all(&self.cache_dir).map_err(|e| format!("重新创建缓存目录失败: {}", e))?;
 
         println!("🗑️  所有缓存已清除");
         Ok(())

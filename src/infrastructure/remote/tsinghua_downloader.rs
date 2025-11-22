@@ -2,11 +2,11 @@ use reqwest;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use super::{download::download_to_file, platform::Platform};
-use super::java_downloader::{JavaDownloader, DownloadTarget, DownloadError};
-use super::UnifiedJavaVersion;
-use super::DownloadSource;
+use super::java_downloader::{DownloadError, DownloadTarget, JavaDownloader};
 use super::mirror_utils;
+use super::DownloadSource;
+use super::UnifiedJavaVersion;
+use super::{download::download_to_file, platform::Platform};
 
 /// Mirror download entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,7 +50,13 @@ impl TsinghuaJavaDownloader {
                         if mirror_os.ends_with('/') { "" } else { "/" },
                         filename
                     );
-                    download_urls.insert(k.clone(), DownloadSource { primary: url, fallback: None });
+                    download_urls.insert(
+                        k.clone(),
+                        DownloadSource {
+                            primary: url,
+                            fallback: None,
+                        },
+                    );
                 }
                 versions.push(UnifiedJavaVersion {
                     version: e.version.clone(),
@@ -67,10 +73,10 @@ impl TsinghuaJavaDownloader {
             }
             return Ok(versions);
         }
-        Err(DownloadError::from("Version registry not found".to_string()))
+        Err(DownloadError::from(
+            "Version registry not found".to_string(),
+        ))
     }
-
-
 }
 
 impl Default for TsinghuaJavaDownloader {
@@ -80,11 +86,26 @@ impl Default for TsinghuaJavaDownloader {
 }
 
 impl JavaDownloader for TsinghuaJavaDownloader {
-    fn list_available_versions(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<UnifiedJavaVersion>, DownloadError>> + Send + '_>> {
+    fn list_available_versions(
+        &self,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<Output = Result<Vec<UnifiedJavaVersion>, DownloadError>>
+                + Send
+                + '_,
+        >,
+    > {
         Box::pin(self.list_versions_internal())
     }
 
-    fn find_version_by_spec<'a, 'b>(&'a self, spec: &'b str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<UnifiedJavaVersion, DownloadError>> + Send + 'a>> {
+    fn find_version_by_spec<'a, 'b>(
+        &'a self,
+        spec: &'b str,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<Output = Result<UnifiedJavaVersion, DownloadError>> + Send + 'a,
+        >,
+    > {
         let spec_string = spec.to_string();
         Box::pin(async move {
             let versions = self.list_versions_internal().await?;
@@ -96,12 +117,14 @@ impl JavaDownloader for TsinghuaJavaDownloader {
         &'a self,
         version: &'b UnifiedJavaVersion,
         platform: &'c Platform,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, DownloadError>> + Send + 'a>> {
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<String, DownloadError>> + Send + 'a>,
+    > {
         // Clone to avoid lifetime issues in async block
         let version_clone = version.clone();
         let platform_clone = platform.clone();
-        
-        Box::pin(async move { 
+
+        Box::pin(async move {
             let key = platform_clone.key();
 
             if let Some(entry) = version_clone.download_urls.get(&key) {
@@ -115,11 +138,14 @@ impl JavaDownloader for TsinghuaJavaDownloader {
                     Err(e) => return Err(DownloadError::from(e)),
                 }
             }
-    
+
             // Try similar OS even if arch key differs
             for (platform_key, entry) in version_clone.download_urls.iter() {
                 if platform_key.starts_with(&platform_clone.os) {
-                    println!("-> Using closest platform match: {} -> {}", platform_key, key);
+                    println!(
+                        "-> Using closest platform match: {} -> {}",
+                        platform_key, key
+                    );
                     match mirror_utils::pick_available_url(&self.client, entry).await {
                         Ok(url) => {
                             if url != entry.primary {
@@ -131,8 +157,11 @@ impl JavaDownloader for TsinghuaJavaDownloader {
                     }
                 }
             }
-    
-            Err(DownloadError::from(format!("No download url matches {}", key)))
+
+            Err(DownloadError::from(format!(
+                "No download url matches {}",
+                key
+            )))
         })
     }
 
@@ -141,15 +170,23 @@ impl JavaDownloader for TsinghuaJavaDownloader {
         version: &'b UnifiedJavaVersion,
         platform: &'c Platform,
         progress_callback: Box<dyn Fn(u64, u64) + Send + Sync>,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<DownloadTarget, DownloadError>> + Send + 'a>> {
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<DownloadTarget, DownloadError>> + Send + 'a>,
+    > {
         // Clone to avoid lifetime issues in async block
         let version_clone = version.clone();
         let platform_clone = platform.clone();
-        
-        Box::pin(async move {
-            let url = self.get_download_url(&version_clone, &platform_clone).await.map_err(DownloadError::from)?;
 
-            println!("-> Downloading Java {} from mirror...", version_clone.version);
+        Box::pin(async move {
+            let url = self
+                .get_download_url(&version_clone, &platform_clone)
+                .await
+                .map_err(DownloadError::from)?;
+
+            println!(
+                "-> Downloading Java {} from mirror...",
+                version_clone.version
+            );
             println!("-> URL: {}", url);
 
             // 创建持久化文件路径而不是临时目录
@@ -158,17 +195,17 @@ impl JavaDownloader for TsinghuaJavaDownloader {
                 .join(".fnva")
                 .join("cache")
                 .join("downloads");
-            
+
             // 确保缓存目录存在
-            tokio::fs::create_dir_all(&cache_dir).await
+            tokio::fs::create_dir_all(&cache_dir)
+                .await
                 .map_err(|e| DownloadError::Io(format!("创建缓存目录失败: {}", e)))?;
 
             let extension = platform_clone.archive_ext();
-            let file_name = format!("OpenJDK-{}-{}.{}-tsinghua.{}", 
-                version_clone.version, 
-                platform_clone.os, 
-                platform_clone.arch,
-                extension);
+            let file_name = format!(
+                "OpenJDK-{}-{}.{}-tsinghua.{}",
+                version_clone.version, platform_clone.os, platform_clone.arch, extension
+            );
             let file_path = cache_dir.join(&file_name);
 
             // 如果文件已存在且大小正确，跳过下载
@@ -176,33 +213,44 @@ impl JavaDownloader for TsinghuaJavaDownloader {
                 let file_size = metadata.len();
                 if file_size > 0 {
                     println!("-> 使用已存在的文件: {} MB", file_size / (1024 * 1024));
-                    return Ok(DownloadTarget::File(file_path.to_string_lossy().to_string()));
+                    return Ok(DownloadTarget::File(
+                        file_path.to_string_lossy().to_string(),
+                    ));
                 }
             }
 
-            download_to_file(&self.client, &url, &file_path, |d, t| progress_callback(d, t)).await
-                .map_err(|e| DownloadError::from(format!("下载失败: {}", e)))?;
-            
-            let file_size = tokio::fs::metadata(&file_path).await
+            download_to_file(&self.client, &url, &file_path, |d, t| {
+                progress_callback(d, t)
+            })
+            .await
+            .map_err(|e| DownloadError::from(format!("下载失败: {}", e)))?;
+
+            let file_size = tokio::fs::metadata(&file_path)
+                .await
                 .map_err(|e| DownloadError::Io(format!("获取文件大小失败: {}", e)))?
                 .len();
             println!("<- Downloaded size: {} MB", file_size / (1024 * 1024));
-            
+
             // 验证文件确实存在
             if !file_path.exists() {
-                return Err(DownloadError::Io(format!("下载的文件不存在: {:?}", file_path)));
+                return Err(DownloadError::Io(format!(
+                    "下载的文件不存在: {:?}",
+                    file_path
+                )));
             }
-            
+
             // 使用规范化路径，确保在 Windows 上正确处理
-            let canonical_path = file_path.canonicalize()
+            let canonical_path = file_path
+                .canonicalize()
                 .map_err(|e| DownloadError::Io(format!("无法获取规范路径: {}", e)))?;
-            
-            let path_str = canonical_path.to_str()
+
+            let path_str = canonical_path
+                .to_str()
                 .ok_or_else(|| DownloadError::Io("路径包含无效字符".to_string()))?
                 .to_string();
-            
+
             println!("-> 文件保存位置: {}", path_str);
-            
+
             // 返回持久化文件路径
             Ok(DownloadTarget::File(path_str))
         })
@@ -230,7 +278,10 @@ mod tests {
                     match downloader.find_version_by_spec(spec).await {
                         Ok(version) => {
                             let lts_marker = if version.is_lts { " (LTS)" } else { "" };
-                            println!("✅ 清华版本解析 '{}' -> Java {}{}", spec, version.version, lts_marker);
+                            println!(
+                                "✅ 清华版本解析 '{}' -> Java {}{}",
+                                spec, version.version, lts_marker
+                            );
                             assert!(!version.version.is_empty());
                             assert!(version.major > 0);
                             assert!(!version.download_urls.is_empty());
@@ -239,8 +290,10 @@ mod tests {
                             let platform = Platform::current();
                             match downloader.get_download_url(&version, &platform).await {
                                 Ok(url) => {
-                                    println!("  ✅ 下载链接获取成功: {}",
-                                        url.chars().take(60).collect::<String>());
+                                    println!(
+                                        "  ✅ 下载链接获取成功: {}",
+                                        url.chars().take(60).collect::<String>()
+                                    );
                                     assert!(url.contains("tsinghua") || url.contains("github"));
                                 }
                                 Err(e) => {

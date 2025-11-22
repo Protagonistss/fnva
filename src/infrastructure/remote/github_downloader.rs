@@ -1,11 +1,11 @@
+use super::download::download_to_file;
+use super::java_downloader::{DownloadError, DownloadTarget, JavaDownloader};
+use super::platform::Platform;
+use super::DownloadSource;
+use super::UnifiedJavaVersion;
 use reqwest;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use super::java_downloader::{JavaDownloader, DownloadTarget, DownloadError};
-use super::UnifiedJavaVersion;
-use super::DownloadSource;
-use super::platform::Platform;
-use super::download::download_to_file;
 
 /// GitHub Java 发行版信息（从 jdk 仓库获取）
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,7 +43,10 @@ impl GitHubJavaDownloader {
     }
 
     /// 从 GitHub 发行版解析版本信息
-    fn parse_version_from_release(&self, release: &GitHubJavaRelease) -> Result<UnifiedJavaVersion, String> {
+    fn parse_version_from_release(
+        &self,
+        release: &GitHubJavaRelease,
+    ) -> Result<UnifiedJavaVersion, String> {
         let tag_name = &release.tag_name;
 
         // adoptium/jdk 的标签格式可能是：jdk-17.0.8+7, jdk-11.0.23+9 等
@@ -61,7 +64,8 @@ impl GitHubJavaDownloader {
             return Err("版本格式无效".to_string());
         }
 
-        let major = version_parts[0].parse::<u32>()
+        let major = version_parts[0]
+            .parse::<u32>()
             .map_err(|_| "无效的主版本号")?;
         let minor = version_parts.get(1).and_then(|s| s.parse::<u32>().ok());
         let patch = version_parts.get(2).and_then(|s| s.parse::<u32>().ok());
@@ -74,10 +78,13 @@ impl GitHubJavaDownloader {
 
         for asset in &release.assets {
             if let Some((os, arch)) = Platform::parse_from_filename(&asset.name) {
-                download_urls.insert(format!("{}-{}", os, arch), DownloadSource {
-                    primary: asset.browser_download_url.clone(),
-                    fallback: None
-                });
+                download_urls.insert(
+                    format!("{}-{}", os, arch),
+                    DownloadSource {
+                        primary: asset.browser_download_url.clone(),
+                        fallback: None,
+                    },
+                );
             }
         }
 
@@ -108,14 +115,15 @@ impl GitHubJavaDownloader {
                 for (k, filename) in iter.iter() {
                     let url = format!(
                         "https://github.com/adoptium/temurin{}-binaries/releases/download/{}/{}",
-                        e.major,
-                        e.tag_name,
-                        filename
+                        e.major, e.tag_name, filename
                     );
-                    download_urls.insert(k.clone(), DownloadSource {
-                        primary: url,
-                        fallback: None
-                    });
+                    download_urls.insert(
+                        k.clone(),
+                        DownloadSource {
+                            primary: url,
+                            fallback: None,
+                        },
+                    );
                 }
                 result.push(UnifiedJavaVersion {
                     version: e.version.clone(),
@@ -132,7 +140,11 @@ impl GitHubJavaDownloader {
             }
             return Ok(result);
         }
-        if registry_only { return Err(DownloadError::from("registry-only: version registry not found".to_string())); }
+        if registry_only {
+            return Err(DownloadError::from(
+                "registry-only: version registry not found".to_string(),
+            ));
+        }
         println!("🔍 正在从 GitHub 查询可用的 Java 版本...");
 
         let ttl = crate::infrastructure::config::Config::load()
@@ -141,7 +153,12 @@ impl GitHubJavaDownloader {
         let cache = crate::remote::cache::VersionCacheManager::new()
             .map_err(|e| DownloadError::from(format!("初始化缓存失败: {}", e)))?
             .with_ttl(ttl);
-        if let Ok(Some(cached)) = cache.load::<Vec<UnifiedJavaVersion>>(&crate::remote::cache::CacheKeys::java_versions_github()).await {
+        if let Ok(Some(cached)) = cache
+            .load::<Vec<UnifiedJavaVersion>>(
+                &crate::remote::cache::CacheKeys::java_versions_github(),
+            )
+            .await
+        {
             println!("📖 使用缓存的 GitHub 版本列表");
             return Ok(cached);
         }
@@ -163,7 +180,8 @@ impl GitHubJavaDownloader {
 
             let url = format!("{}/repos/{}/releases", self.api_base_url, repo);
 
-            let response = self.client
+            let response = self
+                .client
                 .get(&url)
                 .header("User-Agent", "fnva/0.0.5")
                 .header("Accept", "application/vnd.github.v3+json")
@@ -184,7 +202,8 @@ impl GitHubJavaDownloader {
                 }
             };
 
-            for release in releases.into_iter().take(5) { // 每个仓库最多取5个版本
+            for release in releases.into_iter().take(5) {
+                // 每个仓库最多取5个版本
                 // 跳过预发布版本
                 if release.prerelease {
                     continue;
@@ -193,10 +212,12 @@ impl GitHubJavaDownloader {
                 // 解析版本信息
                 if let Ok(version_info) = self.parse_version_from_release(&release) {
                     // 避免重复版本
-                    let version_key = format!("{}.{}.{}",
+                    let version_key = format!(
+                        "{}.{}.{}",
                         version_info.major,
                         version_info.minor.unwrap_or(0),
-                        version_info.patch.unwrap_or(0));
+                        version_info.patch.unwrap_or(0)
+                    );
 
                     if !seen_versions.contains(&version_key) {
                         seen_versions.insert(version_key);
@@ -208,13 +229,20 @@ impl GitHubJavaDownloader {
 
         // 按版本号排序
         all_versions.sort_by(|a, b| {
-            b.major.cmp(&a.major)
+            b.major
+                .cmp(&a.major)
                 .then(b.minor.cmp(&a.minor))
                 .then(b.patch.cmp(&a.patch))
         });
 
         println!("✅ 找到 {} 个可用版本", all_versions.len());
-        let _ = cache.save(&crate::remote::cache::CacheKeys::java_versions_github(), &all_versions, None).await;
+        let _ = cache
+            .save(
+                &crate::remote::cache::CacheKeys::java_versions_github(),
+                &all_versions,
+                None,
+            )
+            .await;
         Ok(all_versions)
     }
 }
@@ -226,12 +254,26 @@ impl Default for GitHubJavaDownloader {
 }
 
 impl JavaDownloader for GitHubJavaDownloader {
-    fn list_available_versions(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<UnifiedJavaVersion>, DownloadError>> + Send + '_>> {
+    fn list_available_versions(
+        &self,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<Output = Result<Vec<UnifiedJavaVersion>, DownloadError>>
+                + Send
+                + '_,
+        >,
+    > {
         Box::pin(self.list_versions_internal())
     }
 
-    fn find_version_by_spec<'a, 'b>(&'a self, spec: &'b str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<UnifiedJavaVersion, DownloadError>> + Send + 'a>> 
-    {
+    fn find_version_by_spec<'a, 'b>(
+        &'a self,
+        spec: &'b str,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<Output = Result<UnifiedJavaVersion, DownloadError>> + Send + 'a,
+        >,
+    > {
         let spec_string = spec.to_string();
         Box::pin(async move {
             let versions = self.list_versions_internal().await?;
@@ -243,11 +285,13 @@ impl JavaDownloader for GitHubJavaDownloader {
         &'a self,
         version: &'b UnifiedJavaVersion,
         platform: &'c Platform,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, DownloadError>> + Send + 'a>> {
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<String, DownloadError>> + Send + 'a>,
+    > {
         // Clone to avoid lifetime issues in async block
         let version_clone = version.clone();
         let platform_clone = platform.clone();
-        
+
         Box::pin(async move {
             let key = platform_clone.key();
             if let Some(source) = version_clone.download_urls.get(&key) {
@@ -260,7 +304,10 @@ impl JavaDownloader for GitHubJavaDownloader {
                     return Ok(source.primary.clone());
                 }
             }
-            Err(DownloadError::from(format!("未找到适合 {}-{} 的下载链接", platform_clone.os, platform_clone.arch)))
+            Err(DownloadError::from(format!(
+                "未找到适合 {}-{} 的下载链接",
+                platform_clone.os, platform_clone.arch
+            )))
         })
     }
 
@@ -269,14 +316,18 @@ impl JavaDownloader for GitHubJavaDownloader {
         version: &'b UnifiedJavaVersion,
         platform: &'c Platform,
         progress_callback: Box<dyn Fn(u64, u64) + Send + Sync>,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<DownloadTarget, DownloadError>> + Send + 'a>> {
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<DownloadTarget, DownloadError>> + Send + 'a>,
+    > {
         // Clone to avoid lifetime issues in async block
         let version_clone = version.clone();
         let platform_clone = platform.clone();
-        
+
         Box::pin(async move {
-            let url = self.get_download_url(&version_clone, &platform_clone).await?;
-            
+            let url = self
+                .get_download_url(&version_clone, &platform_clone)
+                .await?;
+
             println!("📥 正在下载 Java {}...", version_clone.version);
             println!("🔗 下载地址: {}", url);
 
@@ -286,17 +337,17 @@ impl JavaDownloader for GitHubJavaDownloader {
                 .join(".fnva")
                 .join("cache")
                 .join("downloads");
-            
+
             // 确保缓存目录存在
-            tokio::fs::create_dir_all(&cache_dir).await
+            tokio::fs::create_dir_all(&cache_dir)
+                .await
                 .map_err(|e| DownloadError::Io(format!("创建缓存目录失败: {}", e)))?;
 
             let extension = platform_clone.archive_ext();
-            let file_name = format!("OpenJDK-{}-{}.{}-github.{}", 
-                version_clone.version, 
-                platform_clone.os, 
-                platform_clone.arch,
-                extension);
+            let file_name = format!(
+                "OpenJDK-{}-{}.{}-github.{}",
+                version_clone.version, platform_clone.os, platform_clone.arch, extension
+            );
             let file_path = cache_dir.join(&file_name);
 
             // 如果文件已存在且大小正确，跳过下载
@@ -304,48 +355,62 @@ impl JavaDownloader for GitHubJavaDownloader {
                 let file_size = metadata.len();
                 if file_size > 0 {
                     println!("-> 使用已存在的文件: {} MB", file_size / (1024 * 1024));
-                    
+
                     // 验证文件确实存在
                     if !file_path.exists() {
-                        return Err(DownloadError::Io(format!("缓存文件不存在: {:?}", file_path)));
+                        return Err(DownloadError::Io(format!(
+                            "缓存文件不存在: {:?}",
+                            file_path
+                        )));
                     }
-                    
+
                     // 使用规范化路径，确保在 Windows 上正确处理
-                    let canonical_path = file_path.canonicalize()
+                    let canonical_path = file_path
+                        .canonicalize()
                         .map_err(|e| DownloadError::Io(format!("无法获取规范路径: {}", e)))?;
-                    
-                    let path_str = canonical_path.to_str()
+
+                    let path_str = canonical_path
+                        .to_str()
                         .ok_or_else(|| DownloadError::Io("路径包含无效字符".to_string()))?
                         .to_string();
-                    
+
                     println!("-> 文件保存位置: {}", path_str);
                     return Ok(DownloadTarget::File(path_str));
                 }
             }
 
-            download_to_file(&self.client, &url, &file_path, |c, t| progress_callback(c, t)).await
-                .map_err(|e| DownloadError::from(format!("下载失败: {}", e)))?;
-            
-            let file_size = tokio::fs::metadata(&file_path).await
+            download_to_file(&self.client, &url, &file_path, |c, t| {
+                progress_callback(c, t)
+            })
+            .await
+            .map_err(|e| DownloadError::from(format!("下载失败: {}", e)))?;
+
+            let file_size = tokio::fs::metadata(&file_path)
+                .await
                 .map_err(|e| DownloadError::Io(format!("获取文件大小失败: {}", e)))?
                 .len();
             println!("✅ 下载完成，大小: {} MB", file_size / (1024 * 1024));
-            
+
             // 验证文件确实存在
             if !file_path.exists() {
-                return Err(DownloadError::Io(format!("下载的文件不存在: {:?}", file_path)));
+                return Err(DownloadError::Io(format!(
+                    "下载的文件不存在: {:?}",
+                    file_path
+                )));
             }
-            
+
             // 使用规范化路径，确保在 Windows 上正确处理
-            let canonical_path = file_path.canonicalize()
+            let canonical_path = file_path
+                .canonicalize()
                 .map_err(|e| DownloadError::Io(format!("无法获取规范路径: {}", e)))?;
-            
-            let path_str = canonical_path.to_str()
+
+            let path_str = canonical_path
+                .to_str()
                 .ok_or_else(|| DownloadError::Io("路径包含无效字符".to_string()))?
                 .to_string();
-            
+
             println!("-> 文件保存位置: {}", path_str);
-            
+
             // 返回持久化文件路径
             Ok(DownloadTarget::File(path_str))
         })

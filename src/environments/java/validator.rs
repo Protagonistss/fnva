@@ -60,9 +60,21 @@ impl JavaValidator {
 
         // 常见供应商列表
         let valid_vendors = [
-            "Oracle", "Eclipse Adoptium", "Amazon", "Microsoft", "Azul Zulu",
-            "BellSoft Liberica", "OpenLogic", "Red Hat", "IBM", "SAP",
-            "AdoptOpenJDK", "Corretto", "Zulu", "Liberica", "Temurin"
+            "Oracle",
+            "Eclipse Adoptium",
+            "Amazon",
+            "Microsoft",
+            "Azul Zulu",
+            "BellSoft Liberica",
+            "OpenLogic",
+            "Red Hat",
+            "IBM",
+            "SAP",
+            "AdoptOpenJDK",
+            "Corretto",
+            "Zulu",
+            "Liberica",
+            "Temurin",
         ];
 
         for valid_vendor in &valid_vendors {

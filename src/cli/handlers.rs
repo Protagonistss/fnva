@@ -1,7 +1,7 @@
 use crate::cli::commands::*;
 use crate::cli::output::{OutputFormat, FORMATTER};
-use crate::core::switcher::EnvironmentSwitcher;
 use crate::core::environment_manager::EnvironmentType;
+use crate::core::switcher::EnvironmentSwitcher;
 use crate::infrastructure::shell::platform::detect_shell;
 use std::sync::{Arc, Mutex};
 
@@ -38,9 +38,11 @@ impl CommandHandler {
             Commands::Cc { action } => self.handle_cc_command(action).await,
             Commands::Env { action } => self.handle_env_command(action).await,
             Commands::NetworkTest => self.handle_network_test().await,
-            Commands::History { env_type, limit, json } => {
-                self.handle_history_command(env_type, limit, json).await
-            }
+            Commands::History {
+                env_type,
+                limit,
+                json,
+            } => self.handle_history_command(env_type, limit, json).await,
         }
     }
 
@@ -48,10 +50,17 @@ impl CommandHandler {
     async fn handle_java_command(&mut self, action: JavaCommands) -> Result<(), String> {
         match action {
             JavaCommands::List { json } => {
-                let output = self.switcher.list_environments_with_default(
-                    EnvironmentType::Java,
-                    if json { OutputFormat::Json } else { OutputFormat::Text }
-                ).await?;
+                let output = self
+                    .switcher
+                    .list_environments_with_default(
+                        EnvironmentType::Java,
+                        if json {
+                            OutputFormat::Json
+                        } else {
+                            OutputFormat::Text
+                        },
+                    )
+                    .await?;
                 print!("{}", output);
             }
             JavaCommands::Use { name, shell, json } => {
@@ -60,12 +69,15 @@ impl CommandHandler {
                     None => Some(crate::infrastructure::shell::platform::detect_shell()),
                 };
 
-                let result = self.switcher.switch_environment(
-                    EnvironmentType::Java,
-                    &name,
-                    shell_type,
-                    Some("Manual switch via command".to_string())
-                ).await?;
+                let result = self
+                    .switcher
+                    .switch_environment(
+                        EnvironmentType::Java,
+                        &name,
+                        shell_type,
+                        Some("Manual switch via command".to_string()),
+                    )
+                    .await?;
 
                 // 对于 JSON 输出，格式化显示结果
                 if json {
@@ -81,23 +93,42 @@ impl CommandHandler {
                     }
                 } else {
                     // 如果切换失败，显示错误信息
-                    eprintln!("Failed to switch Java environment: {}",
-                        result.error.unwrap_or_else(|| "Unknown error".to_string()));
+                    eprintln!(
+                        "Failed to switch Java environment: {}",
+                        result.error.unwrap_or_else(|| "Unknown error".to_string())
+                    );
                     return Err("Environment switch failed".to_string());
                 }
             }
             JavaCommands::Current { json } => {
-                let output = self.switcher.get_current_environment(
-                    EnvironmentType::Java,
-                    if json { OutputFormat::Json } else { OutputFormat::Text }
-                ).await?;
+                let output = self
+                    .switcher
+                    .get_current_environment(
+                        EnvironmentType::Java,
+                        if json {
+                            OutputFormat::Json
+                        } else {
+                            OutputFormat::Text
+                        },
+                    )
+                    .await?;
                 print!("{}", output);
             }
             JavaCommands::Scan => {
-                let output = self.switcher.scan_environments(EnvironmentType::Java).await?;
+                let output = self
+                    .switcher
+                    .scan_environments(EnvironmentType::Java)
+                    .await?;
                 print!("{}", output);
             }
-            JavaCommands::LsRemote { query_type, java_version, maven_artifact: _, search: _, repository, limit: _ } => {
+            JavaCommands::LsRemote {
+                query_type,
+                java_version,
+                maven_artifact: _,
+                search: _,
+                repository,
+                limit: _,
+            } => {
                 if query_type == "java" {
                     // 使用新的版本管理器查询 Java 版本
                     let output = self.handle_java_ls_remote(java_version, repository).await?;
@@ -106,7 +137,10 @@ impl CommandHandler {
                     return Err(format!("查询类型 '{}' 尚不支持", query_type));
                 }
             }
-            JavaCommands::Install { version, auto_switch } => {
+            JavaCommands::Install {
+                version,
+                auto_switch,
+            } => {
                 use crate::environments::java::installer::JavaInstaller;
                 use crate::infrastructure::config::Config;
 
@@ -121,41 +155,75 @@ impl CommandHandler {
                     }
                 }
             }
-            JavaCommands::Add { name, home, description: _ } => {
+            JavaCommands::Add {
+                name,
+                home,
+                description: _,
+            } => {
                 let config_value = serde_json::json!({
                     "java_home": home
                 });
-                let output = self.switcher.add_environment(EnvironmentType::Java, &name, config_value).await?;
+                let output = self
+                    .switcher
+                    .add_environment(EnvironmentType::Java, &name, config_value)
+                    .await?;
                 print!("{}", output);
             }
             JavaCommands::Remove { name } => {
-                let output = self.switcher.remove_environment(EnvironmentType::Java, &name).await?;
+                let output = self
+                    .switcher
+                    .remove_environment(EnvironmentType::Java, &name)
+                    .await?;
                 print!("{}", output);
             }
-            JavaCommands::Default { name, unset, shell, json } => {
+            JavaCommands::Default {
+                name,
+                unset,
+                shell,
+                json,
+            } => {
                 if unset {
                     // 清除默认环境
-                    let output = self.switcher.clear_default_environment(EnvironmentType::Java).await?;
+                    let output = self
+                        .switcher
+                        .clear_default_environment(EnvironmentType::Java)
+                        .await?;
                     print!("{}", output);
                 } else if let Some(env_name) = name {
                     // 设置默认环境
-                    let output = self.switcher.set_default_environment(EnvironmentType::Java, &env_name).await?;
+                    let output = self
+                        .switcher
+                        .set_default_environment(EnvironmentType::Java, &env_name)
+                        .await?;
                     print!("{}", output);
                 } else {
                     // 显示当前默认环境
-                    match self.switcher.get_default_environment(EnvironmentType::Java).await? {
+                    match self
+                        .switcher
+                        .get_default_environment(EnvironmentType::Java)
+                        .await?
+                    {
                         Some(env_name) => {
                             if let Some(shell) = shell {
                                 match parse_shell_type(&shell) {
                                     Ok(shell_type) => {
-                                        let result = self.switcher.switch_environment(
-                                            EnvironmentType::Java,
-                                            &env_name,
-                                            Some(shell_type),
-                                            Some("Switch to default environment".to_string())
-                                        ).await?;
-                                        let output = FORMATTER.format_switch_result(&result,
-                                            if json { OutputFormat::Json } else { OutputFormat::Text })?;
+                                        let result = self
+                                            .switcher
+                                            .switch_environment(
+                                                EnvironmentType::Java,
+                                                &env_name,
+                                                Some(shell_type),
+                                                Some("Switch to default environment".to_string()),
+                                            )
+                                            .await?;
+                                        let output = FORMATTER.format_switch_result(
+                                            &result,
+                                            if json {
+                                                OutputFormat::Json
+                                            } else {
+                                                OutputFormat::Text
+                                            },
+                                        )?;
                                         print!("{}", output);
                                     }
                                     Err(e) => return Err(e),
@@ -180,10 +248,17 @@ impl CommandHandler {
     async fn handle_llm_command(&mut self, action: LlmCommands) -> Result<(), String> {
         match action {
             LlmCommands::List { json } => {
-                let output = self.switcher.list_environments(
-                    EnvironmentType::Llm,
-                    if json { OutputFormat::Json } else { OutputFormat::Text }
-                ).await?;
+                let output = self
+                    .switcher
+                    .list_environments(
+                        EnvironmentType::Llm,
+                        if json {
+                            OutputFormat::Json
+                        } else {
+                            OutputFormat::Text
+                        },
+                    )
+                    .await?;
                 print!("{}", output);
             }
             LlmCommands::Use { name, shell, json } => {
@@ -191,22 +266,38 @@ impl CommandHandler {
                     Some(s) => Some(parse_shell_type(&s)?),
                     None => None,
                 };
-                let result = self.switcher.switch_environment(
-                    EnvironmentType::Llm,
-                    &name,
-                    shell_type,
-                    Some("Manual switch via command".to_string())
-                ).await?;
+                let result = self
+                    .switcher
+                    .switch_environment(
+                        EnvironmentType::Llm,
+                        &name,
+                        shell_type,
+                        Some("Manual switch via command".to_string()),
+                    )
+                    .await?;
 
-                let output = FORMATTER.format_switch_result(&result,
-                    if json { OutputFormat::Json } else { OutputFormat::Text });
+                let output = FORMATTER.format_switch_result(
+                    &result,
+                    if json {
+                        OutputFormat::Json
+                    } else {
+                        OutputFormat::Text
+                    },
+                );
                 print!("{}", output?);
             }
             LlmCommands::Current { json } => {
-                let output = self.switcher.get_current_environment(
-                    EnvironmentType::Llm,
-                    if json { OutputFormat::Json } else { OutputFormat::Text }
-                ).await?;
+                let output = self
+                    .switcher
+                    .get_current_environment(
+                        EnvironmentType::Llm,
+                        if json {
+                            OutputFormat::Json
+                        } else {
+                            OutputFormat::Text
+                        },
+                    )
+                    .await?;
                 print!("{}", output);
             }
             // 其他 LLM 命令...
@@ -221,10 +312,17 @@ impl CommandHandler {
     async fn handle_cc_command(&mut self, action: CcCommands) -> Result<(), String> {
         match action {
             CcCommands::List { json } => {
-                let output = self.switcher.list_environments_with_default(
-                    EnvironmentType::Cc,
-                    if json { OutputFormat::Json } else { OutputFormat::Text }
-                ).await?;
+                let output = self
+                    .switcher
+                    .list_environments_with_default(
+                        EnvironmentType::Cc,
+                        if json {
+                            OutputFormat::Json
+                        } else {
+                            OutputFormat::Text
+                        },
+                    )
+                    .await?;
                 print!("{}", output);
             }
             CcCommands::Use { name, shell, json } => {
@@ -232,12 +330,15 @@ impl CommandHandler {
                     Some(s) => Some(parse_shell_type(&s)?),
                     None => Some(crate::infrastructure::shell::platform::detect_shell()),
                 };
-                let result = self.switcher.switch_environment(
-                    EnvironmentType::Cc,
-                    &name,
-                    shell_type,
-                    Some("Manual switch via command".to_string())
-                ).await?;
+                let result = self
+                    .switcher
+                    .switch_environment(
+                        EnvironmentType::Cc,
+                        &name,
+                        shell_type,
+                        Some("Manual switch via command".to_string()),
+                    )
+                    .await?;
 
                 // 对于 JSON 输出，格式化显示结果
                 if json {
@@ -253,33 +354,57 @@ impl CommandHandler {
                     }
                 } else {
                     // 如果切换失败，显示错误信息
-                    eprintln!("Failed to switch CC environment: {}",
-                        result.error.unwrap_or_else(|| "Unknown error".to_string()));
+                    eprintln!(
+                        "Failed to switch CC environment: {}",
+                        result.error.unwrap_or_else(|| "Unknown error".to_string())
+                    );
                     return Err("Environment switch failed".to_string());
                 }
             }
-            CcCommands::Default { name, unset, shell, json } => {
+            CcCommands::Default {
+                name,
+                unset,
+                shell,
+                json,
+            } => {
                 if unset {
-                    let output = self.switcher.clear_default_environment(EnvironmentType::Cc).await?;
+                    let output = self
+                        .switcher
+                        .clear_default_environment(EnvironmentType::Cc)
+                        .await?;
                     print!("{}", output);
                 } else if let Some(env_name) = name {
-                    let output = self.switcher.set_default_environment(EnvironmentType::Cc, &env_name).await?;
+                    let output = self
+                        .switcher
+                        .set_default_environment(EnvironmentType::Cc, &env_name)
+                        .await?;
                     print!("{}", output);
                 } else {
-                    match self.switcher.get_default_environment(EnvironmentType::Cc).await? {
+                    match self
+                        .switcher
+                        .get_default_environment(EnvironmentType::Cc)
+                        .await?
+                    {
                         Some(env_name) => {
                             if let Some(shell_name) = shell {
                                 match parse_shell_type(&shell_name) {
                                     Ok(shell_type) => {
-                                        let result = self.switcher.switch_environment(
-                                            EnvironmentType::Cc,
-                                            &env_name,
-                                            Some(shell_type),
-                                            Some("Switch to default environment".to_string())
-                                        ).await?;
+                                        let result = self
+                                            .switcher
+                                            .switch_environment(
+                                                EnvironmentType::Cc,
+                                                &env_name,
+                                                Some(shell_type),
+                                                Some("Switch to default environment".to_string()),
+                                            )
+                                            .await?;
                                         let output = FORMATTER.format_switch_result(
                                             &result,
-                                            if json { OutputFormat::Json } else { OutputFormat::Text }
+                                            if json {
+                                                OutputFormat::Json
+                                            } else {
+                                                OutputFormat::Text
+                                            },
                                         )?;
                                         print!("{}", output);
                                     }
@@ -294,10 +419,17 @@ impl CommandHandler {
                 }
             }
             CcCommands::Current { json } => {
-                let output = self.switcher.get_current_environment(
-                    EnvironmentType::Cc,
-                    if json { OutputFormat::Json } else { OutputFormat::Text }
-                ).await?;
+                let output = self
+                    .switcher
+                    .get_current_environment(
+                        EnvironmentType::Cc,
+                        if json {
+                            OutputFormat::Json
+                        } else {
+                            OutputFormat::Text
+                        },
+                    )
+                    .await?;
                 print!("{}", output);
             }
             // 其他 CC 命令...
@@ -311,7 +443,10 @@ impl CommandHandler {
     /// 处理环境管理命令
     async fn handle_env_command(&mut self, action: EnvCommands) -> Result<(), String> {
         match action {
-            EnvCommands::GenerateEnv { shell, use_on_cd: _ } => {
+            EnvCommands::GenerateEnv {
+                shell,
+                use_on_cd: _,
+            } => {
                 let shell_type = match shell {
                     Some(s) => Some(parse_shell_type(&s)?),
                     None => Some(detect_shell()),
@@ -409,43 +544,67 @@ function fnva {
 
                 print!("{}", script);
             }
-                        EnvCommands::Switch { env_type, name, shell, reason, json } => {
+            EnvCommands::Switch {
+                env_type,
+                name,
+                shell,
+                reason,
+                json,
+            } => {
                 let env_type = parse_environment_type(&env_type)?;
                 let shell_type = match shell {
-            Some(s) => Some(parse_shell_type(&s)?),
-            None => None,
-        };
-                let result = self.switcher.switch_environment(
-                    env_type,
-                    &name,
-                    shell_type,
-                    reason
-                ).await?;
+                    Some(s) => Some(parse_shell_type(&s)?),
+                    None => None,
+                };
+                let result = self
+                    .switcher
+                    .switch_environment(env_type, &name, shell_type, reason)
+                    .await?;
 
-                let output = FORMATTER.format_switch_result(&result,
-                    if json { OutputFormat::Json } else { OutputFormat::Text });
+                let output = FORMATTER.format_switch_result(
+                    &result,
+                    if json {
+                        OutputFormat::Json
+                    } else {
+                        OutputFormat::Text
+                    },
+                );
                 print!("{}", output?);
             }
             EnvCommands::List { env_type, json } => {
                 let env_type = match env_type {
-            Some(t) => parse_environment_type(&t)?,
-            None => EnvironmentType::Java,
-        };
-                let output = self.switcher.list_environments(
-                    env_type,
-                    if json { OutputFormat::Json } else { OutputFormat::Text }
-                ).await?;
+                    Some(t) => parse_environment_type(&t)?,
+                    None => EnvironmentType::Java,
+                };
+                let output = self
+                    .switcher
+                    .list_environments(
+                        env_type,
+                        if json {
+                            OutputFormat::Json
+                        } else {
+                            OutputFormat::Text
+                        },
+                    )
+                    .await?;
                 print!("{}", output);
             }
             EnvCommands::Current { env_type, json } => {
                 let env_type = match env_type {
-            Some(t) => parse_environment_type(&t)?,
-            None => EnvironmentType::Java,
-        };
-                let output = self.switcher.get_current_environment(
-                    env_type,
-                    if json { OutputFormat::Json } else { OutputFormat::Text }
-                ).await?;
+                    Some(t) => parse_environment_type(&t)?,
+                    None => EnvironmentType::Java,
+                };
+                let output = self
+                    .switcher
+                    .get_current_environment(
+                        env_type,
+                        if json {
+                            OutputFormat::Json
+                        } else {
+                            OutputFormat::Text
+                        },
+                    )
+                    .await?;
                 print!("{}", output);
             }
             EnvCommands::ShellIntegration { shell } => {
@@ -453,12 +612,17 @@ function fnva {
                     Some(s) => Some(parse_shell_type(&s)?),
                     None => Some(crate::infrastructure::shell::platform::detect_shell()),
                 };
-                let output = self.switcher.generate_shell_integration(shell_type.unwrap()).await?;
+                let output = self
+                    .switcher
+                    .generate_shell_integration(shell_type.unwrap())
+                    .await?;
                 print!("{}", output);
             }
             // 其他环境命令...
             _ => {
-                return Err("Environment command not yet implemented in new architecture".to_string());
+                return Err(
+                    "Environment command not yet implemented in new architecture".to_string(),
+                );
             }
         }
         Ok(())
@@ -472,7 +636,11 @@ function fnva {
     }
 
     /// 处理 Java 远程查询（简化版本）
-    async fn handle_java_ls_remote(&self, java_version: Option<u32>, _repository: Option<String>) -> Result<String, String> {
+    async fn handle_java_ls_remote(
+        &self,
+        java_version: Option<u32>,
+        _repository: Option<String>,
+    ) -> Result<String, String> {
         use crate::environments::java::installer::JavaInstaller;
 
         println!("🔍 正在查询可用的 Java 版本...");
@@ -511,14 +679,17 @@ function fnva {
 
                 Ok(output)
             }
-            Err(e) => {
-                Err(format!("查询版本失败: {}", e))
-            }
+            Err(e) => Err(format!("查询版本失败: {}", e)),
         }
     }
 
     /// 处理历史命令
-    async fn handle_history_command(&self, env_type: Option<String>, limit: usize, _json: bool) -> Result<(), String> {
+    async fn handle_history_command(
+        &self,
+        env_type: Option<String>,
+        limit: usize,
+        _json: bool,
+    ) -> Result<(), String> {
         let env_type = env_type.map(|t| parse_environment_type(&t)).transpose()?;
         let output = self.switcher.get_switch_history(env_type, limit).await?;
         print!("{}", output);

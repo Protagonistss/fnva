@@ -1,9 +1,5 @@
-use crate::config::{Config, LlmEnvironment, resolve_env_var};
-use crate::infrastructure::shell::platform::{
-    detect_shell,
-    generate_env_command,
-    ShellType,
-};
+use crate::config::{resolve_env_var, Config, LlmEnvironment};
+use crate::infrastructure::shell::platform::{detect_shell, generate_env_command, ShellType};
 use std::collections::HashMap;
 
 /// LLM 环境管理器
@@ -119,7 +115,10 @@ fn generate_env_vars_for_provider(env: &LlmEnvironment) -> HashMap<String, Strin
                 vars.insert("AZURE_OPENAI_ENDPOINT".to_string(), env.base_url.clone());
             }
             if !env.model.is_empty() {
-                vars.insert("AZURE_OPENAI_DEPLOYMENT_NAME".to_string(), env.model.clone());
+                vars.insert(
+                    "AZURE_OPENAI_DEPLOYMENT_NAME".to_string(),
+                    env.model.clone(),
+                );
             }
         }
         "google-gemini" => {
@@ -210,10 +209,7 @@ mod tests {
 
     #[test]
     fn test_get_default_base_url() {
-        assert_eq!(
-            get_default_base_url("openai"),
-            "https://api.openai.com/v1"
-        );
+        assert_eq!(get_default_base_url("openai"), "https://api.openai.com/v1");
         assert_eq!(
             get_default_base_url("anthropic"),
             "https://api.anthropic.com"

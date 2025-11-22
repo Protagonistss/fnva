@@ -39,9 +39,17 @@ impl LlmValidator {
     /// 验证 LLM 提供商
     pub fn validate_provider(provider: &str) -> Result<(), String> {
         let valid_providers = [
-            "openai", "anthropic", "azure-openai", "google-gemini",
-            "cohere", "mistral", "ollama", "huggingface",
-            "baidu", "alibaba", "tencent"
+            "openai",
+            "anthropic",
+            "azure-openai",
+            "google-gemini",
+            "cohere",
+            "mistral",
+            "ollama",
+            "huggingface",
+            "baidu",
+            "alibaba",
+            "tencent",
         ];
 
         for valid_provider in &valid_providers {
@@ -59,8 +67,7 @@ impl LlmValidator {
 
     /// 验证提供商的 Base URL
     pub fn validate_provider_base_url(provider: &str, base_url: &str) -> Result<(), String> {
-        let url = Url::parse(base_url)
-            .map_err(|e| format!("Invalid URL: {}", e))?;
+        let url = Url::parse(base_url).map_err(|e| format!("Invalid URL: {}", e))?;
 
         match provider.to_lowercase().as_str() {
             "openai" => {
@@ -122,17 +129,28 @@ impl LlmValidator {
 
     /// 验证 OpenAI 模型名称
     fn validate_openai_model(model: &str) -> Result<(), String> {
-        let valid_prefixes = ["gpt-", "text-", "code-", "davinci-", "curie-", "babbage-", "ada-"];
+        let valid_prefixes = [
+            "gpt-", "text-", "code-", "davinci-", "curie-", "babbage-", "ada-",
+        ];
         let valid_models = [
-            "gpt-4", "gpt-4-32k", "gpt-3.5-turbo", "gpt-3.5-turbo-16k",
-            "text-davinci-003", "text-curie-001", "text-babbage-001", "text-ada-001"
+            "gpt-4",
+            "gpt-4-32k",
+            "gpt-3.5-turbo",
+            "gpt-3.5-turbo-16k",
+            "text-davinci-003",
+            "text-curie-001",
+            "text-babbage-001",
+            "text-ada-001",
         ];
 
         let model_lower = model.to_lowercase();
 
         // 检查是否匹配已知的模型或前缀
-        if valid_models.iter().any(|m| *m == model_lower) ||
-           valid_prefixes.iter().any(|prefix| model_lower.starts_with(prefix)) {
+        if valid_models.iter().any(|m| *m == model_lower)
+            || valid_prefixes
+                .iter()
+                .any(|prefix| model_lower.starts_with(prefix))
+        {
             return Ok(());
         }
 
@@ -145,7 +163,10 @@ impl LlmValidator {
         let valid_prefixes = ["claude-", "anthropic-"];
         let model_lower = model.to_lowercase();
 
-        if valid_prefixes.iter().any(|prefix| model_lower.starts_with(prefix)) {
+        if valid_prefixes
+            .iter()
+            .any(|prefix| model_lower.starts_with(prefix))
+        {
             return Ok(());
         }
 

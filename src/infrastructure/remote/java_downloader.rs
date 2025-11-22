@@ -1,8 +1,8 @@
 use super::platform::Platform;
 use super::UnifiedJavaVersion;
+use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
-use std::fmt;
 
 pub enum DownloadTarget {
     Bytes(Vec<u8>),
@@ -42,18 +42,18 @@ pub trait JavaDownloader: Send + Sync {
     fn list_available_versions(
         &self,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<UnifiedJavaVersion>, DownloadError>> + Send + '_>>;
-    
+
     fn find_version_by_spec(
         &self,
         spec: &str,
     ) -> Pin<Box<dyn Future<Output = Result<UnifiedJavaVersion, DownloadError>> + Send + '_>>;
-    
+
     fn get_download_url(
         &self,
         version: &UnifiedJavaVersion,
         platform: &Platform,
     ) -> Pin<Box<dyn Future<Output = Result<String, DownloadError>> + Send + '_>>;
-    
+
     fn download_java(
         &self,
         version: &UnifiedJavaVersion,

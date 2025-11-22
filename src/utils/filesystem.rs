@@ -1,6 +1,6 @@
-use std::path::{Path, PathBuf};
 use std::fs;
 use std::io::{self, Write};
+use std::path::{Path, PathBuf};
 
 /// 文件系统工具
 pub struct FileSystemUtils;
@@ -188,7 +188,9 @@ impl FileSystemUtils {
                 let entry = entry?;
                 let path = entry.path();
                 if path.is_dir() {
-                    if let Some(found) = Self::find_file_recursive(&path, filename, current_depth + 1, max_depth)? {
+                    if let Some(found) =
+                        Self::find_file_recursive(&path, filename, current_depth + 1, max_depth)?
+                    {
                         return Ok(Some(found));
                     }
                 }
@@ -225,7 +227,7 @@ impl FileSystemUtils {
         if !file_path.exists() {
             return Err(io::Error::new(
                 io::ErrorKind::NotFound,
-                format!("File not found: {:?}", file_path)
+                format!("File not found: {:?}", file_path),
             ));
         }
 
@@ -250,7 +252,12 @@ impl FileSystemUtils {
         let backup_name = if extension.is_empty() {
             format!("{}_backup_{}", file_stem.to_string_lossy(), timestamp)
         } else {
-            format!("{}_backup_{}.{}", file_stem.to_string_lossy(), timestamp, extension)
+            format!(
+                "{}_backup_{}.{}",
+                file_stem.to_string_lossy(),
+                timestamp,
+                extension
+            )
         };
 
         Ok(file_path

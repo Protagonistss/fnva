@@ -8,8 +8,8 @@ pub struct ShellHook;
 impl ShellHook {
     /// 获取当前环境状态文件路径
     fn get_current_env_file() -> Result<PathBuf, String> {
-        let home_dir = dirs::home_dir()
-            .ok_or_else(|| "Cannot get user home directory".to_string())?;
+        let home_dir =
+            dirs::home_dir().ok_or_else(|| "Cannot get user home directory".to_string())?;
         Ok(home_dir.join(".fnva").join("current_env"))
     }
 
@@ -65,7 +65,8 @@ impl ShellHook {
         // 带重试机制的配置加载
         let config = Config::load()?;
 
-        let env = config.get_java_env(env_name)
+        let env = config
+            .get_java_env(env_name)
             .ok_or_else(|| format!("Java environment '{}' not found", env_name))?;
 
         // 验证路径（更详细的验证）
@@ -116,16 +117,21 @@ impl ShellHook {
         };
 
         let current_path = std::env::var("PATH").unwrap_or_default();
-        let path_separator = if cfg!(target_os = "windows") { ';' } else { ':' };
+        let path_separator = if cfg!(target_os = "windows") {
+            ';'
+        } else {
+            ':'
+        };
 
         let path_parts: Vec<String> = current_path
             .split(path_separator)
             .filter_map(|part| {
                 let trimmed = part.trim();
                 // 过滤掉 Java 相关的路径
-                if trimmed.to_lowercase().contains("java") ||
-                   trimmed.to_lowercase().contains("jdk") ||
-                   trimmed.contains(new_java_home) {
+                if trimmed.to_lowercase().contains("java")
+                    || trimmed.to_lowercase().contains("jdk")
+                    || trimmed.contains(new_java_home)
+                {
                     None
                 } else {
                     Some(trimmed.to_string())
@@ -169,7 +175,7 @@ impl ShellHook {
                     }
                 }
             }
-            Err(e) => Err(e)
+            Err(e) => Err(e),
         }
     }
 
@@ -196,7 +202,10 @@ impl ShellHook {
                 Ok("Java version detected".to_string())
             }
         } else {
-            Err(format!("Java -version command failed with exit code: {}", output.status))
+            Err(format!(
+                "Java -version command failed with exit code: {}",
+                output.status
+            ))
         }
     }
 

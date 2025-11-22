@@ -2,10 +2,7 @@ use super::DownloadSource;
 use reqwest::Client;
 
 /// 从下载源中选择可用的 URL（优先主地址，失败时回退）
-pub async fn pick_available_url(
-    client: &Client,
-    entry: &DownloadSource,
-) -> Result<String, String> {
+pub async fn pick_available_url(client: &Client, entry: &DownloadSource) -> Result<String, String> {
     // 优先使用主地址
     if is_url_available(client, &entry.primary).await {
         return Ok(entry.primary.clone());
@@ -26,4 +23,3 @@ pub async fn is_url_available(client: &Client, url: &str) -> bool {
         Err(_) => false,
     }
 }
-

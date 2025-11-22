@@ -1,8 +1,8 @@
+use super::Platform;
+use super::JavaDownloader;
+use crate::environments::java::VersionManager;
 use reqwest;
 use serde::{Deserialize, Serialize};
-use crate::environments::java::VersionManager;
-use super::{JavaDownloader, UnifiedJavaVersion, DownloadError};
-use super::Platform;
 
 /// Java 版本信息 (API 输出用)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,10 +87,10 @@ pub struct MavenResponse {
 #[derive(Debug, Deserialize)]
 pub struct MavenArtifact {
     pub id: String,
-    pub g: String,  // groupId
-    pub a: String,  // artifactId
+    pub g: String, // groupId
+    pub a: String, // artifactId
     pub latest_version: String,
-    pub p: String,  // packaging
+    pub p: String, // packaging
     pub timestamp: Option<u64>,
 }
 
@@ -135,9 +135,13 @@ impl RemoteManager {
         let platform = Platform::current();
         let downloader = Self::get_downloader_for_repo(repo_url);
 
-        let versions = downloader.list_available_versions().await.map_err(|e| format!("{:?}", e))?;
-        
-        let filtered = versions.into_iter()
+        let versions = downloader
+            .list_available_versions()
+            .await
+            .map_err(|e| format!("{:?}", e))?;
+
+        let filtered = versions
+            .into_iter()
             .filter(|v| feature_version.map_or(true, |mv| v.major == mv))
             .collect::<Vec<_>>();
 
@@ -279,12 +283,14 @@ mod tests {
     #[tokio::test]
     async fn test_list_java_versions_basic() {
         let mut manager = RemoteManager::new();
-        let versions = manager.list_java_versions(
-            Some("https://mirrors.aliyun.com/eclipse/temurin-compliance/temurin"),
-            Some(17),
-            None,
-            None,
-        ).await;
+        let versions = manager
+            .list_java_versions(
+                Some("https://mirrors.aliyun.com/eclipse/temurin-compliance/temurin"),
+                Some(17),
+                None,
+                None,
+            )
+            .await;
 
         // 只要不 panic 即可，允许网络问题导致 Err
         assert!(versions.is_ok() || versions.is_err());
@@ -297,7 +303,8 @@ mod tests {
             "https://search.maven.org/solrsearch/select",
             "org.springframework.boot",
             "spring-boot-starter",
-        ).await;
+        )
+        .await;
 
         // 结果只要不中断即可
         assert!(result.is_ok() || result.is_err());

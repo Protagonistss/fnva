@@ -1,9 +1,6 @@
 use crate::config::{Config, JavaEnvironment};
 use crate::infrastructure::shell::platform::{
-    detect_shell,
-    generate_env_command,
-    generate_path_command,
-    ShellType,
+    detect_shell, generate_env_command, generate_path_command, ShellType,
 };
 use crate::utils::validate_java_home;
 use std::path::PathBuf;
@@ -30,10 +27,7 @@ impl JavaManager {
 
         // 验证 Java Home 路径
         if !validate_java_home(&env.java_home) {
-            return Err(format!(
-                "无效的 JAVA_HOME 路径: {}",
-                env.java_home
-            ));
+            return Err(format!("无效的 JAVA_HOME 路径: {}", env.java_home));
         }
 
         let shell = shell.unwrap_or_else(detect_shell);
@@ -58,20 +52,14 @@ impl JavaManager {
     }
 
     /// 生成切换到指定 Java 环境的脚本文件
-    pub fn generate_switch_script(
-        config: &Config,
-        name: &str,
-    ) -> Result<String, String> {
+    pub fn generate_switch_script(config: &Config, name: &str) -> Result<String, String> {
         let env = config
             .get_java_env(name)
             .ok_or_else(|| format!("Java 环境 '{}' 不存在", name))?;
 
         // 验证 Java Home 路径
         if !validate_java_home(&env.java_home) {
-            return Err(format!(
-                "无效的 JAVA_HOME 路径: {}",
-                env.java_home
-            ));
+            return Err(format!("无效的 JAVA_HOME 路径: {}", env.java_home));
         }
 
         // 获取 PowerShell 脚本路径
@@ -80,13 +68,13 @@ impl JavaManager {
             .join(".fnva");
 
         // 确保目录存在
-        std::fs::create_dir_all(&script_dir)
-            .map_err(|e| format!("创建脚本目录失败: {}", e))?;
+        std::fs::create_dir_all(&script_dir).map_err(|e| format!("创建脚本目录失败: {}", e))?;
 
         let script_path = script_dir.join("switch-java.ps1");
 
         // 生成 PowerShell 脚本内容
-        let script_content = format!(r#"
+        let script_content = format!(
+            r#"
 # fnva 生成的 Java 环境切换脚本
 # 使用方法: .\switch-java.ps1 jdk21
 
@@ -130,7 +118,9 @@ try {{
 }} catch {{
     Write-Warning "无法验证 Java 版本，请检查安装"
 }}
-"#, name, env.java_home);
+"#,
+            name, env.java_home
+        );
 
         // 写入脚本文件
         std::fs::write(&script_path, script_content)
@@ -151,10 +141,7 @@ try {{
 
         // 验证 Java Home 路径
         if !validate_java_home(&env.java_home) {
-            return Err(format!(
-                "无效的 JAVA_HOME 路径: {}",
-                env.java_home
-            ));
+            return Err(format!("无效的 JAVA_HOME 路径: {}", env.java_home));
         }
 
         let java_exe = if cfg!(target_os = "windows") {
@@ -168,7 +155,8 @@ try {{
         cmd.args(java_args);
 
         // 执行命令
-        let output = cmd.output()
+        let output = cmd
+            .output()
             .map_err(|e| format!("执行 Java 命令失败: {}", e))?;
 
         if output.status.success() {
@@ -203,7 +191,10 @@ try {{
             if let Some(home) = find_java_home_from_path(&java_path) {
                 if let Some(installation) = check_java_installation(&home) {
                     // 避免重复添加
-                    if !installations.iter().any(|i| i.java_home == home.to_string_lossy()) {
+                    if !installations
+                        .iter()
+                        .any(|i| i.java_home == home.to_string_lossy())
+                    {
                         installations.push(installation);
                     }
                 }
@@ -298,7 +289,7 @@ fn get_java_version(java_exe: &PathBuf) -> Result<String, String> {
     }
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    
+
     // 解析版本号（例如 "openjdk version \"17.0.1\""）
     if let Some(line) = stderr.lines().next() {
         if let Some(version_start) = line.find("version \"") {
@@ -316,7 +307,7 @@ fn get_java_version(java_exe: &PathBuf) -> Result<String, String> {
 fn find_java_home_from_path(java_path: &PathBuf) -> Option<PathBuf> {
     // java 通常在 $JAVA_HOME/bin/java，所以向上两级
     let mut current = java_path.clone();
-    
+
     // 移除文件名
     if let Some(parent) = current.parent() {
         current = parent.to_path_buf();
@@ -379,7 +370,7 @@ fn get_common_java_paths() -> Vec<String> {
         paths.push("/usr/lib/jvm".to_string());
         paths.push("/usr/java".to_string());
         paths.push("/opt/java".to_string());
-        
+
         // 扫描 /usr/lib/jvm 下的子目录
         let jvm_path = PathBuf::from("/usr/lib/jvm");
         if jvm_path.exists() {

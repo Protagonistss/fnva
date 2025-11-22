@@ -1,0 +1,35 @@
+# PowerShell Integration Script for fnva
+# Add this to your PowerShell Profile ($PROFILE)
+
+function fnva-Integration {
+    param()
+
+    $envFile = "$env:USERPROFILE\.fnva\current_env"
+
+    if (Test-Path $envFile) {
+        try {
+            $currentEnv = Get-Content $envFile -Raw -ErrorAction SilentlyContinue
+            $currentEnv = $currentEnv.Trim()
+
+            if ($currentEnv -and $env:FNVA_CURRENT_ENV -ne $currentEnv) {
+                # Apply environment using fnva command
+                $envScript = & fnva env current --shell powershell 2>$null
+                if ($envScript) {
+                    Invoke-Expression $envScript
+                    $env:FNVA_CURRENT_ENV = $currentEnv
+                }
+            }
+        } catch {
+            Write-Warning "Failed to apply fnva environment: $_"
+        }
+    }
+}
+
+# Hook into PowerShell prompt
+$OriginalPrompt = $function:prompt
+function prompt {
+    & fnva-Integration
+    & $OriginalPrompt
+}
+
+Write-Host "🚀 fnva PowerShell integration loaded" -ForegroundColor Green

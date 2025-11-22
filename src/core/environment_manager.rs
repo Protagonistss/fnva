@@ -1,5 +1,5 @@
-use serde::{Serialize, Deserialize};
 use crate::infrastructure::shell::ShellType;
+use serde::{Deserialize, Serialize};
 
 /// 环境类型枚举
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -120,17 +120,19 @@ pub struct EnvironmentManagerFactory;
 
 impl EnvironmentManagerFactory {
     /// 根据类型创建对应的环境管理器
-    pub fn create_manager(env_type: EnvironmentType) -> Result<Box<dyn EnvironmentManager>, String> {
+    pub fn create_manager(
+        env_type: EnvironmentType,
+    ) -> Result<Box<dyn EnvironmentManager>, String> {
         match env_type {
-            EnvironmentType::Java => {
-                Ok(Box::new(crate::environments::java::JavaEnvironmentManager::new()))
-            }
-            EnvironmentType::Llm => {
-                Ok(Box::new(crate::environments::llm::LlmEnvironmentManager::new()))
-            }
-            EnvironmentType::Cc => {
-                Ok(Box::new(crate::environments::cc::CcEnvironmentManager::new()))
-            }
+            EnvironmentType::Java => Ok(Box::new(
+                crate::environments::java::JavaEnvironmentManager::new(),
+            )),
+            EnvironmentType::Llm => Ok(Box::new(
+                crate::environments::llm::LlmEnvironmentManager::new(),
+            )),
+            EnvironmentType::Cc => Ok(Box::new(
+                crate::environments::cc::CcEnvironmentManager::new(),
+            )),
             EnvironmentType::Maven => {
                 Err("Maven environment manager not implemented yet".to_string())
             }

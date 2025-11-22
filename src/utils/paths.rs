@@ -15,17 +15,26 @@ impl PathUtils {
 
     /// 获取路径的目录部分
     pub fn parent(path: &str) -> Option<String> {
-        Path::new(path).parent().and_then(|p| p.to_str()).map(|s| s.to_string())
+        Path::new(path)
+            .parent()
+            .and_then(|p| p.to_str())
+            .map(|s| s.to_string())
     }
 
     /// 获取路径的文件名部分
     pub fn filename(path: &str) -> Option<String> {
-        Path::new(path).file_name().and_then(|s| s.to_str()).map(|s| s.to_string())
+        Path::new(path)
+            .file_name()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_string())
     }
 
     /// 获取文件扩展名
     pub fn extension(path: &str) -> Option<String> {
-        Path::new(path).extension().and_then(|s| s.to_str()).map(|s| s.to_string())
+        Path::new(path)
+            .extension()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_string())
     }
 
     /// 获取不含扩展名的文件名
@@ -100,12 +109,20 @@ impl PathUtils {
 
     /// 移除路径的最后一个组件
     pub fn pop_component(path: &str) -> String {
-        Path::new(path).parent().unwrap_or_else(|| Path::new(".")).to_string_lossy().to_string()
+        Path::new(path)
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .to_string_lossy()
+            .to_string()
     }
 
     /// 清理路径（移除 . 和 ..）
     pub fn clean(path: &str) -> String {
-        Path::new(path).components().collect::<PathBuf>().to_string_lossy().to_string()
+        Path::new(path)
+            .components()
+            .collect::<PathBuf>()
+            .to_string_lossy()
+            .to_string()
     }
 
     /// 检查路径是否是子路径
@@ -133,7 +150,11 @@ impl PathUtils {
         if common.is_empty() {
             String::new()
         } else {
-            common.iter().collect::<std::path::PathBuf>().to_string_lossy().to_string()
+            common
+                .iter()
+                .collect::<std::path::PathBuf>()
+                .to_string_lossy()
+                .to_string()
         }
     }
 
@@ -175,7 +196,7 @@ impl PathUtils {
         if !path.is_dir() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::NotADirectory,
-                "Path is not a directory"
+                "Path is not a directory",
             ));
         }
 
@@ -185,7 +206,10 @@ impl PathUtils {
     }
 
     /// 递归计算目录大小
-    fn calculate_dir_size_recursive(dir: &Path, total_size: &mut u64) -> Result<(), std::io::Error> {
+    fn calculate_dir_size_recursive(
+        dir: &Path,
+        total_size: &mut u64,
+    ) -> Result<(), std::io::Error> {
         for entry in std::fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
@@ -282,11 +306,23 @@ mod tests {
     #[test]
     fn test_normalize_separators() {
         if cfg!(target_os = "windows") {
-            assert_eq!(PathUtils::normalize_separators("path/to/file"), "path\\to\\file");
-            assert_eq!(PathUtils::normalize_separators("path\\to\\file"), "path\\to\\file");
+            assert_eq!(
+                PathUtils::normalize_separators("path/to/file"),
+                "path\\to\\file"
+            );
+            assert_eq!(
+                PathUtils::normalize_separators("path\\to\\file"),
+                "path\\to\\file"
+            );
         } else {
-            assert_eq!(PathUtils::normalize_separators("path\\to\\file"), "path/to/file");
-            assert_eq!(PathUtils::normalize_separators("path/to/file"), "path/to/file");
+            assert_eq!(
+                PathUtils::normalize_separators("path\\to\\file"),
+                "path/to/file"
+            );
+            assert_eq!(
+                PathUtils::normalize_separators("path/to/file"),
+                "path/to/file"
+            );
         }
     }
 
@@ -316,9 +352,18 @@ mod tests {
 
     #[test]
     fn test_filename_without_extension() {
-        assert_eq!(PathUtils::filename_without_extension("file.txt"), Some("file".to_string()));
-        assert_eq!(PathUtils::filename_without_extension("path/to/file.ext"), Some("file".to_string()));
-        assert_eq!(PathUtils::filename_without_extension("noext"), Some("noext".to_string()));
+        assert_eq!(
+            PathUtils::filename_without_extension("file.txt"),
+            Some("file".to_string())
+        );
+        assert_eq!(
+            PathUtils::filename_without_extension("path/to/file.ext"),
+            Some("file".to_string())
+        );
+        assert_eq!(
+            PathUtils::filename_without_extension("noext"),
+            Some("noext".to_string())
+        );
     }
 
     #[test]
@@ -333,13 +378,19 @@ mod tests {
     #[test]
     fn test_common_prefix() {
         if cfg!(target_os = "windows") {
-            assert_eq!(PathUtils::common_prefix(r"C:\path\to\file1", r"C:\path\to\file2"), r"C:\path\to");
+            assert_eq!(
+                PathUtils::common_prefix(r"C:\path\to\file1", r"C:\path\to\file2"),
+                r"C:\path\to"
+            );
             // Windows下两个不同的路径可能有共同的根路径
             let result = PathUtils::common_prefix("/different/path", "/another/path");
             // 预期结果可能是"\\"（Windows下的根路径）
             assert!(result.is_empty() || result == "\\" || result == "/");
         } else {
-            assert_eq!(PathUtils::common_prefix("/path/to/file1", "/path/to/file2"), "/path/to");
+            assert_eq!(
+                PathUtils::common_prefix("/path/to/file1", "/path/to/file2"),
+                "/path/to"
+            );
             // 对于没有共同路径的情况，清理结果以避免平台差异
             let result = PathUtils::common_prefix("/different/path", "/another/path");
             assert!(result.is_empty() || result == "/");

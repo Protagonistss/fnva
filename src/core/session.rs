@@ -1,9 +1,9 @@
+use crate::core::environment_manager::EnvironmentType;
+use crate::infrastructure::config::Config;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use serde::{Deserialize, Serialize};
-use crate::core::environment_manager::EnvironmentType;
-use crate::infrastructure::config::Config;
 
 /// 会话状态管理器
 #[derive(Debug, Clone)]
@@ -67,8 +67,8 @@ impl SessionManager {
         let content = fs::read_to_string(&self.config_path)
             .map_err(|e| format!("Failed to read session file: {}", e))?;
 
-        let state: SessionState = toml::from_str(&content)
-            .map_err(|e| format!("Failed to parse session file: {}", e))?;
+        let state: SessionState =
+            toml::from_str(&content).map_err(|e| format!("Failed to parse session file: {}", e))?;
 
         self.current_environments = state.current_environments;
 
@@ -92,7 +92,11 @@ impl SessionManager {
     }
 
     /// 设置当前环境
-    pub fn set_current_environment(&mut self, env_type: EnvironmentType, name: &str) -> Result<(), String> {
+    pub fn set_current_environment(
+        &mut self,
+        env_type: EnvironmentType,
+        name: &str,
+    ) -> Result<(), String> {
         self.current_environments.insert(env_type, name.to_string());
         self.save_state()
     }
@@ -151,7 +155,11 @@ impl SessionManager {
     }
 
     /// 获取有效的环境（当前环境或默认环境）
-    pub fn get_effective_environment<'a>(&'a self, config: &'a Config, env_type: EnvironmentType) -> Option<&'a str> {
+    pub fn get_effective_environment<'a>(
+        &'a self,
+        config: &'a Config,
+        env_type: EnvironmentType,
+    ) -> Option<&'a str> {
         // 首先尝试获取当前环境
         if let Some(current) = self.get_current_environment(env_type) {
             return Some(current);
@@ -166,7 +174,12 @@ impl SessionManager {
     }
 
     /// 检查环境是否是当前环境或默认环境
-    pub fn is_active_environment(&self, config: &Config, env_type: EnvironmentType, name: &str) -> bool {
+    pub fn is_active_environment(
+        &self,
+        config: &Config,
+        env_type: EnvironmentType,
+        name: &str,
+    ) -> bool {
         // 检查是否是当前环境
         if let Some(current) = self.get_current_environment(env_type) {
             if current == name {
@@ -282,7 +295,10 @@ impl HistoryManager {
         }) {
             Ok(content) => content,
             Err(e) => {
-                eprintln!("Warning: Failed to serialize history: {}. Skipping history save.", e);
+                eprintln!(
+                    "Warning: Failed to serialize history: {}. Skipping history save.",
+                    e
+                );
                 return Ok(());
             }
         };

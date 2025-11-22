@@ -1,5 +1,5 @@
-use serde::{Serialize, Deserialize};
 use crate::core::environment_manager::EnvironmentInfo;
+use serde::{Deserialize, Serialize};
 
 /// Java 安装信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -77,8 +77,12 @@ impl JavaScanner {
                         if entry_path.is_dir() {
                             let path_str = entry_path.to_string_lossy();
                             let normalized_path = Self::normalize_path(&path_str);
-                            if !seen_paths.contains(&normalized_path) && Self::is_valid_java_installation(&path_str) {
-                                if let Ok(installation) = Self::create_installation_from_path(&path_str) {
+                            if !seen_paths.contains(&normalized_path)
+                                && Self::is_valid_java_installation(&path_str)
+                            {
+                                if let Ok(installation) =
+                                    Self::create_installation_from_path(&path_str)
+                                {
                                     installations.push(installation);
                                     seen_paths.insert(normalized_path);
                                 }
@@ -115,9 +119,7 @@ impl JavaScanner {
             }
             Err(_) => {
                 // 如果无法规范化，至少标准化分隔符
-                path.to_string_lossy()
-                    .replace('\\', "/")
-                    .to_lowercase()
+                path.to_string_lossy().replace('\\', "/").to_lowercase()
             }
         }
     }
@@ -247,9 +249,11 @@ impl JavaScanner {
 
         let installation = JavaInstallation {
             name: name.clone(),
-            description: format!("Java {} ({})",
+            description: format!(
+                "Java {} ({})",
                 version.as_deref().unwrap_or("unknown"),
-                path),
+                path
+            ),
             java_home: path.to_string(),
             version,
             vendor,
@@ -341,7 +345,11 @@ impl JavaScanner {
         use std::env;
 
         if let Ok(path_var) = env::var("PATH") {
-            let path_separator = if cfg!(target_os = "windows") { ';' } else { ':' };
+            let path_separator = if cfg!(target_os = "windows") {
+                ';'
+            } else {
+                ':'
+            };
 
             for path_dir in path_var.split(path_separator) {
                 let java_exe = if cfg!(target_os = "windows") {
@@ -354,7 +362,9 @@ impl JavaScanner {
                     // 找到 Java，尝试确定 JAVA_HOME
                     if let Some(java_home) = java_exe.parent().and_then(|p| p.parent()) {
                         if Self::is_valid_java_installation(java_home.to_str().unwrap_or("")) {
-                            return Ok(Some(Self::create_installation_from_path(java_home.to_str().unwrap_or(""))?));
+                            return Ok(Some(Self::create_installation_from_path(
+                                java_home.to_str().unwrap_or(""),
+                            )?));
                         }
                     }
                 }

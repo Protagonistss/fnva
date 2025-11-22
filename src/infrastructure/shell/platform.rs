@@ -9,7 +9,7 @@ pub enum OsType {
 }
 
 /// Shell 类型
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ShellType {
     Bash,
     Zsh,
@@ -115,10 +115,7 @@ pub fn generate_path_command(path_to_add: &str, shell: ShellType) -> String {
             format!("export PATH=\"{}:$PATH\"", escape_shell_value(path_to_add))
         }
         ShellType::Fish => {
-            format!(
-                "set -gx PATH \"{} $PATH\"",
-                escape_shell_value(path_to_add)
-            )
+            format!("set -gx PATH \"{} $PATH\"", escape_shell_value(path_to_add))
         }
         ShellType::PowerShell => {
             format!(
@@ -162,7 +159,10 @@ mod tests {
     #[test]
     fn test_get_os_type() {
         let os = get_os_type();
-        assert!(matches!(os, OsType::Windows | OsType::MacOS | OsType::Linux));
+        assert!(matches!(
+            os,
+            OsType::Windows | OsType::MacOS | OsType::Linux
+        ));
     }
 
     #[test]
@@ -175,7 +175,7 @@ mod tests {
     #[test]
     fn test_escape_shell_value() {
         let escaped = escape_shell_value("path/with'spaces");
-        // 转义后应该包含转义的单引号 \' 
+        // 转义后应该包含转义的单引号 \'
         assert!(escaped.contains("\\'"));
         // 验证转义后的内容
         assert!(escaped.contains("path/with"));

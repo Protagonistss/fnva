@@ -1,11 +1,10 @@
-use std::io;
 use thiserror::Error;
 
 /// 应用程序错误类型
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug)]
 pub enum AppError {
     #[error("IO 错误: {0}")]
-    Io(#[from] io::Error),
+    Io(String),
 
     #[error("环境管理错误: {message}")]
     Environment { message: String },
@@ -17,7 +16,7 @@ pub enum AppError {
     Network { message: String },
 
     #[error("序列化错误: {0}")]
-    Serialization(#[from] serde_json::Error),
+    Serialization(String),
 
     #[error("路径错误: {path} - {reason}")]
     Path { path: String, reason: String },
@@ -87,7 +86,11 @@ pub struct ContextualError {
 
 impl std::fmt::Display for ContextualError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "操作失败: {}\n错误: {}", self.context.operation, self.error)
+        write!(
+            f,
+            "操作失败: {}\n错误: {}",
+            self.context.operation, self.error
+        )
     }
 }
 
@@ -156,6 +159,51 @@ impl AppError {
     }
 }
 
+// 转换trait实现
+impl From<std::io::Error> for AppError {
+    fn from(error: std::io::Error) -> Self {
+        AppError::Io(error.to_string())
+    }
+}
+
+impl From<serde_json::Error> for AppError {
+    fn from(error: serde_json::Error) -> Self {
+        AppError::Serialization(error.to_string())
+    }
+}
+
+impl From<toml::de::Error> for AppError {
+    fn from(error: toml::de::Error) -> Self {
+        AppError::Serialization(error.to_string())
+    }
+}
+
+impl From<toml::ser::Error> for AppError {
+    fn from(error: toml::ser::Error) -> Self {
+        AppError::Serialization(error.to_string())
+    }
+}
+
+impl<T> From<std::sync::PoisonError<T>> for AppError {
+    fn from(_error: std::sync::PoisonError<T>) -> Self {
+        AppError::LockError {
+            operation: "线程锁定失败".to_string(),
+        }
+    }
+}
+
+impl From<handlebars::TemplateError> for AppError {
+    fn from(error: handlebars::TemplateError) -> Self {
+        AppError::Serialization(error.to_string())
+    }
+}
+
+impl From<handlebars::RenderError> for AppError {
+    fn from(error: handlebars::RenderError) -> Self {
+        AppError::Serialization(error.to_string())
+    }
+}
+
 // 必要的trait实现
 impl From<AppError> for ContextualError {
     fn from(error: AppError) -> Self {
@@ -170,8 +218,49 @@ impl From<AppError> for ContextualError {
     }
 }
 
+impl<T> From<std::sync::PoisonError<T>> for ContextualError {
+    fn from(_error: std::sync::PoisonError<T>) -> Self {
+        Self {
+            error: AppError::LockError {
+                operation: "线程锁定失败".to_string(),
+            },
+            context: ErrorContext {
+                operation: "锁定失败".to_string(),
+                suggestions: vec!["检查是否存在死锁".to_string()],
+                help_url: None,
+            },
+        }
+    }
+}
+
 impl From<ContextualError> for String {
     fn from(error: ContextualError) -> Self {
         error.user_message()
     }
+}
+
+/// 为 Result 添加上下文信息的扩展 trait
+pub trait ResultExt<T> {
+    fn with_context(self, operation: &str) -> Result<T, ContextualError>;
+}
+
+impl<T, E: Into<AppError>> ResultExt<T> for Result<T, E> {
+    fn with_context(self, operation: &str) -> Result<T, ContextualError> {
+        self.map_err(|e| ContextualError {
+            error: e.into(),
+            context: ErrorContext {
+                operation: operation.to_string(),
+                suggestions: Vec::new(),
+                help_url: None,
+            },
+        })
+    }
+}
+
+/// 为所有 Result 类型提供 with_context 方法的便利函数
+pub fn with_context<T, E: Into<AppError>>(
+    result: Result<T, E>,
+    operation: &str,
+) -> Result<T, ContextualError> {
+    result.with_context(operation)
 }

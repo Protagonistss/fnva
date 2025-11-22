@@ -82,7 +82,9 @@ fn default_priority() -> u32 {
     10
 }
 
-fn default_registry_only() -> bool { false }
+fn default_registry_only() -> bool {
+    false
+}
 
 /// Java 版本缓存配置
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -269,17 +271,17 @@ impl Config {
             java_environments: Vec::new(),
             llm_environments: Vec::new(),
             cc_environments: Vec::new(),
-        repositories: Repositories {
-            java: default_java_downloader(),
-            maven: default_maven_repositories(),
-        },
-        java_download_sources: JavaDownloadSources {
-            primary: "tsinghua".to_string(),
-            fallback: vec!["aliyun".to_string(), "github".to_string()],
-            sources: Vec::new(),
-            registry_only: false,
-            java_versions_path: None,
-        },
+            repositories: Repositories {
+                java: default_java_downloader(),
+                maven: default_maven_repositories(),
+            },
+            java_download_sources: JavaDownloadSources {
+                primary: "tsinghua".to_string(),
+                fallback: vec!["aliyun".to_string(), "github".to_string()],
+                sources: Vec::new(),
+                registry_only: false,
+                java_versions_path: None,
+            },
             java_version_cache: JavaVersionCache::default(),
             download: DownloadConfig::default(),
             current_java_env: None,
@@ -293,7 +295,7 @@ impl Config {
     /// 从文件加载配置
     pub fn load() -> Result<Self, String> {
         let config_path = get_config_path()?;
-        
+
         if !config_path.exists() {
             // 如果配置文件不存在，创建默认配置
             let config = Config::new();
@@ -301,28 +303,25 @@ impl Config {
             return Ok(config);
         }
 
-        let content = fs::read_to_string(&config_path)
-            .map_err(|e| format!("无法读取配置文件: {}", e))?;
-        
-        toml::from_str(&content)
-            .map_err(|e| format!("解析配置文件失败: {}", e))
+        let content =
+            fs::read_to_string(&config_path).map_err(|e| format!("无法读取配置文件: {}", e))?;
+
+        toml::from_str(&content).map_err(|e| format!("解析配置文件失败: {}", e))
     }
 
     /// 保存配置到文件
     pub fn save(&self) -> Result<(), String> {
         let config_path = get_config_path()?;
-        
+
         // 确保配置目录存在
         if let Some(parent) = config_path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| format!("无法创建配置目录: {}", e))?;
+            fs::create_dir_all(parent).map_err(|e| format!("无法创建配置目录: {}", e))?;
         }
 
-        let toml_content = toml::to_string_pretty(self)
-            .map_err(|e| format!("序列化配置失败: {}", e))?;
+        let toml_content =
+            toml::to_string_pretty(self).map_err(|e| format!("序列化配置失败: {}", e))?;
 
-        fs::write(&config_path, toml_content)
-            .map_err(|e| format!("写入配置文件失败: {}", e))?;
+        fs::write(&config_path, toml_content).map_err(|e| format!("写入配置文件失败: {}", e))?;
 
         Ok(())
     }
@@ -478,18 +477,16 @@ pub fn resolve_env_var(value: &str) -> String {
 
 /// 获取配置文件路径
 pub fn get_config_path() -> Result<PathBuf, String> {
-    let home_dir = dirs::home_dir()
-        .ok_or_else(|| "无法获取用户主目录".to_string())?;
-    
+    let home_dir = dirs::home_dir().ok_or_else(|| "无法获取用户主目录".to_string())?;
+
     let config_file = home_dir.join(".fnva").join("config.toml");
     Ok(config_file)
 }
 
 /// 获取配置目录
 pub fn get_config_dir() -> Result<PathBuf, String> {
-    let home_dir = dirs::home_dir()
-        .ok_or_else(|| "无法获取用户主目录".to_string())?;
-    
+    let home_dir = dirs::home_dir().ok_or_else(|| "无法获取用户主目录".to_string())?;
+
     Ok(home_dir.join(".fnva"))
 }
 
@@ -501,13 +498,13 @@ mod tests {
     fn test_resolve_env_var() {
         // 设置测试环境变量
         env::set_var("TEST_VAR", "test_value");
-        
+
         let resolved = resolve_env_var("${TEST_VAR}");
         assert_eq!(resolved, "test_value");
-        
+
         let not_resolved = resolve_env_var("normal_value");
         assert_eq!(not_resolved, "normal_value");
-        
+
         env::remove_var("TEST_VAR");
     }
 
@@ -520,7 +517,7 @@ mod tests {
             description: "Test JDK".to_string(),
             source: EnvironmentSource::Manual,
         };
-        
+
         assert!(config.add_java_env(env.clone()).is_ok());
         assert!(config.add_java_env(env).is_err()); // 重复添加应该失败
     }

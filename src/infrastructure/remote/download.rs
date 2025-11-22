@@ -1,8 +1,8 @@
 use futures_util::StreamExt;
 use reqwest::Client;
-use tokio::io::AsyncWriteExt;
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use std::path::Path;
+use tokio::io::AsyncWriteExt;
 
 /// 错误类型：用于区分临时错误和永久错误
 #[derive(Debug, Clone, PartialEq)]
@@ -67,7 +67,9 @@ fn classify_error(error: &str, status_code: Option<u16>) -> ErrorType {
     // 根据状态码判断
     if let Some(code) = status_code {
         match code {
-            404 | 403 | 401 => return ErrorType::Permanent(format!("资源不存在或无权访问 (HTTP {})", code)),
+            404 | 403 | 401 => {
+                return ErrorType::Permanent(format!("资源不存在或无权访问 (HTTP {})", code))
+            }
             500..=599 => return ErrorType::Transient(format!("服务器错误 (HTTP {})", code)),
             _ => {}
         }
@@ -94,17 +96,22 @@ fn verify_sha256(data: &[u8], expected: &str) -> Result<(), String> {
     hasher.update(data);
     let result = hasher.finalize();
     let actual = hex::encode(result);
-    
+
     if actual.eq_ignore_ascii_case(expected) {
         Ok(())
     } else {
-        Err(format!("SHA256 mismatch: expected {}, got {}", expected, actual))
+        Err(format!(
+            "SHA256 mismatch: expected {}, got {}",
+            expected, actual
+        ))
     }
 }
 
 /// 验证文件哈希
 async fn verify_file_sha256(path: &Path, expected: &str) -> Result<(), String> {
-    let mut file = tokio::fs::File::open(path).await.map_err(|e| e.to_string())?;
+    let mut file = tokio::fs::File::open(path)
+        .await
+        .map_err(|e| e.to_string())?;
     let mut hasher = Sha256::new();
     let mut buffer = [0u8; 8192]; // 8KB buffer
 
@@ -123,7 +130,10 @@ async fn verify_file_sha256(path: &Path, expected: &str) -> Result<(), String> {
     if actual.eq_ignore_ascii_case(expected) {
         Ok(())
     } else {
-        Err(format!("SHA256 mismatch: expected {}, got {}", expected, actual))
+        Err(format!(
+            "SHA256 mismatch: expected {}, got {}",
+            expected, actual
+        ))
     }
 }
 
@@ -158,9 +168,17 @@ pub async fn download_to_bytes_with_options(
             Ok(data) => {
                 if let Some(expected) = &options.expected_sha256 {
                     if let Err(e) = verify_sha256(&data, expected) {
-                        println!("⚠️  校验失败 (尝试 {}/{}): {}", attempts, options.retry_count + 1, e);
+                        println!(
+                            "⚠️  校验失败 (尝试 {}/{}): {}",
+                            attempts,
+                            options.retry_count + 1,
+                            e
+                        );
                         if attempts > options.retry_count {
-                            return Err(format!("校验失败 (已重试 {} 次): {}", options.retry_count, e));
+                            return Err(format!(
+                                "校验失败 (已重试 {} 次): {}",
+                                options.retry_count, e
+                            ));
                         }
                         let delay = options.calculate_retry_delay(attempts);
                         tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
@@ -174,34 +192,48 @@ pub async fn download_to_bytes_with_options(
                 // 尝试从错误消息中提取状态码
                 if e.contains("状态码:") {
                     if let Some(code_str) = e.split("状态码:").nth(1) {
-                        if let Ok(code) = code_str.trim().split_whitespace().next().unwrap_or("").parse::<u16>() {
+                        if let Ok(code) = code_str
+                            .trim()
+                            .split_whitespace()
+                            .next()
+                            .unwrap_or("")
+                            .parse::<u16>()
+                        {
                             last_status_code = Some(code);
                         }
                     }
                 }
 
                 let error_type = classify_error(&e, last_status_code);
-                
+
                 // 永久错误不重试
                 if matches!(error_type, ErrorType::Permanent(_)) {
-                    return Err(format!("{}: {}", 
-                        if let ErrorType::Permanent(msg) = error_type { msg } else { unreachable!() },
-                        e));
+                    return Err(format!(
+                        "{}: {}",
+                        if let ErrorType::Permanent(msg) = error_type {
+                            msg
+                        } else {
+                            unreachable!()
+                        },
+                        e
+                    ));
                 }
 
                 if attempts > options.retry_count {
-                    return Err(format!("下载失败 (已重试 {} 次): {}。URL: {}", 
-                        options.retry_count, 
-                        e,
-                        url));
+                    return Err(format!(
+                        "下载失败 (已重试 {} 次): {}。URL: {}",
+                        options.retry_count, e, url
+                    ));
                 }
 
                 let delay = options.calculate_retry_delay(attempts);
-                println!("⚠️  下载出错 (尝试 {}/{}): {}。{}ms 后重试...", 
-                    attempts, 
-                    options.retry_count + 1, 
+                println!(
+                    "⚠️  下载出错 (尝试 {}/{}): {}。{}ms 后重试...",
+                    attempts,
+                    options.retry_count + 1,
                     e,
-                    delay);
+                    delay
+                );
                 tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
             }
         }
@@ -275,12 +307,20 @@ pub async fn download_to_file_with_options(
             Ok(_) => {
                 if let Some(expected) = &options.expected_sha256 {
                     if let Err(e) = verify_file_sha256(file_path, expected).await {
-                        println!("⚠️  文件校验失败 (尝试 {}/{}): {}", attempts, options.retry_count + 1, e);
+                        println!(
+                            "⚠️  文件校验失败 (尝试 {}/{}): {}",
+                            attempts,
+                            options.retry_count + 1,
+                            e
+                        );
                         // 删除损坏的文件
                         let _ = tokio::fs::remove_file(file_path).await;
-                        
+
                         if attempts > options.retry_count {
-                            return Err(format!("校验失败 (已重试 {} 次): {}", options.retry_count, e));
+                            return Err(format!(
+                                "校验失败 (已重试 {} 次): {}",
+                                options.retry_count, e
+                            ));
                         }
                         let delay = options.calculate_retry_delay(attempts);
                         tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
@@ -294,7 +334,13 @@ pub async fn download_to_file_with_options(
                 // 尝试从错误消息中提取状态码
                 if e.contains("状态码:") {
                     if let Some(code_str) = e.split("状态码:").nth(1) {
-                        if let Ok(code) = code_str.trim().split_whitespace().next().unwrap_or("").parse::<u16>() {
+                        if let Ok(code) = code_str
+                            .trim()
+                            .split_whitespace()
+                            .next()
+                            .unwrap_or("")
+                            .parse::<u16>()
+                        {
                             last_status_code = Some(code);
                         }
                     }
@@ -302,31 +348,41 @@ pub async fn download_to_file_with_options(
 
                 // 尝试删除可能未完成的文件
                 let _ = tokio::fs::remove_file(file_path).await;
-                
+
                 let error_type = classify_error(&e, last_status_code);
-                
+
                 // 永久错误不重试
                 if matches!(error_type, ErrorType::Permanent(_)) {
-                    return Err(format!("{}: {} (URL: {})", 
-                        if let ErrorType::Permanent(msg) = error_type { msg } else { unreachable!() },
+                    return Err(format!(
+                        "{}: {} (URL: {})",
+                        if let ErrorType::Permanent(msg) = error_type {
+                            msg
+                        } else {
+                            unreachable!()
+                        },
                         e,
-                        url));
+                        url
+                    ));
                 }
 
                 if attempts > options.retry_count {
-                    return Err(format!("下载失败 (已重试 {} 次): {}。URL: {}，文件: {}", 
-                        options.retry_count, 
+                    return Err(format!(
+                        "下载失败 (已重试 {} 次): {}。URL: {}，文件: {}",
+                        options.retry_count,
                         e,
                         url,
-                        file_path.display()));
+                        file_path.display()
+                    ));
                 }
 
                 let delay = options.calculate_retry_delay(attempts);
-                println!("⚠️  下载出错 (尝试 {}/{}): {}。{}ms 后重试...", 
-                    attempts, 
-                    options.retry_count + 1, 
+                println!(
+                    "⚠️  下载出错 (尝试 {}/{}): {}。{}ms 后重试...",
+                    attempts,
+                    options.retry_count + 1,
                     e,
-                    delay);
+                    delay
+                );
                 tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
             }
         }
@@ -363,7 +419,7 @@ async fn download_to_file_internal(
     let total_size = response.content_length().unwrap_or(0);
     let mut downloaded = 0u64;
     let mut stream = response.bytes_stream();
-    
+
     // 使用临时文件
     let temp_path = file_path.with_extension("downloading");
     let mut file = tokio::fs::File::create(&temp_path)
@@ -374,10 +430,14 @@ async fn download_to_file_internal(
         let chunk = chunk.map_err(|e| format!("读取数据失败: {}", e))?;
         downloaded += chunk.len() as u64;
         progress(downloaded, total_size);
-        file.write_all(&chunk).await.map_err(|e| format!("写入文件失败: {}", e))?;
+        file.write_all(&chunk)
+            .await
+            .map_err(|e| format!("写入文件失败: {}", e))?;
     }
 
-    file.flush().await.map_err(|e| format!("刷新文件失败: {}", e))?;
+    file.flush()
+        .await
+        .map_err(|e| format!("刷新文件失败: {}", e))?;
     drop(file); // 关闭文件
 
     // 重命名为目标文件

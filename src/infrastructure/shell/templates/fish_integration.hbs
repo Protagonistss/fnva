@@ -1,0 +1,36 @@
+# Fish Integration Script for fnva
+# Add this to your ~/.config/fish/config.fish
+
+function fnva_hook --on-variable PWD
+    set env_file "$HOME/.fnva/current_env"
+    if test -f "$env_file"
+        set current_env (cat "$env_file" 2>/dev/null | string trim)
+        if test -n "$current_env"; and test "$FNVA_CURRENT_ENV" != "$current_env"
+            # Apply environment using fnva command
+            if command -v fnva >/dev/null 2>&1
+                fnva env current --shell fish | source
+                set -gx FNVA_CURRENT_ENV "$current_env"
+            end
+        end
+    end
+end
+
+# Function to show current environment in prompt
+function fnva_prompt
+    set -l fnva_prompt ""
+    if set -q FNVA_CURRENT_JAVA
+        set fnva_prompt "[Java: $FNVA_CURRENT_JAVA]"
+    else if set -q FNVA_CURRENT_LLM
+        set fnva_prompt "[LLM: $FNVA_CURRENT_LLM]"
+    else if set -q FNVA_CURRENT_CC
+        set fnva_prompt "[CC: $FNVA_CURRENT_CC]"
+    end
+
+    if test -n "$fnva_prompt"
+        set_color 666666
+        echo -n "$fnva_prompt"
+        set_color normal
+    end
+end
+
+echo "🚀 fnva Fish integration loaded"

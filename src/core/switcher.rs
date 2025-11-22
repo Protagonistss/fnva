@@ -1,11 +1,13 @@
+use crate::cli::output::OutputFormat;
+use crate::core::environment_manager::{EnvironmentManager, EnvironmentType, SwitchResult};
+use crate::core::session::{HistoryManager, SessionManager, SwitchHistory};
+use crate::error::{
+    option_with_context, safe_to_json, safe_to_json_pretty, AppError, ContextualResult, SafeMutex,
+};
+use crate::infrastructure::config::Config;
+use crate::infrastructure::shell::{script_factory::ScriptGenerator, ShellType};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use crate::core::environment_manager::{EnvironmentManager, EnvironmentType, SwitchResult};
-use crate::core::session::{SessionManager, HistoryManager};
-use crate::infrastructure::shell::{ShellType, script_builder::ScriptBuilder};
-use crate::cli::output::OutputFormat;
-use crate::infrastructure::config::Config;
-use crate::error::{AppError, ContextualResult, SafeMutex, safe_to_json_pretty, safe_to_json, with_context, option_with_context};
 
 /// 环境切换器
 pub struct EnvironmentSwitcher {
@@ -20,14 +22,12 @@ pub struct EnvironmentSwitcher {
 impl EnvironmentSwitcher {
     /// 创建新的环境切换器
     pub fn new() -> ContextualResult<Self> {
-        let session_manager = SessionManager::new()
-            .map_err(|e| AppError::Config {
-                message: format!("创建会话管理器失败: {}", e)
-            })?;
-        let history_manager = HistoryManager::new(100)
-            .map_err(|e| AppError::Internal {
-                message: format!("创建历史管理器失败: {}", e)
-            })?;
+        let session_manager = SessionManager::new().map_err(|e| AppError::Config {
+            message: format!("创建会话管理器失败: {}", e),
+        })?;
+        let history_manager = HistoryManager::new(100).map_err(|e| AppError::Internal {
+            message: format!("创建历史管理器失败: {}", e),
+        })?;
 
         Ok(Self {
             managers: HashMap::new(),
@@ -37,11 +37,11 @@ impl EnvironmentSwitcher {
     }
 
     /// 注册环境管理器
-    pub fn register_manager(&mut self, manager: Arc<Mutex<dyn EnvironmentManager>>) -> ContextualResult<()> {
-        let env_type = with_context(
-            manager.lock().map(|guard| guard.environment_type()),
-            "注册环境管理器时获取锁失败",
-        )?;
+    pub fn register_manager(
+        &mut self,
+        manager: Arc<Mutex<dyn EnvironmentManager>>,
+    ) -> ContextualResult<()> {
+        let env_type = manager.lock().map(|guard| guard.environment_type())?;
         self.managers.insert(env_type, manager);
         Ok(())
     }
@@ -63,24 +63,20 @@ impl EnvironmentSwitcher {
 
         // 获取当前环境（不可变）
         let old_env = {
-            let manager_guard = manager.lock()
-                .map_err(|_| AppError::lock_failed("获取环境管理器锁"))
-                .with_context("获取当前环境时锁定失败")?;
-            manager_guard.get_current()
+            let manager_guard = manager.lock()?;
+            manager_guard
+                .get_current()
                 .map_err(|e| AppError::Environment {
-                    message: format!("获取当前环境失败: {}", e)
+                    message: format!("获取当前环境失败: {}", e),
                 })?
         };
 
         // 验证环境是否存在
         let env_info = {
-            let manager_guard = manager.lock()
-                .map_err(|_| AppError::lock_failed("获取环境管理器锁"))
-                .with_context("验证环境存在性时锁定失败")?;
-            manager_guard.get(name)
-                .map_err(|e| AppError::Environment {
-                    message: format!("查找环境 '{}' 失败: {}", name, e)
-                })?
+            let manager_guard = manager.lock()?;
+            manager_guard.get(name).map_err(|e| AppError::Environment {
+                message: format!("查找环境 '{}' 失败: {}", name, e),
+            })?
         };
 
         if env_info.is_none() {
@@ -95,33 +91,32 @@ impl EnvironmentSwitcher {
 
         // 生成切换脚本（需要可变借用）
         let script = {
-            let mut manager_guard = manager.lock()
-                .map_err(|_| AppError::lock_failed("获取环境管理器锁"))
-                .with_context("生成切换脚本时锁定失败")?;
-            manager_guard.use_env(name, shell_type)
+            let mut manager_guard = manager.lock()?;
+            manager_guard
+                .use_env(name, shell_type)
                 .map_err(|e| AppError::ScriptGeneration {
                     shell_type: format!("{:?}", shell_type.unwrap_or(ShellType::Bash)),
-                    reason: e
+                    reason: e,
                 })?
         };
 
         // 更新会话状态
         {
-            let mut session_manager = self.session_manager.lock()
-                .with_context("更新会话状态时锁定失败")?;
-            session_manager.set_current_environment(env_type, name)
+            let mut session_manager = self.session_manager.lock()?;
+            session_manager
+                .set_current_environment(env_type, name)
                 .map_err(|e| AppError::Config {
-                    message: format!("更新会话状态失败: {}", e)
+                    message: format!("更新会话状态失败: {}", e),
                 })?;
         }
 
         // 记录历史
         {
-            let mut history_manager = self.history_manager.lock()
-                .with_context("记录历史时锁定失败")?;
-            history_manager.record_switch(env_type, old_env, name.to_string(), reason)
+            let mut history_manager = self.history_manager.lock()?;
+            history_manager
+                .record_switch(env_type, old_env, name.to_string(), reason)
                 .map_err(|e| AppError::Internal {
-                    message: format!("记录切换历史失败: {}", e)
+                    message: format!("记录切换历史失败: {}", e),
                 })?;
         }
 
@@ -147,18 +142,15 @@ impl EnvironmentSwitcher {
         )?;
 
         let environments = {
-            let manager_guard = manager.lock()
-                .with_context("列出环境时锁定失败")?;
-            manager_guard.list()
-                .map_err(|e| AppError::Environment {
-                    message: format!("获取环境列表失败: {}", e)
-                })?
+            let manager_guard = manager.lock()?;
+            manager_guard.list().map_err(|e| AppError::Environment {
+                message: format!("获取环境列表失败: {}", e),
+            })?
         };
 
         // 获取当前环境
         let current_env = {
-            let session_manager = self.session_manager.lock()
-                .with_context("获取当前环境时锁定失败")?;
+            let session_manager = self.session_manager.lock()?;
             session_manager.get_current_environment(env_type).cloned()
         };
 
@@ -186,8 +178,7 @@ impl EnvironmentSwitcher {
                     "current": current_env,
                     "environments": environments
                 });
-                safe_to_json_pretty(&json_output)
-                    .with_context("序列化环境列表为JSON时失败")
+                Ok(safe_to_json_pretty(&json_output)?)
             }
         }
     }
@@ -209,16 +200,15 @@ impl EnvironmentSwitcher {
         // TODO: 实现配置解析逻辑
 
         let result = {
-            let mut manager_guard = manager.lock()
-                .with_context("添加环境时锁定失败")?;
+            let mut manager_guard = manager.lock()?;
 
             // Convert JSON Value to string for the object-safe interface
-            let config_str = safe_to_json(&config)
-                .with_context("序列化配置时失败")?;
+            let config_str = safe_to_json(&config)?;
 
-            manager_guard.add(name, &config_str)
+            manager_guard
+                .add(name, &config_str)
                 .map_err(|e| AppError::Environment {
-                    message: format!("添加环境失败: {}", e)
+                    message: format!("添加环境失败: {}", e),
                 })?;
 
             format!("Successfully added {} environment: {}", env_type, name)
@@ -240,29 +230,32 @@ impl EnvironmentSwitcher {
         )?;
 
         {
-            let mut manager_guard = manager.lock()
-                .with_context("删除环境时锁定失败")?;
-            manager_guard.remove(name)
+            let mut manager_guard = manager.lock()?;
+            manager_guard
+                .remove(name)
                 .map_err(|e| AppError::Environment {
-                    message: format!("删除环境失败: {}", e)
+                    message: format!("删除环境失败: {}", e),
                 })?;
         }
 
         // 如果删除的是当前环境，清除会话状态
         {
-            let mut session_manager = self.session_manager.lock()
-                .with_context("清除会话状态时锁定失败")?;
+            let mut session_manager = self.session_manager.lock()?;
             if let Some(current) = session_manager.get_current_environment(env_type) {
                 if current == name {
-                    session_manager.remove_current_environment(env_type)
+                    session_manager
+                        .remove_current_environment(env_type)
                         .map_err(|e| AppError::Config {
-                            message: format!("清除当前环境失败: {}", e)
+                            message: format!("清除当前环境失败: {}", e),
                         })?;
                 }
             }
         }
 
-        Ok(format!("Successfully removed {} environment: {}", env_type, name))
+        Ok(format!(
+            "Successfully removed {} environment: {}",
+            env_type, name
+        ))
     }
 
     /// 获取当前环境
@@ -278,11 +271,11 @@ impl EnvironmentSwitcher {
         )?;
 
         let (current_env, manager_guard) = {
-            let manager_guard = manager.lock()
-                .with_context("获取当前环境时锁定失败")?;
-            let current_env = manager_guard.get_current()
+            let manager_guard = manager.lock()?;
+            let current_env = manager_guard
+                .get_current()
                 .map_err(|e| AppError::Environment {
-                    message: format!("获取当前环境失败: {}", e)
+                    message: format!("获取当前环境失败: {}", e),
                 })?;
             (current_env, manager_guard)
         };
@@ -290,13 +283,24 @@ impl EnvironmentSwitcher {
         match output_format {
             OutputFormat::Text => {
                 if let Some(env_name) = current_env {
-                    if let Some(env_info) = manager_guard.get(&env_name).map_err(|e| AppError::Environment {
-                        message: format!("获取环境信息失败: {}", e)
-                    })? {
-                        Ok(format!("Current {} environment: {}\n{}\n",
-                            env_type, env_name, env_info.description.clone().unwrap_or_default()))
+                    if let Some(env_info) =
+                        manager_guard
+                            .get(&env_name)
+                            .map_err(|e| AppError::Environment {
+                                message: format!("获取环境信息失败: {}", e),
+                            })?
+                    {
+                        Ok(format!(
+                            "Current {} environment: {}\n{}\n",
+                            env_type,
+                            env_name,
+                            env_info.description.clone().unwrap_or_default()
+                        ))
                     } else {
-                        Ok(format!("Current {} environment: {} (details unavailable)\n", env_type, env_name))
+                        Ok(format!(
+                            "Current {} environment: {} (details unavailable)\n",
+                            env_type, env_name
+                        ))
                     }
                 } else {
                     Ok(format!("No current {} environment\n", env_type))
@@ -304,9 +308,13 @@ impl EnvironmentSwitcher {
             }
             OutputFormat::Json => {
                 let json_output = if let Some(env_name) = current_env {
-                    if let Some(env_info) = manager_guard.get(&env_name).map_err(|e| AppError::Environment {
-                        message: format!("获取环境信息失败: {}", e)
-                    })? {
+                    if let Some(env_info) =
+                        manager_guard
+                            .get(&env_name)
+                            .map_err(|e| AppError::Environment {
+                                message: format!("获取环境信息失败: {}", e),
+                            })?
+                    {
                         serde_json::json!({
                             "environment_type": env_type,
                             "name": env_name,
@@ -326,8 +334,7 @@ impl EnvironmentSwitcher {
                         "details": null
                     })
                 };
-                safe_to_json_pretty(&json_output)
-                    .with_context("序列化当前环境信息为JSON时失败")
+                Ok(safe_to_json_pretty(&json_output)?)
             }
         }
     }
@@ -337,24 +344,18 @@ impl EnvironmentSwitcher {
         &self,
         shell_type: ShellType,
     ) -> ContextualResult<String> {
-        let current_envs = {
-            let session_manager = self.session_manager.lock()
-                .with_context("生成shell集成脚本时锁定失败")?;
-            session_manager.get_all_current()
-        };
+        let current_envs = self.session_manager.lock()?.get_all_current().clone();
 
-        ScriptBuilder::build_integration_script(current_envs, shell_type)
-            .map_err(|e| AppError::ScriptGeneration {
-                shell_type: format!("{:?}", shell_type),
-                reason: e
-            })
+        let generator = ScriptGenerator::new().map_err(|e| AppError::ScriptGeneration {
+            shell_type: format!("{:?}", shell_type),
+            reason: e.to_string(),
+        })?;
+
+        Ok(generator.generate_integration_script(&current_envs, Some(shell_type))?)
     }
 
     /// 扫描环境
-    pub async fn scan_environments(
-        &self,
-        env_type: EnvironmentType,
-    ) -> ContextualResult<String> {
+    pub async fn scan_environments(&self, env_type: EnvironmentType) -> ContextualResult<String> {
         let manager = option_with_context(
             self.managers.get(&env_type),
             AppError::env_not_found(&format!("{:?}", env_type)),
@@ -362,19 +363,21 @@ impl EnvironmentSwitcher {
         )?;
 
         let found_envs = {
-            let manager_guard = manager.lock()
-                .with_context("扫描环境时锁定失败")?;
-            manager_guard.scan()
-                .map_err(|e| AppError::Environment {
-                    message: format!("扫描环境失败: {}", e)
-                })?
+            let manager_guard = manager.lock()?;
+            manager_guard.scan().map_err(|e| AppError::Environment {
+                message: format!("扫描环境失败: {}", e),
+            })?
         };
 
         let mut output = String::new();
         if found_envs.is_empty() {
             output.push_str(&format!("No {} environments found on system\n", env_type));
         } else {
-            output.push_str(&format!("Found {} {} environments:\n", found_envs.len(), env_type));
+            output.push_str(&format!(
+                "Found {} {} environments:\n",
+                found_envs.len(),
+                env_type
+            ));
             for env in found_envs {
                 output.push_str(&format!("  {}: {}\n", env.name, env.path));
             }
@@ -389,18 +392,23 @@ impl EnvironmentSwitcher {
         env_type: Option<EnvironmentType>,
         limit: usize,
     ) -> ContextualResult<String> {
-        let history = {
-            let history_manager = self.history_manager.lock()
-                .with_context("获取切换历史时锁定失败")?;
+        let history: Vec<SwitchHistory> = {
+            let history_manager = self.history_manager.lock()?;
 
             if let Some(env_type) = env_type {
-                history_manager.get_history_for_env(env_type)
+                // get_history_for_env returns Vec<&SwitchHistory>
+                // We need to convert the references to owned values
+                history_manager
+                    .get_history_for_env(env_type)
                     .into_iter()
                     .rev()
                     .take(limit)
+                    .map(|switch_history_ref| switch_history_ref.clone()) // Clone to get owned SwitchHistory
                     .collect()
             } else {
-                history_manager.get_recent_history(limit)
+                // get_recent_history returns &[SwitchHistory]
+                history_manager
+                    .get_recent_history(limit)
                     .iter()
                     .rev()
                     .cloned()
@@ -440,37 +448,53 @@ impl EnvironmentSwitcher {
         )?;
 
         {
-            let manager = manager_entry.lock()
-                .with_context("验证环境可用性时锁定失败")?;
-            if !manager.is_available(name).map_err(|e| AppError::Environment {
-                message: format!("检查环境可用性失败: {}", e)
-            })? {
+            let manager = manager_entry.lock()?;
+            if !manager
+                .is_available(name)
+                .map_err(|e| AppError::Environment {
+                    message: format!("检查环境可用性失败: {}", e),
+                })?
+            {
                 return Err(AppError::Environment {
-                    message: format!("{} environment '{}' not found", env_type, name)
-                }.with_context("设置默认环境").into());
+                    message: format!("{} environment '{}' not found", env_type, name),
+                }
+                .into());
             }
         }
 
         // 直接设置默认环境（不验证）
         let mut config = Config::load().map_err(|e| AppError::Config {
-            message: format!("加载配置失败: {}", e)
+            message: format!("加载配置失败: {}", e),
         })?;
 
         match env_type {
-            EnvironmentType::Java => config.set_default_java_env(name.to_string()).map_err(|e| AppError::Config {
-                message: format!("设置默认Java环境失败: {}", e)
-            })?,
-            EnvironmentType::Cc => config.set_default_cc_env(name.to_string()).map_err(|e| AppError::Config {
-                message: format!("设置默认CC环境失败: {}", e)
-            })?,
-            _ => return Err(AppError::Validation {
-                field: "env_type".to_string(),
-                reason: "Default environment support is currently only available for Java and CC".to_string(),
-            }.with_context("设置默认环境").into()),
+            EnvironmentType::Java => {
+                config
+                    .set_default_java_env(name.to_string())
+                    .map_err(|e| AppError::Config {
+                        message: format!("设置默认Java环境失败: {}", e),
+                    })?
+            }
+            EnvironmentType::Cc => {
+                config
+                    .set_default_cc_env(name.to_string())
+                    .map_err(|e| AppError::Config {
+                        message: format!("设置默认CC环境失败: {}", e),
+                    })?
+            }
+            _ => {
+                return Err(AppError::Validation {
+                    field: "env_type".to_string(),
+                    reason:
+                        "Default environment support is currently only available for Java and CC"
+                            .to_string(),
+                }
+                .into())
+            }
         }
 
         config.save().map_err(|e| AppError::Config {
-            message: format!("保存配置失败: {}", e)
+            message: format!("保存配置失败: {}", e),
         })?;
 
         Ok(format!("Set default {} environment: {}", env_type, name))
@@ -482,20 +506,25 @@ impl EnvironmentSwitcher {
         env_type: EnvironmentType,
     ) -> ContextualResult<String> {
         let mut config = Config::load().map_err(|e| AppError::Config {
-            message: format!("加载配置失败: {}", e)
+            message: format!("加载配置失败: {}", e),
         })?;
 
         match env_type {
             EnvironmentType::Java => config.clear_default_java_env(),
             EnvironmentType::Cc => config.clear_default_cc_env(),
-            _ => return Err(AppError::Validation {
-                field: "env_type".to_string(),
-                reason: "Default environment support is currently only available for Java and CC".to_string(),
-            }.with_context("清除默认环境").into()),
+            _ => {
+                return Err(AppError::Validation {
+                    field: "env_type".to_string(),
+                    reason:
+                        "Default environment support is currently only available for Java and CC"
+                            .to_string(),
+                }
+                .into())
+            }
         }
 
         config.save().map_err(|e| AppError::Config {
-            message: format!("保存配置失败: {}", e)
+            message: format!("保存配置失败: {}", e),
         })?;
 
         Ok(format!("Cleared default {} environment", env_type))
@@ -507,7 +536,7 @@ impl EnvironmentSwitcher {
         env_type: EnvironmentType,
     ) -> ContextualResult<Option<String>> {
         let config = Config::load().map_err(|e| AppError::Config {
-            message: format!("加载配置失败: {}", e)
+            message: format!("加载配置失败: {}", e),
         })?;
 
         let default_env = match env_type {
@@ -525,7 +554,7 @@ impl EnvironmentSwitcher {
         shell_type: Option<ShellType>,
     ) -> ContextualResult<SwitchResult> {
         let config = Config::load().map_err(|e| AppError::Config {
-            message: format!("加载配置失败: {}", e)
+            message: format!("加载配置失败: {}", e),
         })?;
 
         let default_env = match env_type {
@@ -535,7 +564,13 @@ impl EnvironmentSwitcher {
         };
 
         if let Some(default_env) = default_env {
-            self.switch_environment(env_type, &default_env, shell_type, Some("Switch to default environment".to_string())).await
+            self.switch_environment(
+                env_type,
+                &default_env,
+                shell_type,
+                Some("Switch to default environment".to_string()),
+            )
+            .await
         } else {
             Ok(SwitchResult {
                 name: "default".to_string(),
@@ -561,19 +596,16 @@ impl EnvironmentSwitcher {
 
         // 一次性加载配置，避免重复读取
         let config = Config::load().map_err(|e| AppError::Config {
-            message: format!("加载配置失败: {}", e)
+            message: format!("加载配置失败: {}", e),
         })?;
 
         let (environments, current_env) = {
-            let manager_guard = manager.lock()
-                .with_context("列出环境时锁定失败")?;
-            let environments = manager_guard.list()
-                .map_err(|e| AppError::Environment {
-                    message: format!("获取环境列表失败: {}", e)
-                })?;
+            let manager_guard = manager.lock()?;
+            let environments = manager_guard.list().map_err(|e| AppError::Environment {
+                message: format!("获取环境列表失败: {}", e),
+            })?;
             let current_env = {
-                let session_manager = self.session_manager.lock()
-                    .with_context("获取当前环境时锁定失败")?;
+                let session_manager = self.session_manager.lock()?;
                 session_manager.get_current_environment(env_type).cloned()
             };
             (environments, current_env)
@@ -599,8 +631,12 @@ impl EnvironmentSwitcher {
                         let is_default = default_env.as_ref().map_or(false, |def| def == &name);
 
                         let mut markers = Vec::new();
-                        if is_current { markers.push("current"); }
-                        if is_default { markers.push("default"); }
+                        if is_current {
+                            markers.push("current");
+                        }
+                        if is_default {
+                            markers.push("default");
+                        }
                         let marker_str = if markers.is_empty() {
                             String::new()
                         } else {
@@ -620,8 +656,7 @@ impl EnvironmentSwitcher {
                     "default": default_env,
                     "environments": environments
                 });
-                safe_to_json_pretty(&json_output)
-                    .with_context("序列化环境列表为JSON时失败")
+                Ok(safe_to_json_pretty(&json_output)?)
             }
         }
     }

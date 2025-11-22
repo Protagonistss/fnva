@@ -1,5 +1,5 @@
-use std::sync::{Arc, Mutex};
 use crate::error::{AppError, ContextualError, ErrorContext};
+use std::sync::{Arc, Mutex};
 
 /// 提供安全的 Mutex 操作，避免 unwrap()
 pub struct SafeMutex<T> {
@@ -17,35 +17,28 @@ impl<T> SafeMutex<T> {
 
     /// 安全地获取锁，如果锁定失败返回错误
     pub fn lock(&self) -> Result<std::sync::MutexGuard<T>, ContextualError> {
-        self.inner.lock().map_err(|_| {
-            ContextualError {
-                error: AppError::lock_failed(&format!("锁定失败: {}", self.name)),
-                context: ErrorContext {
-                    operation: format!("获取 {} 锁时发生死锁", self.name),
-                    suggestions: vec![
-                        "检查是否存在死锁".to_string(),
-                        "确保其他线程正确释放锁".to_string(),
-                    ],
-                    help_url: None,
-                },
-            }
+        self.inner.lock().map_err(|_| ContextualError {
+            error: AppError::lock_failed(&format!("锁定失败: {}", self.name)),
+            context: ErrorContext {
+                operation: format!("获取 {} 锁时发生死锁", self.name),
+                suggestions: vec![
+                    "检查是否存在死锁".to_string(),
+                    "确保其他线程正确释放锁".to_string(),
+                ],
+                help_url: None,
+            },
         })
     }
 
     /// 尝试获取锁，非阻塞
     pub fn try_lock(&self) -> Result<std::sync::MutexGuard<T>, ContextualError> {
-        self.inner.try_lock().map_err(|_| {
-            ContextualError {
-                error: AppError::lock_failed(&format!("无法获取锁: {}", self.name)),
-                context: ErrorContext {
-                    operation: format!("尝试获取 {} 锁时被占用", self.name),
-                    suggestions: vec![
-                        "稍后重试".to_string(),
-                        "检查锁的持有者".to_string(),
-                    ],
-                    help_url: None,
-                },
-            }
+        self.inner.try_lock().map_err(|_| ContextualError {
+            error: AppError::lock_failed(&format!("无法获取锁: {}", self.name)),
+            context: ErrorContext {
+                operation: format!("尝试获取 {} 锁时被占用", self.name),
+                suggestions: vec!["稍后重试".to_string(), "检查锁的持有者".to_string()],
+                help_url: None,
+            },
         })
     }
 }
@@ -61,18 +54,15 @@ impl<T> Clone for SafeMutex<T> {
 
 /// 提供安全的路径转换，避免 unwrap()
 pub fn safe_path_to_str(path: &std::path::Path) -> Result<&str, AppError> {
-    path.to_str().ok_or_else(|| {
-        AppError::path_conversion_failed(&format!("{:?}", path))
-    })
+    path.to_str()
+        .ok_or_else(|| AppError::path_conversion_failed(&format!("{:?}", path)))
 }
 
 /// 提供安全的路径字符串转换
 pub fn safe_path_to_string(path: &std::path::Path) -> Result<String, AppError> {
     path.to_str()
         .map(|s| s.to_string())
-        .ok_or_else(|| {
-            AppError::path_conversion_failed(&format!("{:?}", path))
-        })
+        .ok_or_else(|| AppError::path_conversion_failed(&format!("{:?}", path)))
 }
 
 /// 安全的 JSON 序列化
@@ -90,20 +80,8 @@ pub fn safe_from_json<T: for<'de> serde::Deserialize<'de>>(json: &str) -> Result
     serde_json::from_str(json).map_err(Into::into)
 }
 
-/// 为Result添加上下文信息的辅助函数
-pub fn with_context<T, E: Into<AppError>>(
-    result: Result<T, E>,
-    operation: &str,
-) -> Result<T, ContextualError> {
-    result.map_err(|e| ContextualError {
-        error: e.into(),
-        context: ErrorContext {
-            operation: operation.to_string(),
-            suggestions: Vec::new(),
-            help_url: None,
-        },
-    })
-}
+/// 为Result添加上下文信息的辅助函数（使用app_error模块的版本）
+pub use crate::error::app_error::with_context;
 
 /// 为Option添加上下文信息的辅助函数
 pub fn option_with_context<T>(

@@ -1,0 +1,45 @@
+# Cognitive complexity threshold
+cognitive-complexity-threshold = 15
+
+# Lines threshold
+too-many-lines-threshold = 100
+
+# Type complexity threshold
+type-complexity-threshold = 250
+
+# Allowed lints
+allow = [
+    "clippy::module_name_repetitions",
+    "clippy::must_use_candidate",
+    "clippy::missing_errors_doc",
+]
+
+# Disallowed lints (to promote stricter coding standards)
+deny = [
+    "clippy::all",
+    "clippy::pedantic",
+    "clippy::nursery",
+    "clippy::cargo",
+]
+
+# Specific warnings
+warn = [
+    "clippy::unimplemented",
+    "clippy::todo",
+    "clippy::unreachable",
+    "clippy::panic",
+    "clippy::expect_used",
+    "clippy::unwrap_used",
+    "clippy::indexing_slicing",
+    "clippy::match_same_arms",
+    "clippy::redundant_clone",
+    "clippy::cast_possible_truncation",
+]
+
+# Allow specific pedantic lints
+allow-pedantic = [
+    "clippy::module_name_repetitions",
+    "clippy::missing-errors-doc",
+    "clippy::must_use_candidate",
+    "clippy::cast_possible_truncation",
+]
