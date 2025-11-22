@@ -168,19 +168,35 @@ impl JavaInstaller {
     ) -> Result<String, String> {
         let pb = crate::infrastructure::installer::utils::create_progress_bar().unwrap_or_else(|_| {
             // If progress bar creation fails, create a simple one
-            indicatif::ProgressBar::new_spinner()
+            let pb = indicatif::ProgressBar::new_spinner();
+            pb.set_style(
+                indicatif::ProgressStyle::default_spinner()
+                    .template("{spinner:.green} {msg}")
+                    .unwrap()
+                    .progress_chars("=>-")
+            );
+            pb
         });
 
-        // Wrap callback in Arc/Mutex or ensure Send+Sync?
-        // The trait requires Send+Sync for callback.
-        // indicatif ProgressBar is Send+Sync (usually, via Arc internally).
+        // 克隆进度条以便在回调中使用
+        let pb_clone = pb.clone();
 
         let target = downloader
             .download_java(
                 version_info,
                 platform,
-                Box::new(move |_downloaded, _total| {
-                    // Progress callback - temporarily simplified
+                Box::new(move |downloaded, total| {
+                    if total > 0 {
+                        // 设置总长度并更新进度
+                        if pb_clone.length().unwrap_or(0) == 0 {
+                            pb_clone.set_length(total);
+                        }
+                        pb_clone.set_position(downloaded);
+                    } else {
+                        // 如果未知总大小，显示下载的字节数
+                        pb_clone.set_message(format!("已下载: {} MB", downloaded / (1024 * 1024)));
+                        pb_clone.tick();
+                    }
                 }),
             )
             .await

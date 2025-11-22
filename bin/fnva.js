@@ -3,6 +3,7 @@
 const { spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const EncodingUtils = require('../lib/encoding-utils');
 
 function resolvePlatform() {
   switch (process.platform) {
@@ -132,21 +133,18 @@ function removeAutoFlag(args) {
 function createTempScriptFile(script, envType, envName) {
   try {
     const os = require('os');
-    const fs = require('fs');
     const path = require('path');
 
-    const tempDir = os.tmpdir();
-    const scriptFile = path.join(tempDir, `fnva_${envType}_${envName}_${Date.now()}.ps1`);
-
-    fs.writeFileSync(scriptFile, script, 'utf8');
+    const prefix = `fnva_${envType}_${envName}`;
+    const scriptFile = EncodingUtils.createTempPowerShellScript(script, prefix);
 
     console.log('');
-    console.log('💡 环境已切换到当前进程。要在新的 PowerShell 窗口中使用此环境，运行：');
+    console.log('[INFO] 环境已切换到当前进程。要在新的 PowerShell 窗口中使用此环境，运行：');
     console.log(`   ${scriptFile}`);
     console.log('   或者: fnva', envType, 'use', envName, '--auto');
 
   } catch (error) {
-    console.warn('⚠️  无法创建临时脚本文件:', error.message);
+    console.warn('[WARN] 无法创建临时脚本文件:', error.message);
   }
 }
 
@@ -208,18 +206,18 @@ function applyEnvironmentVariables(envVars) {
 }
 
 function displaySuccessMessage(envType, envName, envVars) {
-  console.log(`✅ Switched to ${envType} environment: ${envName}`);
+  console.log(`[OK] Switched to ${envType} environment: ${envName}`);
 
   if (envVars.JAVA_HOME) {
-    console.log(`📁 JAVA_HOME: ${envVars.JAVA_HOME}`);
+    console.log(`[DIR] JAVA_HOME: ${envVars.JAVA_HOME}`);
   }
 
   if (envVars.ANTHROPIC_AUTH_TOKEN) {
-    console.log(`🔑 ANTHROPIC_AUTH_TOKEN: [已设置]`);
+    console.log(`[KEY] ANTHROPIC_AUTH_TOKEN: [已设置]`);
   }
 
   if (envVars.OPENAI_API_KEY) {
-    console.log(`🔑 OPENAI_API_KEY: [已设置]`);
+    console.log(`[KEY] OPENAI_API_KEY: [已设置]`);
   }
 }
 
@@ -227,7 +225,8 @@ function generateSimpleScript(envVars, envType, envName) {
   const lines = [];
 
   if (process.platform === 'win32') {
-    // Windows PowerShell
+    // Windows PowerShell - 使用编码工具设置
+    lines.push(EncodingUtils.generatePowerShellEncodingSetup());
     lines.push(`Write-Host "Switched to ${envType} environment: ${envName}" -ForegroundColor Green`);
 
     if (envVars.JAVA_HOME) {
@@ -381,6 +380,9 @@ function handleNodeOnlyMode(args) {
 }
 
 function run() {
+  // 设置Windows控制台编码
+  EncodingUtils.setWindowsConsoleEncoding();
+
   const binaryPath = buildBinaryPath();
 
   if (!binaryPath) {
@@ -432,11 +434,11 @@ function run() {
 
     if (result.error) {
       if (result.error.code === 'EACCES' && process.platform !== 'win32') {
-        console.error(`❌ Permission denied. The fnva binary is not executable.`);
-        console.error(`💡 To fix this, run: sudo chmod +x "${binaryPath}"`);
-        console.error(`   Or reinstall: npm install -g fnva --force`);
+        console.error(`[ERROR] Permission denied. The fnva binary is not executable.`);
+        console.error(`[INFO] To fix this, run: sudo chmod +x "${binaryPath}"`);
+        console.error(`[INFO] Or reinstall: npm install -g fnva --force`);
       } else {
-        console.error(`Failed to execute fnva: ${result.error.message}`);
+        console.error(`[ERROR] Failed to execute fnva: ${result.error.message}`);
       }
       process.exit(result.status ?? 1);
     }
@@ -456,16 +458,16 @@ function run() {
       // Windows：默认不启动新的会话；可通过 --session 开启旧行为
       if (process.platform === 'win32') {
         if (hasSessionFlag(args)) {
-          console.log(`✅ Switched to ${envType} environment: ${envName}`);
-          console.log(`🚀 Starting new PowerShell session with ${envName} environment...`);
+          console.log(`[OK] Switched to ${envType} environment: ${envName}`);
+          console.log(`[INFO] Starting new PowerShell session with ${envName} environment...`);
           console.log(`Type "exit" to return to previous session\n`);
 
           try {
             const os = require('os');
-            const fs = require('fs');
             const tempScript = os.tmpdir() + '\\fnva_env_' + Date.now() + '.ps1';
             const fullScript = script + '\n';
-            fs.writeFileSync(tempScript, fullScript, 'utf8');
+            // 使用编码工具写入文件
+            EncodingUtils.writeFileWithEncoding(tempScript, fullScript);
             const { spawn } = require('child_process');
             const ps = spawn('powershell', ['-NoExit', '-ExecutionPolicy', 'Bypass', '-File', tempScript], {
               stdio: 'inherit',
@@ -473,7 +475,7 @@ function run() {
             });
             ps.on('exit', () => {
               try { fs.unlinkSync(tempScript); } catch (_) {}
-              console.log('👋 Returned to original session');
+              console.log('[INFO] Returned to original session');
             });
             return;
           } catch (error) {
@@ -501,7 +503,8 @@ function run() {
 
               try {
                 const tempFile = path.join(os.tmpdir(), `fnva_auto_${Date.now()}.ps1`);
-                fs.writeFileSync(tempFile, simpleScript, 'utf8');
+                // 使用编码工具写入文件
+                EncodingUtils.writeFileWithEncoding(tempFile, simpleScript);
 
                 // 使用 PowerShell 执行脚本
                 spawn('powershell', ['-ExecutionPolicy', 'Bypass', '-File', tempFile], {
@@ -511,10 +514,10 @@ function run() {
                   try { fs.unlinkSync(tempFile); } catch (_) {}
                 });
 
-                console.log('✅ 环境已自动切换');
+                console.log('[OK] 环境已自动切换');
                 return;
               } catch (error) {
-                console.warn('⚠️  自动执行失败，回退到脚本输出');
+                console.warn('[WARN] 自动执行失败，回退到脚本输出');
               }
             }
 
@@ -524,9 +527,9 @@ function run() {
         }
       } else {
         // Unix-like systems: 显示使用说明
-        console.log(`✅ Switched to ${envType} environment: ${envName}`);
+        console.log(`[OK] Switched to ${envType} environment: ${envName}`);
         console.log('');
-        console.log('💡 To apply this environment, run:');
+        console.log('[INFO] To apply this environment, run:');
         console.log(`  node bin/fnva.js ${args.join(' ')} | bash`);
       }
     } else {
@@ -548,11 +551,11 @@ function run() {
 
     if (result.error) {
       if (result.error.code === 'EACCES' && process.platform !== 'win32') {
-        console.error(`❌ Permission denied. The fnva binary is not executable.`);
-        console.error(`💡 To fix this, run: sudo chmod +x "${binaryPath}"`);
-        console.error(`   Or reinstall: npm install -g fnva --force`);
+        console.error(`[ERROR] Permission denied. The fnva binary is not executable.`);
+        console.error(`[INFO] To fix this, run: sudo chmod +x "${binaryPath}"`);
+        console.error(`[INFO] Or reinstall: npm install -g fnva --force`);
       } else {
-        console.error(`Failed to execute fnva: ${result.error.message}`);
+        console.error(`[ERROR] Failed to execute fnva: ${result.error.message}`);
       }
       process.exit(result.status ?? 1);
     }
