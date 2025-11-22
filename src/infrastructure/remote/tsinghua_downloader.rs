@@ -2,10 +2,11 @@ use reqwest;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use super::{download::download_to_bytes, platform::Platform};
+use super::{download::download_to_file, platform::Platform};
 use super::java_downloader::{JavaDownloader, DownloadTarget, DownloadError};
 use super::UnifiedJavaVersion;
 use super::DownloadSource;
+use super::mirror_utils;
 
 /// Mirror download entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -70,27 +71,6 @@ impl TsinghuaJavaDownloader {
     }
 
 
-    /// Get download URL for platform with mirror-first and GitHub fallback
-    async fn pick_available_url(&self, entry: &DownloadSource) -> Result<String, String> {
-        // Prefer mirror first
-        if self.is_url_available(&entry.primary).await {
-            return Ok(entry.primary.clone());
-        }
-
-        if let Some(fallback) = &entry.fallback {
-            println!("-> Mirror unavailable, falling back to GitHub");
-            return Ok(fallback.clone());
-        }
-
-        Err("Primary and fallback download url unavailable".to_string())
-    }
-
-    async fn is_url_available(&self, url: &str) -> bool {
-        match self.client.head(url).send().await {
-            Ok(resp) => resp.status().is_success(),
-            Err(_) => false,
-        }
-    }
 }
 
 impl Default for TsinghuaJavaDownloader {
@@ -125,14 +105,30 @@ impl JavaDownloader for TsinghuaJavaDownloader {
             let key = platform_clone.key();
 
             if let Some(entry) = version_clone.download_urls.get(&key) {
-                return self.pick_available_url(entry).await.map_err(DownloadError::from);
+                match mirror_utils::pick_available_url(&self.client, entry).await {
+                    Ok(url) => {
+                        if url != entry.primary {
+                            println!("-> Mirror unavailable, falling back to GitHub");
+                        }
+                        return Ok(url);
+                    }
+                    Err(e) => return Err(DownloadError::from(e)),
+                }
             }
     
             // Try similar OS even if arch key differs
             for (platform_key, entry) in version_clone.download_urls.iter() {
                 if platform_key.starts_with(&platform_clone.os) {
                     println!("-> Using closest platform match: {} -> {}", platform_key, key);
-                    return self.pick_available_url(entry).await.map_err(DownloadError::from);
+                    match mirror_utils::pick_available_url(&self.client, entry).await {
+                        Ok(url) => {
+                            if url != entry.primary {
+                                println!("-> Mirror unavailable, falling back to GitHub");
+                            }
+                            return Ok(url);
+                        }
+                        Err(e) => return Err(DownloadError::from(e)),
+                    }
                 }
             }
     
@@ -156,10 +152,59 @@ impl JavaDownloader for TsinghuaJavaDownloader {
             println!("-> Downloading Java {} from mirror...", version_clone.version);
             println!("-> URL: {}", url);
 
-            let bytes = download_to_bytes(&self.client, &url, |d, t| progress_callback(d, t)).await
-                .map_err(DownloadError::from)?;
-            println!("<- Downloaded size: {} MB", bytes.len() / (1024 * 1024));
-            Ok(DownloadTarget::Bytes(bytes))
+            // 创建持久化文件路径而不是临时目录
+            let cache_dir = dirs::home_dir()
+                .ok_or_else(|| DownloadError::Io("无法获取用户主目录".to_string()))?
+                .join(".fnva")
+                .join("cache")
+                .join("downloads");
+            
+            // 确保缓存目录存在
+            tokio::fs::create_dir_all(&cache_dir).await
+                .map_err(|e| DownloadError::Io(format!("创建缓存目录失败: {}", e)))?;
+
+            let extension = platform_clone.archive_ext();
+            let file_name = format!("OpenJDK-{}-{}.{}-tsinghua.{}", 
+                version_clone.version, 
+                platform_clone.os, 
+                platform_clone.arch,
+                extension);
+            let file_path = cache_dir.join(&file_name);
+
+            // 如果文件已存在且大小正确，跳过下载
+            if let Ok(metadata) = tokio::fs::metadata(&file_path).await {
+                let file_size = metadata.len();
+                if file_size > 0 {
+                    println!("-> 使用已存在的文件: {} MB", file_size / (1024 * 1024));
+                    return Ok(DownloadTarget::File(file_path.to_string_lossy().to_string()));
+                }
+            }
+
+            download_to_file(&self.client, &url, &file_path, |d, t| progress_callback(d, t)).await
+                .map_err(|e| DownloadError::from(format!("下载失败: {}", e)))?;
+            
+            let file_size = tokio::fs::metadata(&file_path).await
+                .map_err(|e| DownloadError::Io(format!("获取文件大小失败: {}", e)))?
+                .len();
+            println!("<- Downloaded size: {} MB", file_size / (1024 * 1024));
+            
+            // 验证文件确实存在
+            if !file_path.exists() {
+                return Err(DownloadError::Io(format!("下载的文件不存在: {:?}", file_path)));
+            }
+            
+            // 使用规范化路径，确保在 Windows 上正确处理
+            let canonical_path = file_path.canonicalize()
+                .map_err(|e| DownloadError::Io(format!("无法获取规范路径: {}", e)))?;
+            
+            let path_str = canonical_path.to_str()
+                .ok_or_else(|| DownloadError::Io("路径包含无效字符".to_string()))?
+                .to_string();
+            
+            println!("-> 文件保存位置: {}", path_str);
+            
+            // 返回持久化文件路径
+            Ok(DownloadTarget::File(path_str))
         })
     }
 }

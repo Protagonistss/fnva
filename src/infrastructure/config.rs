@@ -20,6 +20,9 @@ pub struct Config {
     /// Java 版本缓存配置
     #[serde(default)]
     pub java_version_cache: JavaVersionCache,
+    /// 下载配置
+    #[serde(default)]
+    pub download: DownloadConfig,
     /// 当前激活的 Java 环境名称
     #[serde(default)]
     pub current_java_env: Option<String>,
@@ -90,6 +93,46 @@ pub struct JavaVersionCache {
     /// 是否启用缓存
     #[serde(default = "default_cache_enabled")]
     pub enabled: bool,
+}
+
+/// 下载配置
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct DownloadConfig {
+    /// 重试次数
+    #[serde(default = "default_retry_count")]
+    pub retry_count: u32,
+    /// 初始重试延迟（毫秒）
+    #[serde(default = "default_retry_delay_ms")]
+    pub retry_delay_ms: u64,
+    /// 是否使用指数退避
+    #[serde(default = "default_exponential_backoff")]
+    pub exponential_backoff: bool,
+    /// 连接超时时间（秒）
+    #[serde(default = "default_connect_timeout_sec")]
+    pub connect_timeout_sec: u64,
+    /// 读取超时时间（秒）
+    #[serde(default = "default_read_timeout_sec")]
+    pub read_timeout_sec: u64,
+}
+
+fn default_retry_count() -> u32 {
+    3
+}
+
+fn default_retry_delay_ms() -> u64 {
+    1000
+}
+
+fn default_exponential_backoff() -> bool {
+    true
+}
+
+fn default_connect_timeout_sec() -> u64 {
+    30
+}
+
+fn default_read_timeout_sec() -> u64 {
+    300
 }
 
 fn default_cache_ttl() -> u64 {
@@ -238,6 +281,7 @@ impl Config {
             java_versions_path: None,
         },
             java_version_cache: JavaVersionCache::default(),
+            download: DownloadConfig::default(),
             current_java_env: None,
             default_java_env: None,
             default_cc_env: None,

@@ -1,9 +1,6 @@
 use crate::config::Config;
-use indicatif::{ProgressBar, ProgressStyle};
 use std::fs;
 use std::path::Path;
-use std::process::Command;
-use tempfile::TempDir;
 use crate::infrastructure::remote::{JavaDownloader, UnifiedJavaVersion, Platform};
 
 /// Java 安装管理器
@@ -149,7 +146,6 @@ impl JavaInstaller {
         platform: &Platform,
         env_name: &str,
     ) -> Result<String, String> {
-        let temp_dir = TempDir::new().map_err(|e| format!("创建临时目录失败: {}", e))?;
         let pb = crate::infrastructure::installer::utils::create_progress_bar();
         let pb_clone = pb.clone();
         
@@ -174,19 +170,17 @@ impl JavaInstaller {
             .map_err(|e| format!("下载失败: {:?}", e))?;
         pb.finish_with_message("下载完成");
 
-        let extension = platform.archive_ext();
-        let file_name = format!("OpenJDK-{}-{}.{}", version_info.version, platform.os, extension);
-        let file_path = temp_dir.path().join(&file_name);
-
-        match target {
-            crate::remote::DownloadTarget::Bytes(data) => {
-                tokio::fs::write(&file_path, data).await.map_err(|e| format!("写入文件失败: {}", e))?
-            }
+        // 下载器现在直接下载到文件，避免内存占用
+        let file_path = match target {
             crate::remote::DownloadTarget::File(p) => {
-                let from = std::path::Path::new(&p);
-                tokio::fs::copy(from, &file_path).await.map_err(|e| format!("复制文件失败: {}", e))?;
+                // 文件已经下载完成，直接使用
+                std::path::PathBuf::from(p)
             }
-        }
+            crate::remote::DownloadTarget::Bytes(_) => {
+                // 保留对旧实现的兼容性（虽然现在不会用到）
+                return Err("不支持内存下载模式，请使用文件下载".to_string());
+            }
+        };
 
         let java_home = Self::install_archive(&file_path, &version_info.version, env_name).await?;
 

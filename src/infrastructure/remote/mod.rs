@@ -8,6 +8,7 @@ pub mod tsinghua_downloader;
 pub mod cache;
 pub mod java_downloader;
 pub mod version_registry;
+pub mod mirror_utils;
 
 pub use repositories::*;
 pub use remote_manager::*;

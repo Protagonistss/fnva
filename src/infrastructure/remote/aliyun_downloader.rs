@@ -1,12 +1,12 @@
 use reqwest;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use super::{download::download_to_bytes, platform::Platform};
+use super::{download::download_to_file, platform::Platform};
 use super::java_downloader::{JavaDownloader, DownloadTarget, DownloadError};
 use super::UnifiedJavaVersion;
 use super::DownloadSource;
 use super::GitHubJavaDownloader;
+use super::mirror_utils;
 
 /// 阿里云镜像下载器：基于 GitHub 版本信息构造镜像 URL，并在镜像失效时自动回退。
 pub struct AliyunJavaDownloader {
@@ -122,26 +122,6 @@ impl AliyunJavaDownloader {
         Ok(versions)
     }
 
-    async fn pick_available_url(&self, entry: &DownloadSource) -> Result<String, String> {
-        // 优先阿里云镜像，可用即返回
-        if self.is_url_available(&entry.primary).await {
-            return Ok(entry.primary.clone());
-        }
-
-        if let Some(fallback) = &entry.fallback {
-            println!("↩️  镜像不可用，回退 GitHub");
-            return Ok(fallback.clone());
-        }
-
-        Err("镜像与备用地址均不可用".to_string())
-    }
-
-    async fn is_url_available(&self, url: &str) -> bool {
-        match self.client.head(url).send().await {
-            Ok(resp) => resp.status().is_success(),
-            Err(_) => false,
-        }
-    }
 }
 
 impl Default for AliyunJavaDownloader {
@@ -176,14 +156,30 @@ impl JavaDownloader for AliyunJavaDownloader {
             let key = platform_clone.key();
 
             if let Some(entry) = version_clone.download_urls.get(&key) {
-                return self.pick_available_url(entry).await.map_err(DownloadError::from);
+                match mirror_utils::pick_available_url(&self.client, entry).await {
+                    Ok(url) => {
+                        if url != entry.primary {
+                            println!("↩️  镜像不可用，回退 GitHub");
+                        }
+                        return Ok(url);
+                    }
+                    Err(e) => return Err(DownloadError::from(e)),
+                }
             }
 
             // 允许同 OS 任意架构兜底
             for (platform_key, entry) in version_clone.download_urls.iter() {
                 if platform_key.starts_with(&platform_clone.os) {
                     println!("⚠️  使用邻近平台包: {} -> {}", platform_key, key);
-                    return self.pick_available_url(entry).await.map_err(DownloadError::from);
+                    match mirror_utils::pick_available_url(&self.client, entry).await {
+                        Ok(url) => {
+                            if url != entry.primary {
+                                println!("↩️  镜像不可用，回退 GitHub");
+                            }
+                            return Ok(url);
+                        }
+                        Err(e) => return Err(DownloadError::from(e)),
+                    }
                 }
             }
 
@@ -207,10 +203,74 @@ impl JavaDownloader for AliyunJavaDownloader {
             println!("⬇️  下载 Java {}...", version_clone.version);
             println!("📥 地址: {}", url);
 
-            let bytes = download_to_bytes(&self.client, &url, |d, t| progress_callback(d, t)).await
-                .map_err(DownloadError::from)?;
-            println!("✓ 下载完成，大小: {} MB", bytes.len() / (1024 * 1024));
-            Ok(DownloadTarget::Bytes(bytes))
+            // 创建持久化文件路径而不是临时目录
+            let cache_dir = dirs::home_dir()
+                .ok_or_else(|| DownloadError::Io("无法获取用户主目录".to_string()))?
+                .join(".fnva")
+                .join("cache")
+                .join("downloads");
+            
+            // 确保缓存目录存在
+            tokio::fs::create_dir_all(&cache_dir).await
+                .map_err(|e| DownloadError::Io(format!("创建缓存目录失败: {}", e)))?;
+
+            let extension = platform_clone.archive_ext();
+            let file_name = format!("OpenJDK-{}-{}.{}-aliyun.{}", 
+                version_clone.version, 
+                platform_clone.os, 
+                platform_clone.arch,
+                extension);
+            let file_path = cache_dir.join(&file_name);
+
+            // 如果文件已存在且大小正确，跳过下载
+            if let Ok(metadata) = tokio::fs::metadata(&file_path).await {
+                let file_size = metadata.len();
+                if file_size > 0 {
+                    println!("-> 使用已存在的文件: {} MB", file_size / (1024 * 1024));
+                    
+                    // 验证文件确实存在
+                    if !file_path.exists() {
+                        return Err(DownloadError::Io(format!("缓存文件不存在: {:?}", file_path)));
+                    }
+                    
+                    // 使用规范化路径，确保在 Windows 上正确处理
+                    let canonical_path = file_path.canonicalize()
+                        .map_err(|e| DownloadError::Io(format!("无法获取规范路径: {}", e)))?;
+                    
+                    let path_str = canonical_path.to_str()
+                        .ok_or_else(|| DownloadError::Io("路径包含无效字符".to_string()))?
+                        .to_string();
+                    
+                    println!("-> 文件保存位置: {}", path_str);
+                    return Ok(DownloadTarget::File(path_str));
+                }
+            }
+
+            download_to_file(&self.client, &url, &file_path, |d, t| progress_callback(d, t)).await
+                .map_err(|e| DownloadError::from(format!("下载失败: {}", e)))?;
+            
+            let file_size = tokio::fs::metadata(&file_path).await
+                .map_err(|e| DownloadError::Io(format!("获取文件大小失败: {}", e)))?
+                .len();
+            println!("✓ 下载完成，大小: {} MB", file_size / (1024 * 1024));
+            
+            // 验证文件确实存在
+            if !file_path.exists() {
+                return Err(DownloadError::Io(format!("下载的文件不存在: {:?}", file_path)));
+            }
+            
+            // 使用规范化路径，确保在 Windows 上正确处理
+            let canonical_path = file_path.canonicalize()
+                .map_err(|e| DownloadError::Io(format!("无法获取规范路径: {}", e)))?;
+            
+            let path_str = canonical_path.to_str()
+                .ok_or_else(|| DownloadError::Io("路径包含无效字符".to_string()))?
+                .to_string();
+            
+            println!("-> 文件保存位置: {}", path_str);
+            
+            // 返回持久化文件路径
+            Ok(DownloadTarget::File(path_str))
         })
     }
 }
