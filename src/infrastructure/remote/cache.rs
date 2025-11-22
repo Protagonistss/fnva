@@ -4,8 +4,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use tokio::fs as async_fs;
 
-use super::{GitHubJavaVersion, TsinghuaJavaVersion, AliyunJavaVersion};
-
 /// 缓存条目
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheEntry<T> {

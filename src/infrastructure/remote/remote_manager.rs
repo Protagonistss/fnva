@@ -1,8 +1,10 @@
 use reqwest;
 use serde::{Deserialize, Serialize};
 use crate::environments::java::VersionManager;
+use super::{JavaDownloader, UnifiedJavaVersion, DownloadError};
+use super::Platform;
 
-/// Java 版本信息
+/// Java 版本信息 (API 输出用)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JavaVersionInfo {
     pub version: String,
@@ -105,6 +107,21 @@ impl RemoteManager {
         &mut self.version_manager
     }
 
+    /// 内部辅助：获取对应的下载器实例
+    fn get_downloader_for_repo(repo_url: Option<&str>) -> Box<dyn JavaDownloader> {
+        let repo = repo_url.unwrap_or("");
+        let use_tsinghua = repo.contains("tuna.tsinghua.edu.cn") || repo.is_empty(); // 默认为清华源
+        let use_aliyun = repo.contains("aliyun");
+
+        if use_tsinghua {
+            Box::new(crate::remote::TsinghuaJavaDownloader::new())
+        } else if use_aliyun {
+            Box::new(crate::remote::AliyunJavaDownloader::new())
+        } else {
+            Box::new(crate::remote::GitHubJavaDownloader::new())
+        }
+    }
+
     /// 查询可用的 Java 版本列表，优先根据 repo_url 选择阿里云或 GitHub。
     pub async fn list_java_versions(
         &mut self,
@@ -115,71 +132,11 @@ impl RemoteManager {
     ) -> Result<Vec<JavaVersionInfo>, String> {
         println!("查询 Java 版本信息...");
 
-        let platform = crate::remote::Platform::current();
-        let repo = repo_url.unwrap_or("");
-        let use_tsinghua = repo.contains("tuna.tsinghua.edu.cn") || repo.is_empty();
-        let use_aliyun = repo.contains("aliyun");
+        let platform = Platform::current();
+        let downloader = Self::get_downloader_for_repo(repo_url);
 
-        if use_tsinghua {
-            let downloader = crate::remote::TsinghuaJavaDownloader::new();
-            let versions = downloader.list_available_versions().await?;
-            let filtered = versions.into_iter()
-                .filter(|v| feature_version.map_or(true, |mv| v.major == mv))
-                .collect::<Vec<_>>();
-
-            if filtered.is_empty() {
-                return Err(feature_version.map_or_else(
-                    || "未找到可用版本".to_string(),
-                    |mv| format!("未找到 Java {}", mv),
-                ));
-            }
-
-            let mut result = Vec::new();
-            for version in filtered {
-                let download_url = downloader.get_download_url(&version, &platform).await.ok();
-                result.push(JavaVersionInfo {
-                    version: version.version.clone(),
-                    major: Some(version.major),
-                    minor: version.minor,
-                    patch: version.patch,
-                    release_name: version.release_name.clone(),
-                    download_url,
-                });
-            }
-            return Ok(result);
-        }
-
-        if use_aliyun {
-            let downloader = crate::remote::AliyunJavaDownloader::new();
-            let versions = downloader.list_available_versions().await?;
-            let filtered = versions.into_iter()
-                .filter(|v| feature_version.map_or(true, |mv| v.major == mv))
-                .collect::<Vec<_>>();
-
-            if filtered.is_empty() {
-                return Err(feature_version.map_or_else(
-                    || "未找到可用版本".to_string(),
-                    |mv| format!("未找到 Java {}", mv),
-                ));
-            }
-
-            let mut result = Vec::new();
-            for version in filtered {
-                let download_url = downloader.get_download_url(&version, &platform).await.ok();
-                result.push(JavaVersionInfo {
-                    version: version.version.clone(),
-                    major: Some(version.major),
-                    minor: version.minor,
-                    patch: version.patch,
-                    release_name: version.release_name.clone(),
-                    download_url,
-                });
-            }
-            return Ok(result);
-        }
-
-        let downloader = crate::remote::GitHubJavaDownloader::new();
-        let versions = downloader.list_available_versions().await?;
+        let versions = downloader.list_available_versions().await.map_err(|e| format!("{:?}", e))?;
+        
         let filtered = versions.into_iter()
             .filter(|v| feature_version.map_or(true, |mv| v.major == mv))
             .collect::<Vec<_>>();
@@ -193,7 +150,7 @@ impl RemoteManager {
 
         let mut result = Vec::new();
         for version in filtered {
-            let download_url = downloader.get_download_url(&version, &platform.os, &platform.arch).await.ok();
+            let download_url = downloader.get_download_url(&version, &platform).await.ok();
             result.push(JavaVersionInfo {
                 version: version.version.clone(),
                 major: Some(version.major),
@@ -203,7 +160,6 @@ impl RemoteManager {
                 download_url,
             });
         }
-
         Ok(result)
     }
 

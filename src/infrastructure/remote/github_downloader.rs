@@ -2,6 +2,9 @@ use reqwest;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use super::java_downloader::{JavaDownloader, DownloadTarget, DownloadError};
+use super::UnifiedJavaVersion;
+use super::DownloadSource;
+use super::platform::Platform;
 
 /// GitHub Java 发行版信息（从 jdk 仓库获取）
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -23,20 +26,6 @@ pub struct GitHubAsset {
     pub content_type: String,
 }
 
-/// Java 版本信息
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GitHubJavaVersion {
-    pub version: String,
-    pub major: u32,
-    pub minor: Option<u32>,
-    pub patch: Option<u32>,
-    pub tag_name: String,
-    pub release_name: String,
-    pub download_urls: HashMap<String, String>, // os-arch -> download_url
-    pub is_lts: bool,
-    pub published_at: String,
-}
-
 /// GitHub Java 下载器
 pub struct GitHubJavaDownloader {
     client: reqwest::Client,
@@ -52,8 +41,60 @@ impl GitHubJavaDownloader {
         }
     }
 
-    /// 获取可用的 Java 版本列表（从多个 Adoptium 仓库）
-    pub async fn list_available_versions(&self) -> Result<Vec<GitHubJavaVersion>, String> {
+    /// 从 GitHub 发行版解析版本信息
+    fn parse_version_from_release(&self, release: &GitHubJavaRelease) -> Result<UnifiedJavaVersion, String> {
+        let tag_name = &release.tag_name;
+
+        // adoptium/jdk 的标签格式可能是：jdk-17.0.8+7, jdk-11.0.23+9 等
+        let version_part = if let Some(version) = tag_name.strip_prefix("jdk-") {
+            version
+        } else {
+            return Err(format!("无效的标签格式: {}", tag_name));
+        };
+
+        // 移除构建号部分，如 "17.0.8+7" -> "17.0.8"
+        let clean_version = version_part.split('+').next().unwrap_or(version_part);
+
+        let version_parts: Vec<&str> = clean_version.split('.').collect();
+        if version_parts.len() < 2 {
+            return Err("版本格式无效".to_string());
+        }
+
+        let major = version_parts[0].parse::<u32>()
+            .map_err(|_| "无效的主版本号")?;
+        let minor = version_parts.get(1).and_then(|s| s.parse::<u32>().ok());
+        let patch = version_parts.get(2).and_then(|s| s.parse::<u32>().ok());
+
+        // 判断是否为 LTS 版本
+        let is_lts = [8, 11, 17, 21, 25].contains(&major);
+
+        // 解析下载链接
+        let mut download_urls = HashMap::new();
+
+        for asset in &release.assets {
+            if let Some((os, arch)) = Platform::parse_from_filename(&asset.name) {
+                download_urls.insert(format!("{}-{}", os, arch), DownloadSource {
+                    primary: asset.browser_download_url.clone(),
+                    fallback: None
+                });
+            }
+        }
+
+        Ok(UnifiedJavaVersion {
+            version: clean_version.to_string(),
+            major,
+            minor,
+            patch,
+            release_name: release.name.clone(),
+            tag_name: tag_name.clone(),
+            download_urls,
+            is_lts,
+            published_at: release.published_at.clone(),
+            checksums: None, // GitHub API 不直接返回 checksum，后续可以增强
+        })
+    }
+
+    async fn list_versions_internal(&self) -> Result<Vec<UnifiedJavaVersion>, DownloadError> {
         let registry_only = crate::infrastructure::config::Config::load()
             .map(|c| c.java_download_sources.registry_only)
             .unwrap_or(false);
@@ -70,9 +111,12 @@ impl GitHubJavaDownloader {
                         e.tag_name,
                         filename
                     );
-                    download_urls.insert(k.clone(), url);
+                    download_urls.insert(k.clone(), DownloadSource {
+                        primary: url,
+                        fallback: None
+                    });
                 }
-                result.push(GitHubJavaVersion {
+                result.push(UnifiedJavaVersion {
                     version: e.version.clone(),
                     major: e.major,
                     minor,
@@ -82,26 +126,28 @@ impl GitHubJavaDownloader {
                     download_urls,
                     is_lts: e.lts,
                     published_at: "registry".to_string(),
+                    checksums: None,
                 });
             }
             return Ok(result);
         }
-        if registry_only { return Err("registry-only: version registry not found".to_string()); }
+        if registry_only { return Err(DownloadError::from("registry-only: version registry not found".to_string())); }
         println!("🔍 正在从 GitHub 查询可用的 Java 版本...");
 
         let ttl = crate::infrastructure::config::Config::load()
             .map(|c| c.java_version_cache.ttl)
             .unwrap_or(3600);
         let cache = crate::remote::cache::VersionCacheManager::new()
-            .map_err(|e| format!("初始化缓存失败: {}", e))?
+            .map_err(|e| DownloadError::from(format!("初始化缓存失败: {}", e)))?
             .with_ttl(ttl);
-        if let Ok(Some(cached)) = cache.load::<Vec<GitHubJavaVersion>>(&crate::remote::cache::CacheKeys::java_versions_github()).await {
+        if let Ok(Some(cached)) = cache.load::<Vec<UnifiedJavaVersion>>(&crate::remote::cache::CacheKeys::java_versions_github()).await {
             println!("📖 使用缓存的 GitHub 版本列表");
             return Ok(cached);
         }
 
         // 尝试多个 Adoptium GitHub 仓库
         let repositories = vec![
+            "adoptium/temurin25-binaries",
             "adoptium/temurin21-binaries",
             "adoptium/temurin17-binaries",
             "adoptium/temurin11-binaries",
@@ -122,7 +168,7 @@ impl GitHubJavaDownloader {
                 .header("Accept", "application/vnd.github.v3+json")
                 .send()
                 .await
-                .map_err(|e| format!("请求 GitHub API 失败: {}", e))?;
+                .map_err(|e| DownloadError::from(format!("请求 GitHub API 失败: {}", e)))?;
 
             if !response.status().is_success() {
                 println!("⚠️  仓库 {} 访问失败: {}", repo, response.status());
@@ -170,289 +216,6 @@ impl GitHubJavaDownloader {
         let _ = cache.save(&crate::remote::cache::CacheKeys::java_versions_github(), &all_versions, None).await;
         Ok(all_versions)
     }
-
-    /// 根据操作系统和架构获取下载链接
-    pub async fn get_download_url(
-        &self,
-        version: &GitHubJavaVersion,
-        os: &str,
-        arch: &str
-    ) -> Result<String, String> {
-        let key = format!("{}-{}", os, arch);
-
-        if let Some(url) = version.download_urls.get(&key) {
-            return Ok(url.clone());
-        }
-
-        // 尝试匹配相似的配置
-        for (platform_key, url) in &version.download_urls {
-            if platform_key.starts_with(os) {
-                println!("⚠️  使用相似的架构: {} -> {}", platform_key, key);
-                return Ok(url.clone());
-            }
-        }
-
-        Err(format!("未找到适合 {}-{} 的下载链接", os, arch))
-    }
-
-    /// 下载指定版本的 Java
-    pub async fn download_java(
-        &self,
-        version: &GitHubJavaVersion,
-        os: &str,
-        arch: &str,
-        progress_callback: impl Fn(u64, u64),
-    ) -> Result<Vec<u8>, String> {
-        let download_url = self.get_download_url(version, os, arch).await?;
-
-        println!("📥 正在下载 Java {}...", version.version);
-        println!("🔗 下载地址: {}", download_url);
-
-        let response = self.client
-            .get(&download_url)
-            .header("User-Agent", "fnva/0.0.5")
-            .send()
-            .await
-            .map_err(|e| format!("下载请求失败: {}", e))?;
-
-        if !response.status().is_success() {
-            return Err(format!("下载失败: {}", response.status()));
-        }
-
-        let total_size = response.content_length().unwrap_or(0);
-        let mut downloaded = 0u64;
-        let mut data = Vec::new();
-
-        let mut stream = response.bytes_stream();
-        use futures_util::StreamExt;
-
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|e| format!("下载流错误: {}", e))?;
-            data.extend_from_slice(&chunk);
-            downloaded += chunk.len() as u64;
-            progress_callback(downloaded, total_size);
-        }
-
-        println!("✅ 下载完成，大小: {} MB", data.len() / (1024 * 1024));
-        Ok(data)
-    }
-
-    /// 从 GitHub 发行版解析版本信息
-    fn parse_version_from_release(&self, release: &GitHubJavaRelease) -> Result<GitHubJavaVersion, String> {
-        let tag_name = &release.tag_name;
-
-        // adoptium/jdk 的标签格式可能是：jdk-17.0.8+7, jdk-11.0.23+9 等
-        let version_part = if let Some(version) = tag_name.strip_prefix("jdk-") {
-            version
-        } else {
-            return Err(format!("无效的标签格式: {}", tag_name));
-        };
-
-        // 移除构建号部分，如 "17.0.8+7" -> "17.0.8"
-        let clean_version = version_part.split('+').next().unwrap_or(version_part);
-
-        let version_parts: Vec<&str> = clean_version.split('.').collect();
-        if version_parts.len() < 2 {
-            return Err("版本格式无效".to_string());
-        }
-
-        let major = version_parts[0].parse::<u32>()
-            .map_err(|_| "无效的主版本号")?;
-        let minor = version_parts.get(1).and_then(|s| s.parse::<u32>().ok());
-        let patch = version_parts.get(2).and_then(|s| s.parse::<u32>().ok());
-
-        // 判断是否为 LTS 版本
-        let is_lts = [8, 11, 17, 21].contains(&major);
-
-        // 解析下载链接
-        let mut download_urls = HashMap::new();
-
-        for asset in &release.assets {
-            if let Some((os, arch)) = self.parse_os_arch_from_filename(&asset.name) {
-                download_urls.insert(format!("{}-{}", os, arch), asset.browser_download_url.clone());
-            }
-        }
-
-        Ok(GitHubJavaVersion {
-            version: clean_version.to_string(),
-            major,
-            minor,
-            patch,
-            tag_name: tag_name.clone(),
-            release_name: release.name.clone(),
-            download_urls,
-            is_lts,
-            published_at: release.published_at.clone(),
-        })
-    }
-
-    /// 从文件名解析操作系统和架构
-    fn parse_os_arch_from_filename(&self, filename: &str) -> Option<(String, String)> {
-        let filename_lower = filename.to_lowercase();
-
-        // 解析操作系统
-        let os = if filename_lower.contains("windows") || filename_lower.contains("win") {
-            "windows"
-        } else if filename_lower.contains("mac") || filename_lower.contains("darwin") {
-            "macos"
-        } else if filename_lower.contains("linux") {
-            "linux"
-        } else {
-            return None;
-        };
-
-        // 解析架构
-        let arch = if filename_lower.contains("x64") || filename_lower.contains("x86_64") {
-            "x64"
-        } else if filename_lower.contains("aarch64") || filename_lower.contains("arm64") {
-            "aarch64"
-        } else if filename_lower.contains("x86") || filename_lower.contains("i686") {
-            "x86"
-        } else {
-            return None;
-        };
-
-        Some((os.to_string(), arch.to_string()))
-    }
-
-
-    /// 根据版本规格查找版本
-    pub async fn find_version_by_spec(
-        &self,
-        spec: &str
-    ) -> Result<GitHubJavaVersion, String> {
-        let registry_only = crate::infrastructure::config::Config::load()
-            .map(|c| c.java_download_sources.registry_only)
-            .unwrap_or(false);
-        if let Ok(reg) = crate::remote::VersionRegistry::load() {
-            if let Some(e) = reg.find(spec) {
-                let (minor, patch) = crate::remote::version_registry::split_version(&e.version);
-                let mut download_urls = HashMap::new();
-                let iter = e.assets_github.as_ref().unwrap_or(&e.assets);
-                for (k, filename) in iter.iter() {
-                    let url = format!(
-                        "https://github.com/adoptium/temurin{}-binaries/releases/download/{}/{}",
-                        e.major,
-                        e.tag_name,
-                        filename
-                    );
-                    download_urls.insert(k.clone(), url);
-                }
-                return Ok(GitHubJavaVersion {
-                    version: e.version.clone(),
-                    major: e.major,
-                    minor,
-                    patch,
-                    tag_name: e.tag_name.clone(),
-                    release_name: format!("Eclipse Temurin JDK {}", e.version),
-                    download_urls,
-                    is_lts: e.lts,
-                    published_at: "registry".to_string(),
-                });
-            }
-        }
-        if registry_only { return Err("registry-only: version not found in registry".to_string()); }
-        let versions = self.list_available_versions().await?;
-
-        let spec_cleaned = spec.trim().to_lowercase()
-            .replace("v", "")      // 移除 v 前缀
-            .replace("jdk", "")    // 移除 jdk 前缀
-            .replace("java", "")   // 移除 java 前缀
-            .trim()                // 清理前后空格
-            .to_string();
-
-        if spec_cleaned == "lts" || spec_cleaned == "latest-lts" {
-            // 返回最新的 LTS 版本
-            for version in versions {
-                if version.is_lts {
-                    return Ok(version);
-                }
-            }
-            return Err("未找到 LTS 版本".to_string());
-        } else if spec_cleaned == "latest" || spec_cleaned == "newest" {
-            // 返回最新版本
-            return versions.into_iter().next()
-                .ok_or("未找到可用版本".to_string());
-        }
-
-        // 尝试解析为主版本号或完整版本号
-        let parts: Vec<&str> = spec_cleaned.split('.').filter(|p| !p.is_empty()).collect();
-        
-        if !parts.is_empty() && parts[0].parse::<u32>().is_ok() {
-            if parts.len() == 1 {
-                // 主版本号输入（如 "8"）- LTS优先策略
-                let major = parts[0].parse::<u32>().unwrap();
-                
-                // 首先查找该主版本的LTS版本，按版本号倒序（最新版本优先）
-                let mut lts_versions: Vec<&GitHubJavaVersion> = versions.iter()
-                    .filter(|v| v.major == major && v.is_lts)
-                    .collect();
-                
-                // 按版本号排序（从新到旧）
-                lts_versions.sort_by(|a, b| {
-                    let a_parts: Vec<&str> = a.version.split('.').collect();
-                    let b_parts: Vec<&str> = b.version.split('.').collect();
-                    b_parts.cmp(&a_parts) // 倒序
-                });
-                
-                if let Some(latest_lts) = lts_versions.first() {
-                    return Ok((**latest_lts).clone());
-                }
-                
-                // 如果没有LTS版本，返回该主版本的最新版本
-                let mut major_versions: Vec<&GitHubJavaVersion> = versions.iter()
-                    .filter(|v| v.major == major)
-                    .collect();
-                
-                // 按版本号排序（从新到旧）
-                major_versions.sort_by(|a, b| {
-                    let a_parts: Vec<&str> = a.version.split('.').collect();
-                    let b_parts: Vec<&str> = b.version.split('.').collect();
-                    b_parts.cmp(&a_parts) // 倒序
-                });
-                
-                if let Some(latest) = major_versions.first() {
-                    return Ok((**latest).clone());
-                }
-                
-                return Err(format!("未找到 Java {}", major));
-            } else {
-                // 完整版本号输入（如 "8.0.2"）- 精确匹配优先
-                let full_version = parts.join(".");
-                
-                // 首先尝试精确匹配
-                for version in &versions {
-                    if version.version == full_version ||
-                       version.version.replace('-', ".") == full_version ||
-                       version.tag_name.contains(&full_version) ||
-                       version.release_name.to_lowercase().contains(&full_version) {
-                        return Ok(version.clone());
-                    }
-                }
-                
-                // 精确匹配失败，尝试主版本匹配
-                let major = parts[0].parse::<u32>().unwrap();
-                for version in &versions {
-                    if version.major == major {
-                        return Ok(version.clone());
-                    }
-                }
-                
-                return Err(format!("未找到版本: {}", spec));
-            }
-        }
-
-        // 尝试直接字符串匹配（向后兼容）
-        for version in versions {
-            if version.version == spec_cleaned || 
-               version.tag_name == spec_cleaned ||
-               version.release_name.to_lowercase().contains(&spec_cleaned) {
-                return Ok(version);
-            }
-        }
-
-        Err(format!("未找到版本: {}", spec))
-    }
 }
 
 impl Default for GitHubJavaDownloader {
@@ -462,47 +225,64 @@ impl Default for GitHubJavaDownloader {
 }
 
 impl JavaDownloader for GitHubJavaDownloader {
-    type Version = GitHubJavaVersion;
-
-    fn version_string(&self, version: &Self::Version) -> String {
-        version.version.clone()
+    fn list_available_versions(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<UnifiedJavaVersion>, DownloadError>> + Send + '_>> {
+        Box::pin(self.list_versions_internal())
     }
 
-    fn list_available_versions(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<Self::Version>, DownloadError>> + Send + '_>> {
-        let fut = self.list_available_versions();
-        Box::pin(async move { fut.await.map_err(DownloadError::from) })
-    }
-
-    fn find_version_by_spec<'a, 'b>(&'a self, spec: &'b str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Self::Version, DownloadError>> + Send + 'a>> {
-        let spec_owned = spec.to_string();
-        Box::pin(async move { self.find_version_by_spec(&spec_owned).await.map_err(DownloadError::from) })
+    fn find_version_by_spec<'a, 'b>(&'a self, spec: &'b str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<UnifiedJavaVersion, DownloadError>> + Send + 'a>> 
+    {
+        let spec_string = spec.to_string();
+        Box::pin(async move {
+            let versions = self.list_versions_internal().await?;
+            crate::infrastructure::installer::utils::pick_best_version(versions, &spec_string)
+        })
     }
 
     fn get_download_url<'a, 'b, 'c>(
         &'a self,
-        version: &'b Self::Version,
-        platform: &'c super::platform::Platform,
+        version: &'b UnifiedJavaVersion,
+        platform: &'c Platform,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, DownloadError>> + Send + 'a>> {
-        let os = platform.os.clone();
-        let arch = platform.arch.clone();
-        let version_cloned = version.clone();
-        Box::pin(async move { self.get_download_url(&version_cloned, &os, &arch).await.map_err(DownloadError::from) })
+        // Clone to avoid lifetime issues in async block
+        let version_clone = version.clone();
+        let platform_clone = platform.clone();
+        
+        Box::pin(async move {
+            let key = platform_clone.key();
+            if let Some(source) = version_clone.download_urls.get(&key) {
+                return Ok(source.primary.clone());
+            }
+            // 尝试匹配相似的配置
+            for (platform_key, source) in &version_clone.download_urls {
+                if platform_key.starts_with(&platform_clone.os) {
+                    println!("⚠️  使用相似的架构: {} -> {}", platform_key, key);
+                    return Ok(source.primary.clone());
+                }
+            }
+            Err(DownloadError::from(format!("未找到适合 {}-{} 的下载链接", platform_clone.os, platform_clone.arch)))
+        })
     }
 
     fn download_java<'a, 'b, 'c>(
         &'a self,
-        version: &'b Self::Version,
-        platform: &'c super::platform::Platform,
-        progress_callback: Box<dyn Fn(u64, u64) + Send>,
+        version: &'b UnifiedJavaVersion,
+        platform: &'c Platform,
+        progress_callback: Box<dyn Fn(u64, u64) + Send + Sync>,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<DownloadTarget, DownloadError>> + Send + 'a>> {
-        let os = platform.os.clone();
-        let arch = platform.arch.clone();
-        let version_cloned = version.clone();
+        // Clone to avoid lifetime issues in async block
+        let version_clone = version.clone();
+        let platform_clone = platform.clone();
+        
         Box::pin(async move {
-            let bytes = self
-                .download_java(&version_cloned, &os, &arch, move |d, t| (progress_callback)(d, t))
-                .await
+            let url = self.get_download_url(&version_clone, &platform_clone).await?;
+            
+            println!("📥 正在下载 Java {}...", version_clone.version);
+            println!("🔗 下载地址: {}", url);
+
+            let bytes = crate::remote::download::download_to_bytes(&self.client, &url, |c, t| progress_callback(c, t)).await
                 .map_err(DownloadError::from)?;
+                
+            println!("✅ 下载完成，大小: {} MB", bytes.len() / (1024 * 1024));
             Ok(DownloadTarget::Bytes(bytes))
         })
     }
