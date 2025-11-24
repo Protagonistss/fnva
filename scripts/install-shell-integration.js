@@ -77,11 +77,11 @@ fnva() {
         local temp_file=\$(mktemp)
         chmod +x "\$temp_file"
 
-        FNVA_AUTO_MODE=1 fnva "\$@" > "\$temp_file"
+        FNVA_AUTO_MODE=1 command fnva "\$@" > "\$temp_file"
         source "\$temp_file"
         rm -f "\$temp_file"
     else
-        FNVA_AUTO_MODE=1 fnva "\$@"
+        FNVA_AUTO_MODE=1 command fnva "\$@"
     fi
 }
 `;
@@ -94,11 +94,11 @@ function fnva
     if test (count \$argv) -ge 2; and string match -q -r "^(java|llm|cc)\$" \$argv[1]; and test \$argv[2] = "use"
         set temp_file (mktemp)
         chmod +x \$temp_file
-        env FNVA_AUTO_MODE=1 fnva \$argv > \$temp_file
+        env FNVA_AUTO_MODE=1 command fnva \$argv > \$temp_file
         source \$temp_file
         rm -f \$temp_file
     else
-        env FNVA_AUTO_MODE=1 fnva \$argv
+        env FNVA_AUTO_MODE=1 command fnva \$argv
     end
 end
 `;
