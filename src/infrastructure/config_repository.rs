@@ -71,11 +71,13 @@ impl Default for GlobalSettings {
 }
 
 /// 基于文件的配置仓储实现
+#[allow(dead_code)] // 兼容保留：当前未用到缓存，避免编译警告
 pub struct FileSystemConfigRepository {
     config_dir: PathBuf,
     cache: Arc<RwLock<HashMap<String, String>>>,
 }
 
+#[allow(dead_code)] // 兼容保留未使用的方法
 impl FileSystemConfigRepository {
     /// 创建新的文件系统配置仓储
     pub fn new(config_dir: PathBuf) -> Result<Self, AppError> {

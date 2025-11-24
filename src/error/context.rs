@@ -16,7 +16,7 @@ impl<T> SafeMutex<T> {
     }
 
     /// 安全地获取锁，如果锁定失败返回错误
-    pub fn lock(&self) -> Result<std::sync::MutexGuard<T>, ContextualError> {
+    pub fn lock(&self) -> Result<std::sync::MutexGuard<'_, T>, ContextualError> {
         self.inner.lock().map_err(|_| ContextualError {
             error: AppError::lock_failed(&format!("锁定失败: {}", self.name)),
             context: ErrorContext {
@@ -31,7 +31,7 @@ impl<T> SafeMutex<T> {
     }
 
     /// 尝试获取锁，非阻塞
-    pub fn try_lock(&self) -> Result<std::sync::MutexGuard<T>, ContextualError> {
+    pub fn try_lock(&self) -> Result<std::sync::MutexGuard<'_, T>, ContextualError> {
         self.inner.try_lock().map_err(|_| ContextualError {
             error: AppError::lock_failed(&format!("无法获取锁: {}", self.name)),
             context: ErrorContext {

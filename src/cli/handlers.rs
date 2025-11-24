@@ -13,19 +13,25 @@ pub struct CommandHandler {
 impl CommandHandler {
     /// 创建新的命令处理器
     pub fn new() -> Result<Self, String> {
-        let mut switcher = EnvironmentSwitcher::new()?;
+        let mut switcher = EnvironmentSwitcher::new().map_err(|e| e.to_string())?;
 
         // 注册 Java 环境管理器
         let java_manager = crate::environments::java::JavaEnvironmentManager::new();
-        switcher.register_manager(Arc::new(Mutex::new(java_manager)));
+        switcher
+            .register_manager(Arc::new(Mutex::new(java_manager)))
+            .map_err(|e| e.to_string())?;
 
         // 注册 LLM 环境管理器
         let llm_manager = crate::environments::llm::LlmEnvironmentManager::new();
-        switcher.register_manager(Arc::new(Mutex::new(llm_manager)));
+        switcher
+            .register_manager(Arc::new(Mutex::new(llm_manager)))
+            .map_err(|e| e.to_string())?;
 
         // 注册 CC 环境管理器
         let cc_manager = crate::environments::cc::CcEnvironmentManager::new();
-        switcher.register_manager(Arc::new(Mutex::new(cc_manager)));
+        switcher
+            .register_manager(Arc::new(Mutex::new(cc_manager)))
+            .map_err(|e| e.to_string())?;
 
         Ok(Self { switcher })
     }

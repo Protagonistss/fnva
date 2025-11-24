@@ -220,8 +220,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_script_generator() {
+    #[test]
+    fn test_script_generator() {
         let generator = ScriptGenerator::new().unwrap();
 
         let config = json!({
@@ -229,9 +229,8 @@ mod tests {
         });
 
         // 测试生成脚本（可能因为环境不同而失败）
-        let _result = generator
-            .generate_switch_script(EnvironmentType::Java, "test", &config, None)
-            .await;
+        let _result =
+            generator.generate_switch_script(EnvironmentType::Java, "test", &config, None);
     }
 
     #[test]

@@ -1,5 +1,6 @@
 use crate::core::environment_manager::{DynEnvironment, EnvironmentManager, EnvironmentType};
-use crate::infrastructure::config::CcEnvironment as ConfigCcEnvironment;
+use crate::core::session::SessionManager;
+use crate::infrastructure::config::{CcEnvironment as ConfigCcEnvironment, Config};
 use crate::infrastructure::shell::ScriptGenerator;
 use crate::infrastructure::shell::ShellType;
 use serde_json;
@@ -27,10 +28,9 @@ impl CcEnvironmentManager {
 
     /// 从配置文件加载 CC 环境
     fn load_from_config(&mut self) -> Result<(), String> {
-        use crate::infrastructure::config::Config;
-
         let config = Config::load()?;
 
+        self.environments.clear();
         for env in &config.cc_environments {
             let cc_env = ConfigCcEnvironment {
                 name: env.name.clone(),
@@ -119,16 +119,46 @@ impl EnvironmentManager for CcEnvironmentManager {
             model: model.to_string(),
         };
 
+        // 持久化到配置文件
+        let mut file_config = Config::load().map_err(|e| format!("Failed to load config: {}", e))?;
+        if let Some(existing) = file_config
+            .cc_environments
+            .iter_mut()
+            .find(|env| env.name == name)
+        {
+            existing.provider = provider.to_string();
+            existing.api_key = api_key.to_string();
+            existing.base_url = base_url.to_string();
+            existing.model = model.to_string();
+            existing.description = description.to_string();
+        } else {
+            file_config.cc_environments.push(cc_environment.clone());
+        }
+        file_config
+            .save()
+            .map_err(|e| format!("Failed to save config: {}", e))?;
+
         self.environments.insert(name.to_string(), cc_environment);
         Ok(())
     }
 
     fn remove(&mut self, name: &str) -> Result<(), String> {
-        if self.environments.remove(name).is_some() {
-            Ok(())
-        } else {
-            Err(format!("CC environment '{}' not found", name))
+        if self.environments.remove(name).is_none() {
+            return Err(format!("CC environment '{}' not found", name));
         }
+
+        let mut config = Config::load().map_err(|e| format!("Failed to load config: {}", e))?;
+        let original_len = config.cc_environments.len();
+        config.cc_environments.retain(|env| env.name != name);
+        if config.cc_environments.len() == original_len {
+            return Err(format!("CC environment '{}' not found", name));
+        }
+
+        config
+            .save()
+            .map_err(|e| format!("Failed to save config: {}", e))?;
+
+        Ok(())
     }
 
     fn use_env(&mut self, name: &str, shell_type: Option<ShellType>) -> Result<String, String> {
@@ -200,12 +230,18 @@ impl EnvironmentManager for CcEnvironmentManager {
     }
 
     fn get_current(&self) -> Result<Option<String>, String> {
-        // Check environment variables to determine current CC
+        // Session 优先
+        if let Ok(session) = SessionManager::new() {
+            if let Some(current) = session.get_current_environment(EnvironmentType::Cc) {
+                return Ok(Some(current.clone()));
+            }
+        }
+
+        // 兜底：检查环境变量
         if let (Ok(auth_token), Ok(base_url)) = (
             std::env::var("ANTHROPIC_AUTH_TOKEN"),
             std::env::var("ANTHROPIC_BASE_URL"),
         ) {
-            // Try to identify which environment based on variables
             for (name, cc_env) in &self.environments {
                 let env_token = cc_env.resolve_env_var(&cc_env.api_key);
                 let env_base_url = cc_env.resolve_env_var(&cc_env.base_url);
@@ -215,6 +251,7 @@ impl EnvironmentManager for CcEnvironmentManager {
                 }
             }
         }
+
         Ok(None)
     }
 

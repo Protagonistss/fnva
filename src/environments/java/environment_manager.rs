@@ -1,6 +1,7 @@
 use crate::core::environment_manager::{
     DynEnvironment, EnvironmentInfo, EnvironmentManager, EnvironmentType,
 };
+use crate::core::session::SessionManager;
 use crate::environments::java::scanner::JavaScanner;
 use crate::infrastructure::shell::ScriptGenerator;
 use crate::infrastructure::shell::ShellType;
@@ -399,6 +400,13 @@ impl EnvironmentManager for JavaEnvironmentManager {
     }
 
     fn get_current(&self) -> Result<Option<String>, String> {
+        // Session 优先
+        if let Ok(session) = SessionManager::new() {
+            if let Some(current) = session.get_current_environment(EnvironmentType::Java) {
+                return Ok(Some(current.clone()));
+            }
+        }
+
         // Check environment variable JAVA_HOME to determine current
         if let Ok(java_home) = std::env::var("JAVA_HOME") {
             // Normalize the JAVA_HOME path for comparison

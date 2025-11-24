@@ -1,3 +1,5 @@
+#![allow(dead_code, deprecated)] // 兼容旧接口：保留但避免警告，推荐使用 ScriptGenerator
+
 use crate::core::environment_manager::EnvironmentType;
 use crate::infrastructure::shell::script_factory::ScriptGenerator;
 use crate::infrastructure::shell::ShellType;

@@ -1,4 +1,6 @@
 use crate::core::environment_manager::{DynEnvironment, EnvironmentManager, EnvironmentType};
+use crate::core::session::SessionManager;
+use crate::infrastructure::config::{Config, LlmEnvironment as ConfigLlmEnvironment};
 use crate::infrastructure::shell::ScriptGenerator;
 use crate::infrastructure::shell::ShellType;
 use serde_json;
@@ -29,10 +31,9 @@ impl LlmEnvironmentManager {
 
     /// 从配置文件加载 LLM 环境
     fn load_from_config(&mut self) -> Result<(), String> {
-        use crate::infrastructure::config::Config;
-
         let config = Config::load()?;
 
+        self.environments.clear();
         for env in &config.llm_environments {
             let llm_env = LlmEnvironment {
                 name: env.name.clone(),
@@ -108,6 +109,12 @@ impl EnvironmentManager for LlmEnvironmentManager {
             .and_then(|v| v.as_str())
             .unwrap_or("gpt-3.5-turbo");
 
+        let temperature = config.get("temperature").and_then(|v| v.as_f64());
+        let max_tokens = config
+            .get("max_tokens")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u32);
+
         let default_desc = format!("LLM: {} ({})", name, model);
         let description = config
             .get("description")
@@ -124,16 +131,58 @@ impl EnvironmentManager for LlmEnvironmentManager {
             model: model.to_string(),
         };
 
+        // 持久化到配置文件
+        let mut file_config = Config::load().map_err(|e| format!("Failed to load config: {}", e))?;
+        if let Some(existing) = file_config
+            .llm_environments
+            .iter_mut()
+            .find(|env| env.name == name)
+        {
+            existing.provider = provider.to_string();
+            existing.api_key = api_key.to_string();
+            existing.base_url = base_url.to_string();
+            existing.model = model.to_string();
+            existing.description = description.to_string();
+            existing.temperature = temperature;
+            existing.max_tokens = max_tokens;
+        } else {
+            file_config.llm_environments.push(ConfigLlmEnvironment {
+                name: name.to_string(),
+                provider: provider.to_string(),
+                api_key: api_key.to_string(),
+                base_url: base_url.to_string(),
+                model: model.to_string(),
+                temperature,
+                max_tokens,
+                description: description.to_string(),
+            });
+        }
+
+        file_config
+            .save()
+            .map_err(|e| format!("Failed to save config: {}", e))?;
+
         self.environments.insert(name.to_string(), llm_environment);
         Ok(())
     }
 
     fn remove(&mut self, name: &str) -> Result<(), String> {
-        if self.environments.remove(name).is_some() {
-            Ok(())
-        } else {
-            Err(format!("LLM environment '{}' not found", name))
+        if self.environments.remove(name).is_none() {
+            return Err(format!("LLM environment '{}' not found", name));
         }
+
+        let mut config = Config::load().map_err(|e| format!("Failed to load config: {}", e))?;
+        let original_len = config.llm_environments.len();
+        config.llm_environments.retain(|env| env.name != name);
+        if config.llm_environments.len() == original_len {
+            return Err(format!("LLM environment '{}' not found", name));
+        }
+
+        config
+            .save()
+            .map_err(|e| format!("Failed to save config: {}", e))?;
+
+        Ok(())
     }
 
     fn use_env(&mut self, name: &str, shell_type: Option<ShellType>) -> Result<String, String> {
@@ -182,17 +231,24 @@ impl EnvironmentManager for LlmEnvironmentManager {
     }
 
     fn get_current(&self) -> Result<Option<String>, String> {
-        // Check environment variables to determine current LLM
+        // Session 为主
+        if let Ok(session) = SessionManager::new() {
+            if let Some(current) = session.get_current_environment(EnvironmentType::Llm) {
+                return Ok(Some(current.clone()));
+            }
+        }
+
+        // 兜底：根据环境变量推测
         if let Ok(_api_key) = std::env::var("OPENAI_API_KEY") {
-            // Try to identify which environment based on other variables
             for (name, llm_env) in &self.environments {
                 if let Ok(current_api_key) = std::env::var("OPENAI_API_KEY") {
-                    if current_api_key == llm_env.api_key {
+                    if current_api_key == llm_env.resolve_env_var(&llm_env.api_key) {
                         return Ok(Some(name.clone()));
                     }
                 }
             }
         }
+
         Ok(None)
     }
 
