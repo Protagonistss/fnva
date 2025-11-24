@@ -11,126 +11,121 @@ function detectShell() {
   return process.env.SHELL?.split('/').pop() || 'bash';
 }
 
-function getShellConfigPath(shell) {
+function getShellConfigPaths(shell) {
   switch (shell) {
     case 'powershell':
-      return path.join(process.env.USERPROFILE || os.homedir(), 'Documents', 'WindowsPowerShell', 'Microsoft.PowerShell_profile.ps1');
+      return [path.join(process.env.USERPROFILE || os.homedir(), 'Documents', 'WindowsPowerShell', 'Microsoft.PowerShell_profile.ps1')];
     case 'bash':
-      return path.join(os.homedir(), '.bashrc');
+      return [path.join(os.homedir(), '.bashrc')];
     case 'zsh':
-      return path.join(os.homedir(), '.zshrc');
+      return [
+        path.join(os.homedir(), '.zshrc'),
+        path.join(os.homedir(), '.oh-my-zsh', 'custom', '.zshrc'),
+      ];
     case 'fish':
-      return path.join(os.homedir(), '.config', 'fish', 'config.fish');
+      return [path.join(os.homedir(), '.config', 'fish', 'config.fish')];
     default:
-      return null;
+      return [];
   }
+}
+
+function cleanConfigFile(cfgPath) {
+  let content = fs.readFileSync(cfgPath, 'utf8');
+  const originalContent = content;
+
+  const marker = '# fnva 自动化函数 - 用 npm 安装自动添加';
+  const startIndex = content.indexOf(marker);
+
+  if (startIndex !== -1) {
+    const beforeMarker = content.substring(0, startIndex).trimEnd();
+    const afterMarker = content.substring(startIndex);
+    const lines = afterMarker.split('\n');
+
+    let functionEndIndex = -1;
+    let braceCount = 0;
+    let foundFunction = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (line.includes('function fnva') || line.includes('fnva(')) {
+        foundFunction = true;
+      }
+
+      if (foundFunction) {
+        for (const char of line) {
+          if (char === '{') braceCount++;
+          if (char === '}') braceCount--;
+        }
+        if (braceCount === 0) {
+          functionEndIndex = i + 1;
+          break;
+        }
+      }
+    }
+
+    if (functionEndIndex !== -1) {
+      const afterFunction = lines.slice(functionEndIndex).join('\n');
+      content = beforeMarker + '\n' + afterFunction;
+    }
+  }
+
+  // 正则兜底：移除残留 fnva 片段
+  if (content === originalContent) {
+    content = content
+      .replace(/# fnva 自动化函数 - 用 npm 安装自动添加[\s\S]*?(?=\n\S|\n$)/g, '')
+      .replace(/.*fnva.*\n?/g, '')
+      .replace(/.*FNVAAUTOMODE.*\n?/g, '')
+      .replace(/.*cmd\.exe.*fnva.*\n?/g, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim() + '\n';
+  }
+
+  if (content !== originalContent) {
+    fs.writeFileSync(cfgPath, content);
+    console.log(`✅ fnva shell 集成已从 ${cfgPath} 移除`);
+    return true;
+  }
+
+  console.log(`⚠️  未在 ${cfgPath} 找到需要清理的内容`);
+  return false;
 }
 
 function removeShellIntegration(configPath, shell) {
-  if (!fs.existsSync(configPath)) {
-    console.log(`⚠️  配置文件不存在: ${configPath}`);
-    return false;
+  const paths = getShellConfigPaths(shell);
+  if (configPath) paths.unshift(configPath); // 兼容传入单一路径
+
+  let removedAny = false;
+  for (const cfgPath of paths) {
+    if (!cfgPath || !fs.existsSync(cfgPath)) continue;
+    try {
+      const removed = cleanConfigFile(cfgPath);
+      removedAny = removedAny || removed;
+    } catch (error) {
+      console.log(`❌ 移除失败 (${cfgPath}): ${error.message}`);
+    }
   }
 
-  try {
-    let content = fs.readFileSync(configPath, 'utf8');
-    const originalContent = content;
-
-    // 方法1: 查找标记，精确删除整个函数块
-    const marker = '# fnva 自动化函数 - 由 npm 安装自动添加';
-    const startIndex = content.indexOf(marker);
-
-    if (startIndex !== -1) {
-      // 找到标记前的换行符
-      const beforeMarker = content.substring(0, startIndex).trimEnd();
-
-      // 从标记开始查找完整的函数
-      const afterMarker = content.substring(startIndex);
-      const lines = afterMarker.split('\n');
-
-      let functionEndIndex = -1;
-      let braceCount = 0;
-      let foundFunction = false;
-
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if (line.includes('function fnva') || line.includes('fnva(')) {
-          foundFunction = true;
-        }
-
-        if (foundFunction) {
-          // 计算大括号
-          for (const char of line) {
-            if (char === '{') braceCount++;
-            if (char === '}') braceCount--;
-          }
-
-          // 当大括号平衡时，函数结束
-          if (braceCount === 0) {
-            functionEndIndex = i + 1;
-            break;
-          }
-        }
-      }
-
-      if (functionEndIndex !== -1) {
-        // 重建内容
-        const afterFunction = lines.slice(functionEndIndex).join('\n');
-        content = beforeMarker + '\n' + afterFunction;
-      } else {
-        console.log('⚠️  无法确定函数结束位置');
-        return false;
-      }
-    }
-
-    // 方法2: 如果没找到标记，使用正则表达式清理任何 fnva 相关内容
-    if (content === originalContent) {
-      // 使用正则表达式删除任何包含 fnva 的行和相关的环境变量处理
-      content = content
-        // 删除标记到函数结束的所有内容
-        .replace(/# fnva 自动化函数 - 由 npm 安装自动添加[\s\S]*?(?=\n\S|\n$)/g, '')
-        // 删除剩余的 fnva 相关行
-        .replace(/.*fnva.*\n?/g, '')
-        // 删除 FNVAAUTOMODE 相关行
-        .replace(/.*FNVAAUTOMODE.*\n?/g, '')
-        // 删除 cmd.exe 调用 fnva 的行
-        .replace(/.*cmd\.exe.*fnva.*\n?/g, '')
-        // 清理多余的空行
-        .replace(/\n{3,}/g, '\n\n')
-        .trim() + '\n';
-    }
-
-    // 如果内容有变化，写入文件
-    if (content !== originalContent) {
-      fs.writeFileSync(configPath, content);
-      console.log(`✅ fnva shell 集成已从 ${configPath} 移除`);
-      return true;
-    } else {
-      console.log('⚠️  未找到需要清理的内容');
-      return false;
-    }
-  } catch (error) {
-    console.log(`❌ 移除失败: ${error.message}`);
-    return false;
+  if (!removedAny) {
+    console.log('⚠️  未找到可清理的 shell 配置文件或未匹配到 fnva 片段');
   }
+  return removedAny;
 }
 
 function main() {
-  console.log('🔧 fnva shell 集成卸载器');
+  console.log('🧹 fnva shell 集成卸载');
 
   const shell = detectShell();
-  const configPath = getShellConfigPath(shell);
+  const paths = getShellConfigPaths(shell);
 
-  if (!configPath) {
-    console.log(`❌ 不支持的 shell: ${shell}`);
+  if (paths.length === 0) {
+    console.log(`⚠️  不支持的 shell: ${shell}`);
     return;
   }
 
-  const success = removeShellIntegration(configPath, shell);
+  const success = removeShellIntegration(null, shell);
 
   if (success) {
     console.log('🔄 请重新加载你的 shell 配置:');
-
     switch (shell) {
       case 'powershell':
         console.log('   . $PROFILE');
@@ -154,6 +149,6 @@ if (require.main === module) {
 
 module.exports = {
   detectShell,
-  getShellConfigPath,
-  removeShellIntegration
+  getShellConfigPaths,
+  removeShellIntegration,
 };
