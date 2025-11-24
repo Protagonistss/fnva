@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 
 // Shell integration installer for fnva (npm postinstall helper).
-// Generates a lightweight function wrapper per shell that calls the real
-// `fnva` binary and applies environment switch scripts.
+// Generates a minimal shell function that invokes the real fnva binary.
 
 const fs = require('fs');
 const path = require('path');
@@ -64,13 +63,28 @@ function fnva {
 `;
 }
 
+function resolveBinaryPath() {
+  // Prefer real binary, avoid this function name
+  if (process.platform === 'win32') {
+    return process.argv[0];
+  }
+  let bin = '';
+  try {
+    const which = require('child_process').spawnSync('which', ['fnva'], { encoding: 'utf8' });
+    if (which.status === 0) {
+      bin = (which.stdout || '').trim();
+    }
+  } catch {}
+  return bin;
+}
+
 function getBashFunction() {
   return `
 # fnva auto integration (added by npm install)
 fnva() {
     local __fnva_bin
     __fnva_bin="$(command -v fnva | head -n 1)"
-    if [[ -z "$__fnva_bin" ]]; then
+    if [[ -z "$__fnva_bin" || ! -x "$__fnva_bin" ]]; then
         echo "fnva: binary not found in PATH" >&2
         return 127
     fi
@@ -140,13 +154,13 @@ function installShellIntegration() {
   const configPath = getShellConfigPath(shell);
 
   if (!configPath) {
-    console.log(`⚠️  Unsupported shell: ${shell}`);
+    console.log(`Unsupported shell: ${shell}`);
     console.log('Please configure fnva manually (see README).');
     return false;
   }
 
   if (isFunctionInstalled(configPath)) {
-    console.log(`✅ fnva shell integration already present: ${configPath}`);
+    console.log(`fnva shell integration already present: ${configPath}`);
     return true;
   }
 
@@ -165,25 +179,11 @@ function installShellIntegration() {
       fs.writeFileSync(configPath, functionCode);
     }
 
-    console.log(`✅ fnva shell integration installed at: ${configPath}`);
-    console.log('🔄 Reload your shell config:');
-    switch (shell) {
-      case 'powershell':
-        console.log('   . $PROFILE');
-        break;
-      case 'bash':
-        console.log('   source ~/.bashrc');
-        break;
-      case 'zsh':
-        console.log('   source ~/.zshrc');
-        break;
-      case 'fish':
-        console.log('   source ~/.config/fish/config.fish');
-        break;
-    }
+    console.log(`fnva shell integration installed at: ${configPath}`);
+    console.log('Reload your shell config after install.');
     return true;
   } catch (error) {
-    console.log(`❌ Install failed: ${error.message}`);
+    console.log(`Install failed: ${error.message}`);
     console.log('Please configure fnva manually (see README).');
     return false;
   }
@@ -191,13 +191,13 @@ function installShellIntegration() {
 
 function promptInstallation() {
   if (process.env.FNVA_SKIP_SHELL_SETUP === '1') {
-    console.log('⏭️  Skipping shell integration (FNVA_SKIP_SHELL_SETUP=1)');
+    console.log('Skipping shell integration (FNVA_SKIP_SHELL_SETUP=1)');
     return;
   }
 
   const shell = detectShell();
-  console.log(`🔍 Detected shell: ${shell}`);
-  console.log('❓ Install fnva shell integration? (y/N)');
+  console.log(`Detected shell: ${shell}`);
+  console.log('Install fnva shell integration? (y/N)');
 
   const readline = require('readline');
   const rl = readline.createInterface({
@@ -210,21 +210,20 @@ function promptInstallation() {
     if (normalized === 'y' || normalized === 'yes') {
       installShellIntegration();
     } else {
-      console.log('⏩ Skipped shell integration.');
+      console.log('Skipped shell integration.');
     }
     rl.close();
   });
 }
 
 function main() {
-  console.log('🛠️ fnva shell integration installer');
-  console.log(`📦 Node.js version: ${process.version}`);
-  console.log(`📍 CWD: ${process.cwd()}`);
+  console.log('fnva shell integration installer');
+  console.log(`Node.js version: ${process.version}`);
+  console.log(`CWD: ${process.cwd()}`);
 
   if (process.argv.includes('--auto') || process.argv.includes('--yes')) {
-    console.log('🤖 Auto mode: installing...');
     const result = installShellIntegration();
-    console.log(`📄 Install result: ${result ? 'success' : 'failed'}`);
+    console.log(`Install result: ${result ? 'success' : 'failed'}`);
   } else {
     promptInstallation();
   }

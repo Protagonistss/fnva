@@ -1,6 +1,6 @@
 {
   "name": "fnva",
-  "version": "0.0.28",
+  "version": "0.0.29",
   "description": "跨平台环境切换工具，支持 Java 和 LLM 环境配置",
   "author": "protagonistss",
   "license": "MIT",
