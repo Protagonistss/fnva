@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 
+// Shell integration uninstaller for fnva (npm postuninstall helper).
+// Cleans fnva wrapper functions from common shell config files.
+
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
 function detectShell() {
-  if (process.platform === 'win32') {
-    return 'powershell';
-  }
+  if (process.platform === 'win32') return 'powershell';
   return process.env.SHELL?.split('/').pop() || 'bash';
 }
 
@@ -33,7 +34,7 @@ function cleanConfigFile(cfgPath) {
   let content = fs.readFileSync(cfgPath, 'utf8');
   const originalContent = content;
 
-  const marker = '# fnva 自动化函数 - 用 npm 安装自动添加';
+  const marker = '# fnva auto integration (added by npm install)';
   const startIndex = content.indexOf(marker);
 
   if (startIndex !== -1) {
@@ -69,10 +70,9 @@ function cleanConfigFile(cfgPath) {
     }
   }
 
-  // 正则兜底：移除残留 fnva 片段
   if (content === originalContent) {
     content = content
-      .replace(/# fnva 自动化函数 - 用 npm 安装自动添加[\s\S]*?(?=\n\S|\n$)/g, '')
+      .replace(/# fnva auto integration \(added by npm install\)[\s\S]*?(?=\n\S|\n$)/g, '')
       .replace(/.*fnva.*\n?/g, '')
       .replace(/.*FNVAAUTOMODE.*\n?/g, '')
       .replace(/.*cmd\.exe.*fnva.*\n?/g, '')
@@ -82,50 +82,50 @@ function cleanConfigFile(cfgPath) {
 
   if (content !== originalContent) {
     fs.writeFileSync(cfgPath, content);
-    console.log(`✅ fnva shell 集成已从 ${cfgPath} 移除`);
+    console.log(`✅ fnva shell integration removed from ${cfgPath}`);
     return true;
   }
 
-  console.log(`⚠️  未在 ${cfgPath} 找到需要清理的内容`);
+  console.log(`⚠️  No fnva block found in ${cfgPath}`);
   return false;
 }
 
 function removeShellIntegration(configPath, shell) {
-  const paths = getShellConfigPaths(shell);
-  if (configPath) paths.unshift(configPath); // 兼容传入单一路径
-
+  const paths = configPath ? [configPath] : getShellConfigPaths(shell);
   let removedAny = false;
+
   for (const cfgPath of paths) {
     if (!cfgPath || !fs.existsSync(cfgPath)) continue;
     try {
       const removed = cleanConfigFile(cfgPath);
       removedAny = removedAny || removed;
     } catch (error) {
-      console.log(`❌ 移除失败 (${cfgPath}): ${error.message}`);
+      console.log(`❌ Remove failed (${cfgPath}): ${error.message}`);
     }
   }
 
   if (!removedAny) {
-    console.log('⚠️  未找到可清理的 shell 配置文件或未匹配到 fnva 片段');
+    console.log('⚠️  No shell config cleaned (file missing or no fnva block)');
   }
+
   return removedAny;
 }
 
 function main() {
-  console.log('🧹 fnva shell 集成卸载');
+  console.log('🧹 fnva shell integration uninstaller');
 
   const shell = detectShell();
   const paths = getShellConfigPaths(shell);
 
-  if (paths.length === 0) {
-    console.log(`⚠️  不支持的 shell: ${shell}`);
+  if (!paths.length) {
+    console.log(`⚠️  Unsupported shell: ${shell}`);
     return;
   }
 
   const success = removeShellIntegration(null, shell);
 
   if (success) {
-    console.log('🔄 请重新加载你的 shell 配置:');
+    console.log('🔄 Reload your shell config:');
     switch (shell) {
       case 'powershell':
         console.log('   . $PROFILE');
