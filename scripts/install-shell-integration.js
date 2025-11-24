@@ -1,9 +1,8 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { spawn } = require('child_process');
 
 function detectShell() {
   if (process.platform === 'win32') {
@@ -29,7 +28,7 @@ function getShellConfigPath(shell) {
 
 function getPowerShellFunction() {
   return `
-# fnva 自动化函数 - 由 npm 安装自动添加
+# fnva 自动化函数 - 用 npm 安装自动添加
 function fnva {
     if ($args.Count -ge 2 -and ($args[0] -eq "java" -or $args[0] -eq "llm" -or $args[0] -eq "cc") -and ($args[1] -eq "use")) {
         $tempFile = Join-Path $env:TEMP ("fnva_script_" + (Get-Random) + ".ps1")
@@ -39,7 +38,7 @@ function fnva {
             # 捕获 fnva 输出并保存到临时文件
             $output = cmd.exe /c "set FNVA_AUTO_MODE=%FNVAAUTOMODE% && fnva $args" 2>&1
 
-            # 如果输出包含 PowerShell 脚本内容，保存并执行
+            # 如果输出包含 PowerShell 脚本内容，则保存并执行
             if ($output -match '\$env:' -or $output -match 'Write-Host') {
                 $output | Out-File -FilePath $tempFile -Encoding UTF8
                 try {
@@ -71,17 +70,25 @@ function fnva {
 
 function getBashFunction() {
   return `
-# fnva 自动化函数 - 由 npm 安装自动添加
+# fnva 自动化函数 - 用 npm 安装自动添加
 fnva() {
-    if [[ \$# -ge 2 && ("\$1" == "java" || "\$1" == "llm" || "\$1" == "cc") && "\$2" == "use" ]]; then
-        local temp_file=\$(mktemp)
-        chmod +x "\$temp_file"
+    local __fnva_bin
+    __fnva_bin="$(command -v fnva | head -n 1)"
+    if [[ -z "$__fnva_bin" ]]; then
+        echo "fnva: binary not found in PATH" >&2
+        return 127
+    fi
 
-        FNVA_AUTO_MODE=1 command fnva "\$@" > "\$temp_file"
-        source "\$temp_file"
-        rm -f "\$temp_file"
+    if [[ $# -ge 2 && ("$1" == "java" || "$1" == "llm" || "$1" == "cc") && "$2" == "use" ]]; then
+        local temp_file
+        temp_file="$(mktemp)"
+        chmod +x "$temp_file"
+
+        FNVA_AUTO_MODE=1 "$__fnva_bin" "$@" > "$temp_file"
+        source "$temp_file"
+        rm -f "$temp_file"
     else
-        FNVA_AUTO_MODE=1 command fnva "\$@"
+        FNVA_AUTO_MODE=1 "$__fnva_bin" "$@"
     fi
 }
 `;
@@ -89,16 +96,22 @@ fnva() {
 
 function getFishFunction() {
   return `
-# fnva 自动化函数 - 由 npm 安装自动添加
+# fnva 自动化函数 - 用 npm 安装自动添加
 function fnva
-    if test (count \$argv) -ge 2; and string match -q -r "^(java|llm|cc)\$" \$argv[1]; and test \$argv[2] = "use"
+    set __fnva_bin (command -v fnva | head -n 1)
+    if test -z "$__fnva_bin"
+        echo "fnva: binary not found in PATH" >&2
+        return 127
+    end
+
+    if test (count $argv) -ge 2; and string match -q -r "^(java|llm|cc)$" $argv[1]; and test $argv[2] = "use"
         set temp_file (mktemp)
-        chmod +x \$temp_file
-        env FNVA_AUTO_MODE=1 command fnva \$argv > \$temp_file
-        source \$temp_file
-        rm -f \$temp_file
+        chmod +x $temp_file
+        env FNVA_AUTO_MODE=1 "$__fnva_bin" $argv > $temp_file
+        source $temp_file
+        rm -f $temp_file
     else
-        env FNVA_AUTO_MODE=1 command fnva \$argv
+        env FNVA_AUTO_MODE=1 "$__fnva_bin" $argv
     end
 end
 `;
@@ -111,7 +124,7 @@ function getShellFunction(shell) {
     case 'bash':
       return getBashFunction();
     case 'zsh':
-      return getBashFunction(); // zsh 使用和 bash 相同的语法
+      return getBashFunction(); // zsh 使用与 bash 相同的函数
     case 'fish':
       return getFishFunction();
     default:
@@ -119,13 +132,13 @@ function getShellFunction(shell) {
   }
 }
 
-function isFunctionInstalled(configPath, shell) {
+function isFunctionInstalled(configPath) {
   if (!fs.existsSync(configPath)) {
     return false;
   }
 
   const content = fs.readFileSync(configPath, 'utf8');
-  return content.includes('fnva 自动化函数 - 由 npm 安装自动添加');
+  return content.includes('fnva 自动化函数 - 用 npm 安装自动添加');
 }
 
 function installShellIntegration() {
@@ -133,27 +146,24 @@ function installShellIntegration() {
   const configPath = getShellConfigPath(shell);
 
   if (!configPath) {
-    console.log(`❌ 不支持的 shell: ${shell}`);
-    console.log('请手动配置 fnva，详见: https://github.com/your-repo/fnva');
+    console.log(`⚠️  不支持的 shell: ${shell}`);
+    console.log('请手动配置 fnva，详见 README');
     return false;
   }
 
-  if (isFunctionInstalled(configPath, shell)) {
-    console.log(`✅ fnva shell 集成已安装在: ${configPath}`);
+  if (isFunctionInstalled(configPath)) {
+    console.log(`✅ fnva shell 集成已存在: ${configPath}`);
     return true;
   }
 
   try {
-    // 确保目录存在
     const dir = path.dirname(configPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
 
-    // 获取函数定义
     const functionCode = getShellFunction(shell);
 
-    // 添加到配置文件
     if (fs.existsSync(configPath)) {
       const content = fs.readFileSync(configPath, 'utf8');
       fs.writeFileSync(configPath, content + '\n' + functionCode);
@@ -187,7 +197,6 @@ function installShellIntegration() {
   }
 }
 
-// 询问用户是否安装
 function promptInstallation() {
   if (process.env.FNVA_SKIP_SHELL_SETUP === '1') {
     console.log('⏭️  跳过 shell 集成安装');
@@ -195,45 +204,42 @@ function promptInstallation() {
   }
 
   const shell = detectShell();
-  console.log(`🔧 检测到 shell: ${shell}`);
-  console.log('🚀 是否安装 fnva shell 集成? (y/N)');
+  console.log(`🔍 检测到 shell: ${shell}`);
+  console.log('❓ 是否安装 fnva shell 集成? (y/N)');
 
-  process.stdin.resume();
-  process.stdin.setEncoding('utf8');
-
-  process.stdin.on('data', function(data) {
-    const response = data.toString().trim().toLowerCase();
-    if (response === 'y' || response === 'yes') {
-      installShellIntegration();
-    } else {
-      console.log('⏭️  跳过 shell 集成安装');
-      console.log('📖 手动配置指南: https://github.com/your-repo/fnva');
-    }
-    process.exit(0);
+  const readline = require('readline');
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
   });
 
-  // 10秒后自动跳过
-  setTimeout(() => {
-    console.log('⏭️  超时，跳过 shell 集成安装');
-    console.log('📖 手动配置指南: https://github.com/your-repo/fnva');
-    process.exit(0);
-  }, 10000);
+  rl.question('> ', (answer) => {
+    const normalized = answer.trim().toLowerCase();
+    if (normalized === 'y' || normalized === 'yes') {
+      installShellIntegration();
+    } else {
+      console.log('⏩ 已跳过 shell 集成安装');
+    }
+    rl.close();
+  });
 }
 
-// 主程序
-if (require.main === module) {
-  console.log('🔧 fnva shell 集成安装器');
-  console.log(`📍 Node.js 进程ID: ${process.pid}`);
-  console.log(`📂 工作目录: ${process.cwd()}`);
-  console.log(`🎯 参数: ${process.argv.join(' ')}`);
+function main() {
+  console.log('🛠️ fnva shell 集成安装器');
+  console.log(`📦 Node.js 版本: ${process.version}`);
+  console.log(`📍 进程工作目录: ${process.cwd()}`);
 
   if (process.argv.includes('--auto') || process.argv.includes('--yes')) {
-    console.log('🚀 自动模式启动安装...');
+    console.log('🤖 自动模式启动安装...');
     const result = installShellIntegration();
-    console.log(`🏁 安装结果: ${result ? '成功' : '失败'}`);
+    console.log(`📄 安装结果: ${result ? '成功' : '失败'}`);
   } else {
     promptInstallation();
   }
+}
+
+if (require.main === module) {
+  main();
 }
 
 module.exports = {
