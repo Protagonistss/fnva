@@ -7,6 +7,9 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+// Absolute path to the packaged fnva shim (bin/fnva.js)
+const FNVA_SHIM = path.resolve(__dirname, '..', 'bin', 'fnva.js');
+
 function detectShell() {
   if (process.platform === 'win32') {
     return 'powershell';
@@ -82,9 +85,8 @@ function getBashFunction() {
   return `
 # fnva auto integration (added by npm install)
 fnva() {
-    local __fnva_bin
-    __fnva_bin="$(command -v fnva | head -n 1)"
-    if [[ -z "$__fnva_bin" || ! -x "$__fnva_bin" ]]; then
+    local __fnva_bin="${FNVA_SHIM}"
+    if [[ ! -x "$__fnva_bin" ]]; then
         echo "fnva: binary not found in PATH" >&2
         return 127
     fi
@@ -108,8 +110,8 @@ function getFishFunction() {
   return `
 # fnva auto integration (added by npm install)
 function fnva
-    set __fnva_bin (command -v fnva | head -n 1)
-    if test -z "$__fnva_bin"
+    set __fnva_bin "${FNVA_SHIM}"
+    if test ! -x "$__fnva_bin"
         echo "fnva: binary not found in PATH" >&2
         return 127
     end
