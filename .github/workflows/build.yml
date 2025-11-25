@@ -191,14 +191,38 @@ jobs:
           echo "=== Final file list for release ==="
           find platforms -type f -name "fnva*" || echo "No fnva files found in platforms"
 
+          # Verify each required file exists before release
+          echo "=== Verifying required files ==="
+          RELEASE_FILES=""
+          for file in \
+            "platforms/linux-x64/fnva" \
+            "platforms/linux-arm64/fnva" \
+            "platforms/darwin-x64/fnva" \
+            "platforms/darwin-arm64/fnva" \
+            "platforms/win32-x64/fnva.exe"; do
+            if [ -f "$file" ]; then
+              echo "✓ $file exists ($(stat -c%s "$file") bytes)"
+              RELEASE_FILES="$RELEASE_FILES$file"$'\n'
+            else
+              echo "✗ $file MISSING - will be skipped"
+            fi
+          done
+
+          # Create release file list
+          if [ -n "$RELEASE_FILES" ]; then
+            echo "Files to release:"
+            echo "$RELEASE_FILES"
+            echo "release_files<<EOF" >> $GITHUB_ENV
+            echo "$RELEASE_FILES" >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+          else
+            echo "No files found to release!"
+            exit 1
+          fi
+
       - name: Upload release assets
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            platforms/linux-x64/fnva
-            platforms/linux-arm64/fnva
-            platforms/darwin-x64/fnva
-            platforms/darwin-arm64/fnva
-            platforms/win32-x64/fnva.exe
+          files: ${{ env.release_files }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
