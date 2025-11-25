@@ -80,11 +80,11 @@ jobs:
             # 仅调整主 sources.list，避免破坏第三方源格式
             sudo sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list
             sudo tee /etc/apt/sources.list.d/arm64-ports.list >/dev/null <<'EOF'
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble main universe multiverse restricted
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-updates main universe multiverse restricted
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-backports main universe multiverse restricted
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-security main universe multiverse restricted
-EOF
+        deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble main universe multiverse restricted
+        deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-updates main universe multiverse restricted
+        deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-backports main universe multiverse restricted
+        deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-security main universe multiverse restricted
+        EOF
           fi
 
           sudo apt-get update
