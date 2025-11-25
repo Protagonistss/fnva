@@ -191,27 +191,39 @@ jobs:
           echo "=== Final file list for release ==="
           find platforms -type f -name "fnva*" || echo "No fnva files found in platforms"
 
-          # Verify each required file exists before release
-          echo "=== Verifying required files ==="
+          # Create release directory structure without renaming files
+          echo "=== Preparing release with directory structure ==="
           RELEASE_FILES=""
-          for file in \
-            "platforms/linux-x64/fnva" \
-            "platforms/linux-arm64/fnva" \
-            "platforms/darwin-x64/fnva" \
-            "platforms/darwin-arm64/fnva" \
-            "platforms/win32-x64/fnva.exe"; do
-            if [ -f "$file" ]; then
-              echo "✓ $file exists ($(stat -c%s "$file") bytes)"
-              RELEASE_FILES="$RELEASE_FILES$file"$'\n'
+
+          # Define platforms and their executable names
+          declare -A PLATFORM_EXECS
+          PLATFORM_EXECS["linux-x64"]="fnva"
+          PLATFORM_EXECS["linux-arm64"]="fnva"
+          PLATFORM_EXECS["darwin-x64"]="fnva"
+          PLATFORM_EXECS["darwin-arm64"]="fnva"
+          PLATFORM_EXECS["win32-x64"]="fnva.exe"
+
+          for platform in "${!PLATFORM_EXECS[@]}"; do
+            source_file="platforms/$platform/${PLATFORM_EXECS[$platform]}"
+            release_path="releases/$platform/${PLATFORM_EXECS[$platform]}"
+
+            if [ -f "$source_file" ]; then
+              mkdir -p "releases/$platform"
+              cp "$source_file" "$release_path"
+              chmod +x "$release_path"
+              echo "✓ Prepared $release_path ($(stat -c%s "$release_path") bytes)"
+              RELEASE_FILES="$RELEASE_FILES$release_path"$'\n'
             else
-              echo "✗ $file MISSING - will be skipped"
+              echo "✗ $source_file MISSING - will be skipped"
             fi
           done
 
           # Create release file list
           if [ -n "$RELEASE_FILES" ]; then
-            echo "Files to release:"
+            echo "Release files:"
             echo "$RELEASE_FILES"
+            echo "=== Final release structure ==="
+            tree releases/ || find releases/ -type f
             echo "release_files<<EOF" >> $GITHUB_ENV
             echo "$RELEASE_FILES" >> $GITHUB_ENV
             echo "EOF" >> $GITHUB_ENV
