@@ -155,17 +155,50 @@ jobs:
           set -euo pipefail
           mkdir -p platforms
           shopt -s nullglob
+
+          echo "=== Downloaded artifacts ==="
+          find artifacts -type f -name "fnva*" || echo "No fnva files found in artifacts"
+          echo "=== Artifact structure ==="
+          ls -la artifacts/ || echo "No artifacts directory"
+
           for dir in artifacts/binary-*; do
-            platform="${dir##*/}"
-            platform="${platform#binary-}"
-            mkdir -p "platforms/${platform}"
-            cp -a "${dir}/." "platforms/${platform}/"
+            if [ -d "$dir" ]; then
+              platform="${dir##*/}"
+              platform="${platform#binary-}"
+              echo "Processing platform: $platform from dir: $dir"
+              mkdir -p "platforms/${platform}"
+
+              # List contents before copying
+              echo "Contents of $dir:"
+              ls -la "$dir" || echo "No files in $dir"
+
+              # Copy files explicitly
+              if [ -f "$dir/fnva" ]; then
+                cp "$dir/fnva" "platforms/${platform}/fnva"
+                chmod +x "platforms/${platform}/fnva"
+                echo "Copied fnva to platforms/${platform}/fnva"
+              fi
+              if [ -f "$dir/fnva.exe" ]; then
+                cp "$dir/fnva.exe" "platforms/${platform}/fnva.exe"
+                echo "Copied fnva.exe to platforms/${platform}/fnva.exe"
+              fi
+            fi
           done
+
+          echo "=== Final platforms structure ==="
           ls -R platforms
+
+          echo "=== Final file list for release ==="
+          find platforms -type f -name "fnva*" || echo "No fnva files found in platforms"
 
       - name: Upload release assets
         uses: softprops/action-gh-release@v1
         with:
-          files: platforms/**/*
+          files: |
+            platforms/linux-x64/fnva
+            platforms/linux-arm64/fnva
+            platforms/darwin-x64/fnva
+            platforms/darwin-arm64/fnva
+            platforms/win32-x64/fnva.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
