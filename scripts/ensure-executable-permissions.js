@@ -49,7 +49,6 @@ function ensureExecutablePermissions() {
   const platformDir = `${platform}-${arch}`;
   const binaryName = platform === 'win32' ? 'fnva.exe' : 'fnva';
   const archBinaryPath = path.join(platformsDir, platformDir, binaryName);
-  const flatBinaryPath = path.join(platformsDir, binaryName);
 
   if (platform === 'win32') {
     log('Info: Windows detected; chmod not required; skipping permission changes');
@@ -58,12 +57,8 @@ function ensureExecutablePermissions() {
 
   if (fs.existsSync(archBinaryPath)) {
     ensureExecutable(archBinaryPath, platformDir);
-  } else if (fs.existsSync(flatBinaryPath)) {
-    log('Info: falling back to legacy platforms/fnva layout');
-    ensureExecutable(flatBinaryPath, 'platforms/fnva');
   } else {
     log(`Warning: binary not found: ${archBinaryPath}`);
-    log(`         Also checked: ${flatBinaryPath}`);
   }
 
   if (process.env.npm_config_global === 'true') {

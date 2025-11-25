@@ -1,6 +1,6 @@
 {
   "name": "fnva",
-  "version": "0.0.30",
+  "version": "0.0.31",
   "description": "跨平台环境切换工具，支持 Java 和 LLM 环境配置",
   "author": "protagonistss",
   "license": "MIT",
@@ -13,6 +13,7 @@
     "install-shell": "node scripts/install-shell-integration.js",
     "uninstall-shell": "node scripts/uninstall-shell-integration.js",
     "build": "scripts/build-local.sh",
+    "build:platforms": "bash scripts/build-platforms.sh",
     "build:all": "scripts/build-all.sh",
     "check-permissions": "node scripts/check-permissions.js",
     "postuninstall": "echo 'Uninstalling fnva shell integration...' && node scripts/uninstall-shell-integration.js"

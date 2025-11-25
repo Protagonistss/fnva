@@ -93,48 +93,26 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y pkg-config libssl-dev build-essential
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+            echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+            echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> $GITHUB_ENV
+          fi
 
       - name: Build binary
         shell: bash
         run: |
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            cargo build --release --target ${{ matrix.target }}
-          elif [[ "${{ runner.os }}" == "macOS"* ]]; then
-            cargo build --release --target ${{ matrix.target }}
-          else
-            # Linux only build x86_64 target to avoid cross-compilation issues
-            if [ "${{ matrix.target }}" = "x86_64-unknown-linux-gnu" ]; then
-              echo "Building native x86_64 with cargo..."
-              cargo build --release --target ${{ matrix.target }}
-            else
-              echo "Skipping cross-compilation for ${{ matrix.target }} to avoid OpenSSL issues"
-              echo "This build will only produce x86_64 binaries on Linux"
-              mkdir -p platforms/${{ matrix.platform }}
-              echo "Skipping cross-compiled build for ${{ matrix.target }}" > platforms/${{ matrix.platform }}/skip.txt
-            fi
-          fi
+          cargo build --release --target ${{ matrix.target }}
 
       - name: Strip binary (Unix)
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          # Check if we have a skip file
-          if [ -f "platforms/${{ matrix.platform }}/skip.txt" ]; then
-            echo "Skipping strip for ${{ matrix.target }}"
-            exit 0
-          fi
-
           strip target/${{ matrix.target }}/release/fnva || true
 
       - name: Prepare binary directory
         shell: bash
         run: |
-          # Check if we have a skip file
-          if [ -f "platforms/${{ matrix.platform }}/skip.txt" ]; then
-            echo "Skipping binary preparation for ${{ matrix.target }}"
-            exit 0
-          fi
-
           mkdir -p platforms/${{ matrix.platform }}
           if [ "${{ runner.os }}" = "Windows" ]; then
             cp target/${{ matrix.target }}/release/fnva.exe platforms/${{ matrix.platform }}/fnva.exe
@@ -148,11 +126,6 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          if [ -f "platforms/${{ matrix.platform }}/skip.txt" ]; then
-            echo "Skipping verify for ${{ matrix.target }}"
-            exit 0
-          fi
-
           chmod +x platforms/${{ matrix.platform }}/fnva
           echo "Architecture info:"
           if command -v lipo >/dev/null 2>&1; then

@@ -55,12 +55,6 @@ function buildBinaryPath() {
   // 1. Prebuilt binary shipped with the npm package
   binaryCandidates.push(platformBinaryPath(platform));
 
-  // Flat legacy structure: platforms/fnva(.exe)
-  const scriptDir = __dirname;
-  const projectRoot = path.resolve(scriptDir, '..');
-  const flatBinaryName = platform === 'win32' ? 'fnva.exe' : 'fnva';
-  binaryCandidates.push(path.join(projectRoot, 'platforms', flatBinaryName));
-
   // 2. User-provided override via environment variable
   if (process.env.FNVA_NATIVE_PATH) {
     binaryCandidates.push(process.env.FNVA_NATIVE_PATH);
