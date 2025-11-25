@@ -53,7 +53,8 @@ function buildBinaryPath() {
   const binaryCandidates = [];
 
   // 1. Prebuilt binary shipped with the npm package
-  binaryCandidates.push(platformBinaryPath(platform));
+  const npmBinaryPath = platformBinaryPath(platform);
+  binaryCandidates.push(npmBinaryPath);
 
   // 2. User-provided override via environment variable
   if (process.env.FNVA_NATIVE_PATH) {
@@ -70,10 +71,30 @@ function buildBinaryPath() {
     binaryCandidates.push(path.join(targetDir, 'debug', 'fnva'));
   }
 
+  // Debug: Show all candidates and their existence
+  if (process.env.FNVA_DEBUG === '1') {
+    console.log('[DEBUG] Looking for fnva binary...');
+    console.log('[DEBUG] Platform:', platform, 'Arch:', resolveArch());
+    console.log('[DEBUG] Binary candidates:');
+    binaryCandidates.forEach((candidate, index) => {
+      const exists = candidate && fs.existsSync(candidate);
+      console.log(`  ${index + 1}. ${candidate} - ${exists ? 'EXISTS' : 'MISSING'}`);
+    });
+  }
+
   for (const candidate of binaryCandidates) {
     if (candidate && fs.existsSync(candidate)) {
+      if (process.env.FNVA_DEBUG === '1') {
+        console.log(`[DEBUG] Found binary at: ${candidate}`);
+      }
       return candidate;
     }
+  }
+
+  if (process.env.FNVA_DEBUG === '1') {
+    console.log('[DEBUG] No binary found, falling back to Node.js mode');
+    console.log('[DEBUG] Expected npm package binary path:', npmBinaryPath);
+    console.log('[DEBUG] npmBinaryPath exists:', fs.existsSync(npmBinaryPath));
   }
 
   return null;
