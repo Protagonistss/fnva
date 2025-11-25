@@ -13,7 +13,8 @@
     "install-shell": "node scripts/install-shell-integration.js",
     "uninstall-shell": "node scripts/uninstall-shell-integration.js",
     "build": "scripts/build-local.sh",
-    "build:platforms": "bash scripts/build-platforms.sh",
+    "build:platforms": "node scripts/build-platforms.js",
+    "build:platforms:sh": "bash scripts/build-platforms.sh",
     "build:all": "scripts/build-all.sh",
     "check-permissions": "node scripts/check-permissions.js",
     "postuninstall": "echo 'Uninstalling fnva shell integration...' && node scripts/uninstall-shell-integration.js"

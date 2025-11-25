@@ -31,47 +31,31 @@ jobs:
             arch: x86_64
             target: x86_64-apple-darwin
             platform: darwin-x64
-            native_target: x86_64-apple-darwin
           - os: macos-14
             arch: aarch64
             target: aarch64-apple-darwin
             platform: darwin-arm64
-            native_target: aarch64-apple-darwin
           - os: windows-latest
             arch: x86_64
             target: x86_64-pc-windows-msvc
             platform: win32-x64
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install Rust (macOS)
-        if: runner.os == 'macOS'
+      - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install Rust (Linux/Windows)
-        if: runner.os != 'macOS'
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - name: Verify Rust installation (macOS)
-        if: runner.os == 'macOS'
+      - name: Verify Rust installation
         shell: bash
         run: |
           echo "PATH: $PATH"
-          which cargo && cargo --version && rustc --version
+          command -v cargo
+          cargo --version
+          rustc --version
           rustup target add ${{ matrix.target }} || true
-
-      - name: Verify Rust installation (Linux/Windows)
-        if: runner.os != 'macOS'
-        shell: bash
-        run: |
-          echo "PATH: $PATH"
-          which cargo && cargo --version && rustc --version
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -87,13 +71,13 @@ jobs:
             ${{ runner.os }}-${{ matrix.arch }}-cargo-
             ${{ runner.os }}-cargo-
 
-      - name: Install system dependencies (Linux only)
+      - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          # Enable arm64 architecture when targeting aarch64
           if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
             sudo dpkg --add-architecture arm64
+            sudo sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list
             sudo tee /etc/apt/sources.list.d/arm64.list >/dev/null <<'EOF'
 deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble main universe multiverse restricted
 deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-updates main universe multiverse restricted
@@ -110,20 +94,18 @@ EOF
               echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++"
               echo "PKG_CONFIG_ALLOW_CROSS=1"
               echo "PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig"
-              echo "PKG_CONFIG_SYSROOT_DIR=/usr/aarch64-linux-gnu"
+              echo "PKG_CONFIG_SYSROOT_DIR=/"
             } >> $GITHUB_ENV
           fi
 
       - name: Build binary
         shell: bash
-        run: |
-          cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }}
 
       - name: Strip binary (Unix)
         if: runner.os != 'Windows'
         shell: bash
-        run: |
-          strip target/${{ matrix.target }}/release/fnva || true
+        run: strip target/${{ matrix.target }}/release/fnva || true
 
       - name: Prepare binary directory
         shell: bash
@@ -131,24 +113,11 @@ EOF
           mkdir -p platforms/${{ matrix.platform }}
           if [ "${{ runner.os }}" = "Windows" ]; then
             cp target/${{ matrix.target }}/release/fnva.exe platforms/${{ matrix.platform }}/fnva.exe
-          elif [[ "${{ runner.os }}" == "macOS"* ]]; then
-            cp target/${{ matrix.target }}/release/fnva platforms/${{ matrix.platform }}/fnva
           else
             cp target/${{ matrix.target }}/release/fnva platforms/${{ matrix.platform }}/fnva
+            chmod +x platforms/${{ matrix.platform }}/fnva
+            file platforms/${{ matrix.platform }}/fnva || true
           fi
-
-      - name: Make executable and verify (Unix)
-        if: runner.os != 'Windows'
-        shell: bash
-        run: |
-          chmod +x platforms/${{ matrix.platform }}/fnva
-          echo "Architecture info:"
-          if command -v lipo >/dev/null 2>&1; then
-            lipo -info platforms/${{ matrix.platform }}/fnva || true
-          fi
-          file platforms/${{ matrix.platform }}/fnva || true
-          echo "Smoke run: --help"
-          ./platforms/${{ matrix.platform }}/fnva --help >/dev/null 2>&1 || true
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -164,289 +133,30 @@ EOF
     if: startsWith(github.ref, 'refs/tags/v')
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
-
-      - name: Prepare platforms directory
-        run: |
-          echo "Preparing release assets..."
-          echo "Current directory structure:"
-          find . -type f -name "*" | head -20 || echo "No files found"
-
-          # Create release-assets directory
-          mkdir -p release-assets
-          echo "Created release-assets directory"
-
-          # Check what's in current directory (artifacts are downloaded here)
-          echo "Looking for artifact directories..."
-          for artifact_dir in binary-*/; do
-            if [ -d "$artifact_dir" ]; then
-              echo "Processing artifact: $artifact_dir"
-              ls -la "$artifact_dir"
-
-              # Get platform name from directory name (binary-linux-x64 -> linux-x64)
-              platform_name=$(basename "$artifact_dir" | sed 's/^binary-//')
-              echo "Platform name: $platform_name"
-
-              # Copy binary files with platform-specific naming
-              if [ -f "$artifact_dir/fnva" ]; then
-                cp "$artifact_dir/fnva" "release-assets/fnva-$platform_name"
-                echo "Copied fnva-$platform_name"
-                chmod +x "release-assets/fnva-$platform_name"
-              fi
-              if [ -f "$artifact_dir/fnva.exe" ]; then
-                cp "$artifact_dir/fnva.exe" "release-assets/fnva-$platform_name.exe"
-                echo "Copied fnva-$platform_name.exe"
-              fi
-            fi
-          done
-
-          # If no binary-* directories found, check if files are directly in current directory
-          if [ -z "$(ls -A release-assets/)" ]; then
-            echo "No binary-* directories found, checking for direct files..."
-
-            # Create platform-specific releases directly from available files
-            if [ -f "fnva" ]; then
-              # Try to determine platform from previous build job context or create generic
-              cp "fnva" "release-assets/fnva-unix"
-              chmod +x "release-assets/fnva-unix"
-              echo "Copied fnva-unix"
-            fi
-
-            if [ -f "fnva.exe" ]; then
-              cp "fnva.exe" "release-assets/fnva-windows.exe"
-              echo "Copied fnva-windows.exe"
-            fi
-          fi
-
-          echo "Final release assets directory:"
-          ls -la release-assets/ || echo "No release assets found"
-
-          # Verify we have files to upload
-          if [ -z "$(ls -A release-assets/)" ]; then
-            echo "Error: No files found in release-assets directory"
-            echo "Searching for all fnva files..."
-            find . -name "fnva*" -type f
-            exit 1
-          else
-            echo "Successfully prepared release assets:"
-            ls -la release-assets/
-          fi
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
         with:
-          files: |
-            release-assets/*
-            platforms/**/*
-          generate_release_notes: true
-          name: Release ${{ github.ref_name }}
-          draft: false
-          prerelease: false
-          fail_on_unmatched_files: false
+          path: artifacts
+
+      - name: Arrange platform folders
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p platforms
+          shopt -s nullglob
+          for dir in artifacts/binary-*; do
+            platform="${dir##*/}"
+            platform="${platform#binary-}"
+            mkdir -p "platforms/${platform}"
+            cp -a "${dir}/." "platforms/${platform}/"
+          done
+          ls -R platforms
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v1
+        with:
+          files: platforms/**/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  prepare-npm:
-    name: Prepare NPM Package
-    needs: build
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: platforms/
-          merge-multiple: true
-
-      - name: Verify platforms for NPM and fix permissions
-        run: |
-          echo "Verifying platforms directory for NPM package..."
-          echo "Platforms structure:"
-          find platforms/ -type f -name "*" | head -10 || echo "No files found"
-
-          if [ ! -d "platforms" ]; then
-            echo "Warning: platforms directory not found"
-            mkdir -p platforms
-          fi
-
-          # Fix executable permissions for all Unix binaries (critical step!)
-          echo "Fixing executable permissions for NPM package..."
-          for binary in platforms/*/fnva; do
-            if [ -f "$binary" ]; then
-              echo "Setting executable permission: $binary"
-              chmod 755 "$binary"
-              # Verify the permission was set
-              if [ -x "$binary" ]; then
-                echo "✓ $binary is now executable"
-              else
-                echo "❌ Failed to make $binary executable"
-                exit 1
-              fi
-            fi
-          done
-
-          echo "All binary permissions fixed for NPM package"
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          registry-url: 'https://registry.npmjs.org'
-
-      - name: Extract version from tag or use package.json
-        id: version
-        run: |
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            VERSION=${GITHUB_REF#refs/tags/v}
-          else
-            VERSION=$(node -p "require('./package.json').version")
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Version: $VERSION"
-
-      - name: Update package.json version
-        run: |
-          echo "Updating package.json version to: ${{ steps.version.outputs.version }}"
-          echo "Current version:"
-          node -p "require('./package.json').version"
-
-          # Update version using npm pkg set (more reliable than npm version)
-          npm pkg set version="${{ steps.version.outputs.version }}"
-
-          # Verify update was successful
-          NEW_VERSION=$(node -p "require('./package.json').version")
-          echo "Updated version: $NEW_VERSION"
-
-          if [ "$NEW_VERSION" != "${{ steps.version.outputs.version }}" ]; then
-            echo "Error: Version update failed"
-            echo "Expected: ${{ steps.version.outputs.version }}"
-            echo "Actual: $NEW_VERSION"
-            exit 1
-          fi
-
-          echo "Version update successful!"
-
-      - name: Prepare npm package
-        run: |
-          echo "Preparing NPM package..."
-          echo "Package structure:"
-          ls -la
-
-          echo "Platforms directory:"
-          ls -la platforms/ || echo "Platforms directory not found"
-
-          echo "Package content verification:"
-          npm pack --dry-run
-
-          echo "Creating NPM package..."
-          npm pack
-
-          echo "Created package files:"
-          ls -la fnva-*.tgz
-
-      - name: Upload npm package
-        uses: actions/upload-artifact@v4
-        with:
-          name: npm-package
-          path: fnva-*.tgz
-          retention-days: 7
-
-      - name: Verify package before publishing
-        run: |
-          echo "Verifying package before NPM publish..."
-          PACKAGE_FILE=$(ls fnva-*.tgz | head -n 1)
-          echo "Package file: $PACKAGE_FILE"
-
-          # Check package size and basic info
-          if [ -f "$PACKAGE_FILE" ]; then
-            echo "Package size: $(du -h "$PACKAGE_FILE")"
-            echo "Package info:"
-            npm info --json . || echo "Could not get package info"
-
-            # Verify permissions are preserved in the package
-            echo "Verifying binary permissions in NPM package..."
-            TEMP_DIR=$(mktemp -d)
-            tar -xzf "$PACKAGE_FILE" -C "$TEMP_DIR"
-
-            PERMISSIONS_OK=true
-            for binary in "$TEMP_DIR"/package/platforms/*/fnva; do
-              if [ -f "$binary" ]; then
-                if [ -x "$binary" ]; then
-                  echo "✓ $(basename $(dirname "$binary"))/fnva has executable permission"
-                else
-                  echo "❌ $(basename $(dirname "$binary"))/fnva lacks executable permission"
-                  PERMISSIONS_OK=false
-                fi
-              fi
-            done
-
-            rm -rf "$TEMP_DIR"
-
-            if [ "$PERMISSIONS_OK" = true ]; then
-              echo "✅ All binaries have correct executable permissions"
-            else
-              echo "❌ Some binaries lack executable permissions"
-              echo "This may cause 'permission denied' errors for users"
-              exit 1
-            fi
-          else
-            echo "Error: Package file not found"
-            exit 1
-          fi
-
-      - name: Verify NPM token configuration
-        run: |
-          echo "Checking NPM configuration..."
-          echo "Registry: $(npm config get registry)"
-
-          # Check if token exists and is accessible
-          if [ -n "$NODE_AUTH_TOKEN" ]; then
-            echo "NODE_AUTH_TOKEN is set (length: ${#NODE_AUTH_TOKEN})"
-            # Test token validity without publishing
-            echo "Testing token access..."
-            npm whoami || echo "Token authentication test failed"
-          else
-            echo "Error: NODE_AUTH_TOKEN is not set"
-            echo "Please ensure NPM_TOKEN secret exists and contains an Automation token"
-            exit 1
-          fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish to NPM
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          echo "Publishing to NPM..."
-          echo "Registry: $(npm config get registry)"
-          echo "Package name: $(node -p "require('./package.json').name")"
-          echo "Package version: $(node -p "require('./package.json').version")"
-
-          # Verify token is set
-          if [ -z "$NODE_AUTH_TOKEN" ]; then
-            echo "Error: NODE_AUTH_TOKEN is not set"
-            echo "Please ensure NPM_TOKEN secret is set to an Automation token"
-            exit 1
-          fi
-
-          # Try publishing with automation token first
-          echo "Attempting to publish with automation token..."
-          if npm publish --access public; then
-            echo "Successfully published to NPM!"
-          else
-            echo "Automation token failed, this indicates you need to create a proper Automation token"
-            echo "Please visit: https://www.npmjs.com/settings/your-username/tokens"
-            echo "Generate a new AUTOMATION token (not Classic/Granular)"
-            echo "Update your NPM_TOKEN secret with the new automation token"
-            exit 1
-          fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
