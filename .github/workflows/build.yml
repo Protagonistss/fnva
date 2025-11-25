@@ -218,12 +218,26 @@ jobs:
             fi
           done
 
-          # Create release file list
+          # Create release file list and verify each file
           if [ -n "$RELEASE_FILES" ]; then
-            echo "Release files:"
+            echo "Release files to upload:"
             echo "$RELEASE_FILES"
             echo "=== Final release structure ==="
             tree releases/ || find releases/ -type f
+
+            # Verify each file exists and is accessible
+            echo "=== File verification ==="
+            echo "$RELEASE_FILES" | while read -r file; do
+              if [ -f "$file" ]; then
+                echo "✓ $file exists ($(stat -c%s "$file") bytes)"
+                echo "✓ File readable: $(test -r "$file" && echo "YES" || echo "NO")"
+                echo "✓ Full path: $(realpath "$file")"
+              else
+                echo "✗ $file MISSING"
+              fi
+            done
+
+            # Store files list with proper escaping
             echo "release_files<<EOF" >> $GITHUB_ENV
             echo "$RELEASE_FILES" >> $GITHUB_ENV
             echo "EOF" >> $GITHUB_ENV
@@ -232,9 +246,55 @@ jobs:
             exit 1
           fi
 
-      - name: Upload release assets
+      - name: Upload release assets (method 1 - try softprops first)
+        id: softprops-upload
         uses: softprops/action-gh-release@v1
         with:
           files: ${{ env.release_files }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: Upload release assets (method 2 - GitHub CLI fallback)
+        if: steps.softprops-upload.outcome == 'failure'
+        shell: bash
+        run: |
+          set -e
+          echo "=== Softprops failed, trying GitHub CLI with directory structure ==="
+
+          # Check GitHub CLI version
+          gh --version
+          gh auth status
+
+          # Get tag from ref
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "Uploading to release: $TAG"
+
+          # Verify release exists
+          gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json tagName || {
+            echo "Release $TAG not found"
+            exit 1
+          }
+
+          echo "$RELEASE_FILES" | while read -r file; do
+            if [ -f "$file" ]; then
+              echo "Uploading: $file"
+              # Preserve directory structure in the release asset name
+              asset_name=$(echo "$file" | sed 's|^releases/||')
+              echo "Asset name: $asset_name"
+
+              # Upload file with specific asset name to preserve directory structure
+              gh release upload "$TAG" "$file" "$asset_name" --clobber -R "$GITHUB_REPOSITORY" || {
+                echo "Failed to upload $file as $asset_name"
+                # Try alternative syntax
+                echo "Trying alternative upload syntax..."
+                gh release upload "$TAG" "$file" --clobber -R "$GITHUB_REPOSITORY" || {
+                  echo "Both upload methods failed for $file"
+                  exit 1
+                }
+              }
+              echo "✓ Successfully uploaded $file"
+            fi
+          done
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
