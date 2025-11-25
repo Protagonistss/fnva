@@ -350,6 +350,7 @@ jobs:
         shell: bash
         run: |
           echo "Building all platform binaries for npm package..."
+          # Environment variables are already set in the previous step
           npm run build:all
 
       - name: Verify platform binaries
@@ -371,7 +372,7 @@ jobs:
           export GITHUB_ACTIONS=true
 
           # Run prepare script
-          npm run prepare-publish
+          npm run prepublishOnly
 
       - name: Publish to npm
         run: npm publish --access public
