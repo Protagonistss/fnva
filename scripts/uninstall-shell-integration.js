@@ -113,33 +113,48 @@ function removeShellIntegration(configPath, shell) {
 
 function main() {
   console.log('🧹 fnva shell integration uninstaller');
+  console.log('npm install location:', __dirname);
+  console.log('Current platform:', process.platform);
+  console.log('Detected shell:', process.env.SHELL || 'unknown');
 
   const shell = detectShell();
   const paths = getShellConfigPaths(shell);
 
+  console.log(`Config paths for ${shell}:`, paths);
+
   if (!paths.length) {
     console.log(`⚠️  Unsupported shell: ${shell}`);
+    console.log('No config files found for this shell');
     return;
   }
 
+  console.log(`Attempting to clean config files...`);
   const success = removeShellIntegration(null, shell);
 
   if (success) {
+    console.log('✅ Shell integration successfully removed');
     console.log('🔄 Reload your shell config:');
     switch (shell) {
       case 'powershell':
         console.log('   . $PROFILE');
+        console.log('   Or start new PowerShell instance');
         break;
       case 'bash':
         console.log('   source ~/.bashrc');
+        console.log('   Or: exec bash');
         break;
       case 'zsh':
         console.log('   source ~/.zshrc');
+        console.log('   Or: exec zsh');
         break;
       case 'fish':
         console.log('   source ~/.config/fish/config.fish');
+        console.log('   Or: exec fish');
         break;
     }
+  } else {
+    console.log('⚠️  No fnva shell integration found in any config files');
+    console.log('   (This is normal if shell integration was never installed)');
   }
 }
 
