@@ -191,8 +191,8 @@ jobs:
           echo "=== Final file list for release ==="
           find platforms -type f -name "fnva*" || echo "No fnva files found in platforms"
 
-          # Create release directory structure without renaming files
-          echo "=== Preparing release with directory structure ==="
+          # Create platform-specific zip packages
+          echo "=== Creating platform-specific zip packages ==="
           RELEASE_FILES=""
 
           # Define platforms and their executable names
@@ -205,35 +205,45 @@ jobs:
 
           for platform in "${!PLATFORM_EXECS[@]}"; do
             source_file="platforms/$platform/${PLATFORM_EXECS[$platform]}"
-            release_path="releases/$platform/${PLATFORM_EXECS[$platform]}"
+            zip_name="$platform.zip"
 
             if [ -f "$source_file" ]; then
-              mkdir -p "releases/$platform"
-              cp "$source_file" "$release_path"
-              chmod +x "$release_path"
-              echo "✓ Prepared $release_path ($(stat -c%s "$release_path") bytes)"
-              RELEASE_FILES="$RELEASE_FILES$release_path"$'\n'
+              echo "Creating $zip_name from $source_file"
+
+              # Create zip file with the executable
+              (cd "$(dirname "$source_file")" && zip -r "../../$zip_name" "$(basename "$source_file")")
+
+              # Verify zip was created
+              if [ -f "$zip_name" ]; then
+                echo "✓ Created $zip_name ($(stat -c%s "$zip_name") bytes)"
+                RELEASE_FILES="$RELEASE_FILES$zip_name"$'\n'
+              else
+                echo "✗ Failed to create $zip_name"
+              fi
             else
               echo "✗ $source_file MISSING - will be skipped"
             fi
           done
 
-          # Create release file list and verify each file
+          # Create release file list and verify each zip file
           if [ -n "$RELEASE_FILES" ]; then
-            echo "Release files to upload:"
+            echo "Release zip files to upload:"
             echo "$RELEASE_FILES"
-            echo "=== Final release structure ==="
-            tree releases/ || find releases/ -type f
+            echo "=== Final zip files ==="
+            ls -la *.zip 2>/dev/null || echo "No zip files found"
 
-            # Verify each file exists and is accessible
-            echo "=== File verification ==="
-            echo "$RELEASE_FILES" | while read -r file; do
-              if [ -f "$file" ]; then
-                echo "✓ $file exists ($(stat -c%s "$file") bytes)"
-                echo "✓ File readable: $(test -r "$file" && echo "YES" || echo "NO")"
-                echo "✓ Full path: $(realpath "$file")"
+            # Verify each zip file exists and is accessible
+            echo "=== Zip file verification ==="
+            echo "$RELEASE_FILES" | while read -r zipfile; do
+              if [ -f "$zipfile" ]; then
+                echo "✓ $zipfile exists ($(stat -c%s "$zipfile") bytes)"
+                echo "✓ File readable: $(test -r "$zipfile" && echo "YES" || echo "NO")"
+                echo "✓ Full path: $(realpath "$zipfile")"
+                # Show zip contents
+                echo "  Contents:"
+                unzip -l "$zipfile" | grep fnva || echo "  (No fnva found in zip)"
               else
-                echo "✗ $file MISSING"
+                echo "✗ $zipfile MISSING"
               fi
             done
 
@@ -242,7 +252,7 @@ jobs:
             echo "$RELEASE_FILES" >> $GITHUB_ENV
             echo "EOF" >> $GITHUB_ENV
           else
-            echo "No files found to release!"
+            echo "No zip files found to release!"
             exit 1
           fi
 
@@ -260,40 +270,25 @@ jobs:
         shell: bash
         run: |
           set -e
-          echo "=== Softprops failed, trying GitHub CLI with directory structure ==="
+          echo "=== Softprops failed, trying GitHub CLI for zip files ==="
 
           # Check GitHub CLI version
           gh --version
-          gh auth status
 
           # Get tag from ref
           TAG="${GITHUB_REF#refs/tags/}"
           echo "Uploading to release: $TAG"
 
-          # Verify release exists
-          gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json tagName || {
-            echo "Release $TAG not found"
-            exit 1
-          }
+          echo "$RELEASE_FILES" | while read -r zipfile; do
+            if [ -f "$zipfile" ]; then
+              echo "Uploading zip: $zipfile"
 
-          echo "$RELEASE_FILES" | while read -r file; do
-            if [ -f "$file" ]; then
-              echo "Uploading: $file"
-              # Preserve directory structure in the release asset name
-              asset_name=$(echo "$file" | sed 's|^releases/||')
-              echo "Asset name: $asset_name"
-
-              # Upload file with specific asset name to preserve directory structure
-              gh release upload "$TAG" "$file" "$asset_name" --clobber -R "$GITHUB_REPOSITORY" || {
-                echo "Failed to upload $file as $asset_name"
-                # Try alternative syntax
-                echo "Trying alternative upload syntax..."
-                gh release upload "$TAG" "$file" --clobber -R "$GITHUB_REPOSITORY" || {
-                  echo "Both upload methods failed for $file"
-                  exit 1
-                }
+              # Upload zip file
+              gh release upload "$TAG" "$zipfile" --clobber -R "$GITHUB_REPOSITORY" || {
+                echo "Failed to upload $zipfile"
+                exit 1
               }
-              echo "✓ Successfully uploaded $file"
+              echo "✓ Successfully uploaded $zipfile"
             fi
           done
         env:
