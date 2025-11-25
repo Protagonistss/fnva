@@ -301,15 +301,20 @@ function handleNodeOnlyMode(args) {
   const path = require('path');
   const os = require('os');
 
-  // 简单的命令处理
-  if (args.length === 0) {
-    console.log('fnva - 环境管理工具 (Node.js 模式)');
+  // 只支持基本帮助信息
+  if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
+    console.log('fnva - 环境管理工具 (Node.js 降级模式)');
     console.log('');
-    console.log('支持的命令:');
+    console.log('⚠️  当前运行在 Node.js 降级模式，功能有限');
+    console.log('');
+    console.log('解决方法:');
+    console.log('1. 确保 npm 包包含平台二进制文件');
+    console.log('2. 重新安装: npm install -g fnva --force');
+    console.log('3. 或者直接下载原生二进制文件');
+    console.log('');
+    console.log('临时可用功能:');
     console.log('  java list     - 列出 Java 环境');
     console.log('  java use <n>  - 切换 Java 环境');
-    console.log('');
-    console.log('注意: Node.js 模式功能有限，建议使用原生二进制版本。');
     return;
   }
 
@@ -389,7 +394,14 @@ function handleNodeOnlyMode(args) {
       process.exit(1);
     }
   } else {
-    console.error(`Command '${args[0]}' not supported in Node.js mode`);
+    console.error(`❌ Command '${args[0]}' requires native binary mode`);
+    console.error('');
+    console.error('当前运行在 Node.js 降级模式，不支持此命令');
+    console.error('');
+    console.error('解决方案:');
+    console.error('1. 重新安装 npm 包: npm install -g fnva --force');
+    console.error('2. 从 GitHub Release 下载原生二进制文件');
+    console.error('3. 或者设置 FNVA_SKIP_NATIVE=1 强制使用此模式（功能受限）');
     process.exit(1);
   }
 }
@@ -398,23 +410,92 @@ function run() {
   // 设置Windows控制台编码
   EncodingUtils.setWindowsConsoleEncoding();
 
+  // 强制显示调试信息
+  const showDebug = process.env.FNVA_DEBUG === '1' || process.argv.includes('--debug');
+
+  if (showDebug) {
+    console.log('=== FNVA DEBUG INFORMATION ===');
+    console.log('Node.js version:', process.version);
+    console.log('Platform:', process.platform);
+    console.log('Architecture:', process.arch);
+    console.log('Node binary:', process.execPath);
+    console.log('Script directory:', __dirname);
+    console.log('Working directory:', process.cwd());
+    console.log('Environment variables:');
+    console.log('  FNVA_DEBUG:', process.env.FNVA_DEBUG);
+    console.log('  FNVA_SKIP_NATIVE:', process.env.FNVA_SKIP_NATIVE);
+    console.log('  FNVA_AUTO_MODE:', process.env.FNVA_AUTO_MODE);
+    console.log('Command line args:', process.argv);
+    console.log('');
+  }
+
   const binaryPath = buildBinaryPath();
+
+  if (showDebug) {
+    console.log('=== BINARY SEARCH RESULTS ===');
+    console.log('Binary path found:', binaryPath);
+
+    // 手动检查所有可能的路径
+    const fs = require('fs');
+    const path = require('path');
+
+    const scriptDir = __dirname;
+    const projectRoot = path.resolve(scriptDir, '..');
+    const platform = process.platform;
+    const arch = process.arch;
+    const platformDir = `${platform}-${arch}`;
+    const binaryName = platform === 'win32' ? 'fnva.exe' : 'fnva';
+    const expectedPath = path.join(projectRoot, 'platforms', platformDir, binaryName);
+
+    console.log('Expected binary path:', expectedPath);
+    console.log('Expected path exists:', fs.existsSync(expectedPath));
+
+    // 检查platforms目录结构
+    console.log('');
+    console.log('=== PLATFORMS DIRECTORY ===');
+    const platformsDir = path.join(projectRoot, 'platforms');
+    if (fs.existsSync(platformsDir)) {
+      const platforms = fs.readdirSync(platformsDir, { withFileTypes: true });
+      platforms.forEach(item => {
+        if (item.isDirectory()) {
+          const platformPath = path.join(platformsDir, item.name);
+          const files = fs.readdirSync(platformPath);
+          console.log(`platforms/${item.name}/:`, files);
+        }
+      });
+    } else {
+      console.log('platforms directory does not exist');
+    }
+
+    console.log('=== END DEBUG ===');
+    console.log('');
+  }
 
   if (!binaryPath) {
     if (process.env.FNVA_SKIP_NATIVE === '1' || process.env.FNVA_AUTO_MODE === '1') {
+      if (showDebug) {
+        console.log('Falling back to Node.js mode (FNVA_SKIP_NATIVE or FNVA_AUTO_MODE set)');
+      }
       // 纯 Node.js 模式 - 实现基本的环境切换功能
       const args = process.argv.slice(2);
       handleNodeOnlyMode(args);
       return;
     }
 
-    console.error('Error: fnva native binary not found.');
+    console.error('❌ Error: fnva native binary not found.');
     console.error('');
-    console.error("Please either:");
-    console.error("  1) Run 'npm run build' (or 'npm run build:all') to produce platform binaries,");
-    console.error("  2) Install a release package that includes the platforms directory, or");
-    console.error("  3) Set FNVA_NATIVE_PATH to the full path of an existing fnva executable.");
-    console.error("  4) Set FNVA_SKIP_NATIVE=1 to use Node.js mode (limited functionality).");
+
+    if (showDebug) {
+      console.error('🔍 Debug information is shown above');
+      console.error('');
+    }
+
+    console.error("💡 Solutions:");
+    console.error("  1) Run 'npm run build:all' to produce platform binaries");
+    console.error("  2) Reinstall npm package: npm install -g fnva --force");
+    console.error("  3) Download binary from GitHub Release");
+    console.error("  4) Set FNVA_SKIP_NATIVE=1 to use Node.js mode (limited functionality)");
+    console.error("  5) Set FNVA_DEBUG=1 to show debug information");
     process.exit(1);
   }
 
