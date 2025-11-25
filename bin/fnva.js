@@ -44,11 +44,6 @@ function buildBinaryPath() {
     return null;
   }
 
-  // 如果设置了 FNVA_AUTO_MODE，自动使用 Node.js 模式
-  if (process.env.FNVA_AUTO_MODE === '1') {
-    return null;
-  }
-
   const platform = resolvePlatform();
   const binaryCandidates = [];
 
@@ -424,7 +419,6 @@ function run() {
     console.log('Environment variables:');
     console.log('  FNVA_DEBUG:', process.env.FNVA_DEBUG);
     console.log('  FNVA_SKIP_NATIVE:', process.env.FNVA_SKIP_NATIVE);
-    console.log('  FNVA_AUTO_MODE:', process.env.FNVA_AUTO_MODE);
     console.log('Command line args:', process.argv);
     console.log('');
   }
@@ -472,9 +466,9 @@ function run() {
   }
 
   if (!binaryPath) {
-    if (process.env.FNVA_SKIP_NATIVE === '1' || process.env.FNVA_AUTO_MODE === '1') {
+    if (process.env.FNVA_SKIP_NATIVE === '1') {
       if (showDebug) {
-        console.log('Falling back to Node.js mode (FNVA_SKIP_NATIVE or FNVA_AUTO_MODE set)');
+        console.log('Falling back to Node.js mode (FNVA_SKIP_NATIVE set)');
       }
       // 纯 Node.js 模式 - 实现基本的环境切换功能
       const args = process.argv.slice(2);
@@ -491,11 +485,10 @@ function run() {
     }
 
     console.error("💡 Solutions:");
-    console.error("  1) Run 'npm run build:all' to produce platform binaries");
-    console.error("  2) Reinstall npm package: npm install -g fnva --force");
-    console.error("  3) Download binary from GitHub Release");
-    console.error("  4) Set FNVA_SKIP_NATIVE=1 to use Node.js mode (limited functionality)");
-    console.error("  5) Set FNVA_DEBUG=1 to show debug information");
+    console.error("  1) Reinstall npm package: npm install -g fnva --force");
+    console.error("  2) Download binary from GitHub Release");
+    console.error("  3) Set FNVA_SKIP_NATIVE=1 to use Node.js mode (limited functionality)");
+    console.error("  4) Set FNVA_DEBUG=1 to show debug information");
     process.exit(1);
   }
 

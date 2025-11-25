@@ -44,9 +44,8 @@ function fnva {
     if ($args.Count -ge 2 -and ($args[0] -eq "java" -or $args[0] -eq "llm" -or $args[0] -eq "cc") -and ($args[1] -eq "use")) {
         $tempFile = Join-Path $env:TEMP ("fnva_script_" + (Get-Random) + ".ps1")
 
-        $env:FNVAAUTOMODE = "1"
         try {
-            $output = cmd.exe /c "set FNVA_AUTO_MODE=%FNVAAUTOMODE% && fnva $args" 2>&1
+            $output = cmd.exe /c "fnva $args" 2>&1
 
             if ($output -match '\\$env:' -or $output -match 'Write-Host') {
                 $output | Out-File -FilePath $tempFile -Encoding UTF8
@@ -55,12 +54,10 @@ function fnva {
                 $output
             }
         } finally {
-            $env:FNVAAUTOMODE = ""
             if (Test-Path $tempFile) { Remove-Item $tempFile -ErrorAction SilentlyContinue }
         }
     } else {
-        $env:FNVAAUTOMODE = "1"
-        try { cmd.exe /c "set FNVA_AUTO_MODE=%FNVAAUTOMODE% && fnva $args" } finally { $env:FNVAAUTOMODE = "" }
+        try { cmd.exe /c "fnva $args" } finally { }
     }
 }
 `;
@@ -96,11 +93,11 @@ fnva() {
         temp_file="$(mktemp)"
         chmod +x "$temp_file"
 
-        FNVA_AUTO_MODE=1 "$__fnva_bin" "$@" > "$temp_file"
+         "$__fnva_bin" "$@" > "$temp_file"
         source "$temp_file"
         rm -f "$temp_file"
     else
-        FNVA_AUTO_MODE=1 "$__fnva_bin" "$@"
+         "$__fnva_bin" "$@"
     fi
 }
 `;
@@ -119,11 +116,11 @@ function fnva
     if test (count $argv) -ge 2; and string match -q -r "^(java|llm|cc)$" $argv[1]; and test $argv[2] = "use"
         set temp_file (mktemp)
         chmod +x $temp_file
-        env FNVA_AUTO_MODE=1 "$__fnva_bin" $argv > $temp_file
+        env  "$__fnva_bin" $argv > $temp_file
         source $temp_file
         rm -f $temp_file
     else
-        env FNVA_AUTO_MODE=1 "$__fnva_bin" $argv
+        env  "$__fnva_bin" $argv
     end
 end
 `;
