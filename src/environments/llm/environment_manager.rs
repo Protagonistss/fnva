@@ -132,7 +132,8 @@ impl EnvironmentManager for LlmEnvironmentManager {
         };
 
         // 持久化到配置文件
-        let mut file_config = Config::load().map_err(|e| format!("Failed to load config: {}", e))?;
+        let mut file_config =
+            Config::load().map_err(|e| format!("Failed to load config: {}", e))?;
         if let Some(existing) = file_config
             .llm_environments
             .iter_mut()
@@ -224,7 +225,12 @@ impl EnvironmentManager for LlmEnvironmentManager {
         }
 
         let generator = ScriptGenerator::new().map_err(|e| e.to_string())?;
-        match generator.generate_switch_script(EnvironmentType::Llm, name, &config, Some(shell_type)) {
+        match generator.generate_switch_script(
+            EnvironmentType::Llm,
+            name,
+            &config,
+            Some(shell_type),
+        ) {
             Ok(script) => Ok(script),
             Err(e) => Err(format!("Failed to generate script: {}", e)),
         }

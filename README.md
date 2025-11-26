@@ -444,6 +444,11 @@ description = "Kimi AI Claude Code 环境"
 - **Windows**: `%USERPROFILE%\.fnva\config.toml`
 
 首次运行时会自动创建配置文件。
+如需为旧版配置补全新字段（例如默认清华下载源），可执行：
+
+```bash
+fnva config sync
+```
 
 ### 配置示例
 

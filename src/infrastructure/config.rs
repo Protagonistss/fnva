@@ -463,6 +463,28 @@ impl Config {
     pub fn remove_java_name_from_removed_list(&mut self, name: &str) {
         self.removed_java_names.retain(|n| n != name);
     }
+
+    /// 补全配置文件并写回，返回是否有变更被写入
+    pub fn sync() -> Result<bool, String> {
+        let config_path = get_config_path()?;
+        let existed = config_path.exists();
+
+        // `load` 会在缺失时创建默认配置
+        let config = Config::load()?;
+        let serialized =
+            toml::to_string_pretty(&config).map_err(|e| format!("序列化配置失败: {}", e))?;
+
+        if existed {
+            if let Ok(current) = fs::read_to_string(&config_path) {
+                if current == serialized {
+                    return Ok(false);
+                }
+            }
+        }
+
+        config.save()?;
+        Ok(true)
+    }
 }
 
 /// 解析环境变量引用（如 ${VAR_NAME}）

@@ -2,7 +2,6 @@
 //!
 //! 本模块提供统一的错误消息格式和多语言支持。
 
-
 /// 错误消息语言
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Language {

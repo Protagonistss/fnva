@@ -1,5 +1,5 @@
-use super::Platform;
 use super::JavaDownloader;
+use super::Platform;
 use crate::environments::java::VersionManager;
 use reqwest;
 use serde::{Deserialize, Serialize};

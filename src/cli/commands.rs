@@ -35,6 +35,11 @@ pub enum Commands {
         #[command(subcommand)]
         action: EnvCommands,
     },
+    /// 配置管理
+    Config {
+        #[command(subcommand)]
+        action: ConfigCommands,
+    },
     /// 网络连接诊断
     NetworkTest,
     /// 环境历史
@@ -377,6 +382,13 @@ pub enum EnvCommands {
         #[arg(short, long)]
         shell: Option<String>,
     },
+}
+
+/// 配置管理命令
+#[derive(Subcommand)]
+pub enum ConfigCommands {
+    /// 补全并同步配置文件
+    Sync,
 }
 
 /// 解析环境类型字符串

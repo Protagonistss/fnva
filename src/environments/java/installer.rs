@@ -166,17 +166,18 @@ impl JavaInstaller {
         platform: &Platform,
         env_name: &str,
     ) -> Result<String, String> {
-        let pb = crate::infrastructure::installer::utils::create_progress_bar().unwrap_or_else(|_| {
-            // If progress bar creation fails, create a simple one
-            let pb = indicatif::ProgressBar::new_spinner();
-            pb.set_style(
-                indicatif::ProgressStyle::default_spinner()
-                    .template("{spinner:.green} {msg}")
-                    .unwrap()
-                    .progress_chars("=>-")
-            );
-            pb
-        });
+        let pb =
+            crate::infrastructure::installer::utils::create_progress_bar().unwrap_or_else(|_| {
+                // If progress bar creation fails, create a simple one
+                let pb = indicatif::ProgressBar::new_spinner();
+                pb.set_style(
+                    indicatif::ProgressStyle::default_spinner()
+                        .template("{spinner:.green} {msg}")
+                        .unwrap()
+                        .progress_chars("=>-"),
+                );
+                pb
+            });
 
         // 克隆进度条以便在回调中使用
         let pb_clone = pb.clone();
