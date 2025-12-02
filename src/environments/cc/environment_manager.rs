@@ -202,21 +202,21 @@ impl EnvironmentManager for CcEnvironmentManager {
             // Add environment-specific model configuration
             match name {
                 "glmcc" => {
-                    config["anthropic_default_sonnet_model"] =
+                    config["default_model"] =
                         serde_json::Value::String("glm-4.6".to_string());
                 }
                 "anycc" => {
-                    config["anthropic_default_sonnet_model"] =
+                    config["default_model"] =
                         serde_json::Value::String("claude-sonnet-4-5".to_string());
                 }
                 "kimicc" => {
-                    config["anthropic_default_sonnet_model"] =
+                    config["default_model"] =
                         serde_json::Value::String("kimi-k2-turbo-preview".to_string());
                 }
                 _ => {
                     // For other environments, use the model specified in config
                     if !cc_env.model.is_empty() {
-                        config["anthropic_default_sonnet_model"] =
+                        config["default_model"] =
                             serde_json::Value::String(cc_env.model.clone());
                     }
                 }

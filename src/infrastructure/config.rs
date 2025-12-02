@@ -203,6 +203,52 @@ fn default_maven_repositories() -> Vec<String> {
     ]
 }
 
+/// 默认 CC 环境配置
+fn default_cc_environments() -> Vec<CcEnvironment> {
+    vec![
+        CcEnvironment {
+            name: "anthropic-cc".to_string(),
+            provider: "anthropic".to_string(),
+            api_key: "${ANTHROPIC_API_KEY}".to_string(),
+            base_url: "https://api.anthropic.com".to_string(),
+            model: "claude-3-sonnet-20240229".to_string(),
+            description: "Anthropic Claude Code 环境".to_string(),
+        },
+        CcEnvironment {
+            name: "moonshot-cc".to_string(),
+            provider: "anthropic".to_string(),
+            api_key: "${MOONSHOT_API_KEY}".to_string(),
+            base_url: "https://api.moonshot.cn/anthropic".to_string(),
+            model: "claude-3-sonnet-20240229".to_string(),
+            description: "Moonshot Claude Code 环境".to_string(),
+        },
+        CcEnvironment {
+            name: "glmcc".to_string(),
+            provider: "anthropic".to_string(),
+            api_key: "${GLM_API_KEY}".to_string(),
+            base_url: "https://open.bigmodel.cn/api/paas/v4".to_string(),
+            model: "glm-4-6".to_string(),
+            description: "智谱AI Claude Code 环境".to_string(),
+        },
+        CcEnvironment {
+            name: "anycc".to_string(),
+            provider: "anthropic".to_string(),
+            api_key: "${ANY_API_KEY}".to_string(),
+            base_url: "https://api.any-api.com/anthropic".to_string(),
+            model: "claude-sonnet-4-5".to_string(),
+            description: "任意API Claude Code 环境".to_string(),
+        },
+        CcEnvironment {
+            name: "kimicc".to_string(),
+            provider: "anthropic".to_string(),
+            api_key: "${KIMI_API_KEY}".to_string(),
+            base_url: "https://api.moonshot.cn/anthropic".to_string(),
+            model: "kimi-k2-turbo-preview".to_string(),
+            description: "Kimi Claude Code 环境".to_string(),
+        },
+    ]
+}
+
 /// Java 环境配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JavaEnvironment {
@@ -270,7 +316,7 @@ impl Config {
         Config {
             java_environments: Vec::new(),
             llm_environments: Vec::new(),
-            cc_environments: Vec::new(),
+            cc_environments: default_cc_environments(),
             repositories: Repositories {
                 java: default_java_downloader(),
                 maven: default_maven_repositories(),
@@ -286,7 +332,7 @@ impl Config {
             download: DownloadConfig::default(),
             current_java_env: None,
             default_java_env: None,
-            default_cc_env: None,
+            default_cc_env: Some("anthropic-cc".to_string()),
             custom_java_scan_paths: Vec::new(),
             removed_java_names: Vec::new(),
         }
@@ -469,19 +515,48 @@ impl Config {
         let config_path = get_config_path()?;
         let existed = config_path.exists();
 
-        // `load` 会在缺失时创建默认配置
-        let config = Config::load()?;
+        let mut config = if existed {
+            // 如果配置文件存在，加载现有配置
+            let content = fs::read_to_string(&config_path)
+                .map_err(|e| format!("无法读取配置文件: {}", e))?;
+            toml::from_str(&content).map_err(|e| format!("解析配置文件失败: {}", e))?
+        } else {
+            // 如果配置文件不存在，创建默认配置
+            Config::new()
+        };
+
+        // 智能补全缺失的 CC 环境配置
+        let default_cc_envs = default_cc_environments();
+        let mut updated = false;
+
+        // 添加缺失的默认 CC 环境
+        for default_env in default_cc_envs {
+            if !config.cc_environments.iter().any(|env| env.name == default_env.name) {
+                config.cc_environments.push(default_env);
+                updated = true;
+            }
+        }
+
+        // 如果没有默认 CC 环境，设置一个
+        if config.default_cc_env.is_none() && !config.cc_environments.is_empty() {
+            config.default_cc_env = Some("anthropic-cc".to_string());
+            updated = true;
+        }
+
+        // 序列化配置
         let serialized =
             toml::to_string_pretty(&config).map_err(|e| format!("序列化配置失败: {}", e))?;
 
+        // 检查是否有变更
         if existed {
             if let Ok(current) = fs::read_to_string(&config_path) {
-                if current == serialized {
+                if current == serialized && !updated {
                     return Ok(false);
                 }
             }
         }
 
+        // 保存配置
         config.save()?;
         Ok(true)
     }

@@ -643,7 +643,22 @@ impl EnvironmentSwitcher {
                             format!(" ({})", markers.join(", "))
                         };
 
-                        output.push_str(&format!("  {}{}: {}\n", name, marker_str, description));
+                        // 显示环境信息，对于 CC 环境显示模型
+                        let env_info = if env_type == EnvironmentType::Cc {
+                            if let Some(model) = &env.version {
+                                if !model.is_empty() {
+                                    format!(" - {}", model)
+                                } else {
+                                    String::new()
+                                }
+                            } else {
+                                String::new()
+                            }
+                        } else {
+                            String::new()
+                        };
+
+                        output.push_str(&format!("  {}{}: {}{}\n", name, marker_str, description, env_info));
                     }
                 }
                 Ok(output)
