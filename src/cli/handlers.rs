@@ -43,6 +43,7 @@ impl CommandHandler {
             Commands::Llm { action } => self.handle_llm_command(action).await,
             Commands::Cc { action } => self.handle_cc_command(action).await,
             Commands::Env { action } => self.handle_env_command(action).await,
+            Commands::Config { action } => self.handle_config_command(action).await,
             Commands::NetworkTest => self.handle_network_test().await,
             Commands::History {
                 env_type,
@@ -629,6 +630,22 @@ function fnva {
                 return Err(
                     "Environment command not yet implemented in new architecture".to_string(),
                 );
+            }
+        }
+        Ok(())
+    }
+
+    /// 处理配置命令
+    async fn handle_config_command(&mut self, action: ConfigCommands) -> Result<(), String> {
+        match action {
+            ConfigCommands::Sync => {
+                use crate::infrastructure::config::Config;
+                let updated = Config::sync()?;
+                if updated {
+                    println!("配置已同步（补全默认字段，例如清华源）");
+                } else {
+                    println!("配置已是最新，无需同步");
+                }
             }
         }
         Ok(())

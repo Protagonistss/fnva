@@ -120,7 +120,8 @@ impl EnvironmentManager for CcEnvironmentManager {
         };
 
         // 持久化到配置文件
-        let mut file_config = Config::load().map_err(|e| format!("Failed to load config: {}", e))?;
+        let mut file_config =
+            Config::load().map_err(|e| format!("Failed to load config: {}", e))?;
         if let Some(existing) = file_config
             .cc_environments
             .iter_mut()
@@ -201,21 +202,21 @@ impl EnvironmentManager for CcEnvironmentManager {
             // Add environment-specific model configuration
             match name {
                 "glmcc" => {
-                    config["anthropic_default_sonnet_model"] =
+                    config["default_model"] =
                         serde_json::Value::String("glm-4.6".to_string());
                 }
                 "anycc" => {
-                    config["anthropic_default_sonnet_model"] =
+                    config["default_model"] =
                         serde_json::Value::String("claude-sonnet-4-5".to_string());
                 }
                 "kimicc" => {
-                    config["anthropic_default_sonnet_model"] =
+                    config["default_model"] =
                         serde_json::Value::String("kimi-k2-turbo-preview".to_string());
                 }
                 _ => {
                     // For other environments, use the model specified in config
                     if !cc_env.model.is_empty() {
-                        config["anthropic_default_sonnet_model"] =
+                        config["default_model"] =
                             serde_json::Value::String(cc_env.model.clone());
                     }
                 }
@@ -223,7 +224,8 @@ impl EnvironmentManager for CcEnvironmentManager {
         }
 
         let generator = ScriptGenerator::new().map_err(|e| e.to_string())?;
-        match generator.generate_switch_script(EnvironmentType::Cc, name, &config, Some(shell_type)) {
+        match generator.generate_switch_script(EnvironmentType::Cc, name, &config, Some(shell_type))
+        {
             Ok(script) => Ok(script),
             Err(e) => Err(format!("Failed to generate script: {}", e)),
         }

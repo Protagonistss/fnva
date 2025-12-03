@@ -393,7 +393,12 @@ impl EnvironmentManager for JavaEnvironmentManager {
         });
 
         let generator = ScriptGenerator::new().map_err(|e| e.to_string())?;
-        match generator.generate_switch_script(EnvironmentType::Java, name, &config, Some(shell_type)) {
+        match generator.generate_switch_script(
+            EnvironmentType::Java,
+            name,
+            &config,
+            Some(shell_type),
+        ) {
             Ok(script) => Ok(script),
             Err(e) => Err(format!("Failed to generate script: {}", e)),
         }

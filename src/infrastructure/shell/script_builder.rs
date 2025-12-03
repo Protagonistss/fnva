@@ -151,7 +151,7 @@ impl ScriptBuilder {
 
                     // Set default Sonnet model if specified
                     if let Some(default_model) = config
-                        .get("anthropic_default_sonnet_model")
+                        .get("default_model")
                         .and_then(|v| v.as_str())
                     {
                         script.push_str(&format!(
@@ -250,7 +250,7 @@ impl ScriptBuilder {
 
                     // Set default Sonnet model if specified
                     if let Some(default_model) = config
-                        .get("anthropic_default_sonnet_model")
+                        .get("default_model")
                         .and_then(|v| v.as_str())
                     {
                         script.push_str(&format!(
