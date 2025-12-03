@@ -5,6 +5,28 @@ edition = "2021"
 authors = ["protagonistss"]
 description = "跨平台环境切换工具，支持 Java 和 LLM 环境配置"
 license = "MIT"
+repository = "https://github.com/Protagonistss/fnva"
+homepage = "https://github.com/Protagonistss/fnva"
+documentation = "https://github.com/Protagonistss/fnva#readme"
+readme = "README.md"
+keywords = ["environment", "java", "llm", "cli", "version-manager"]
+categories = ["command-line-utilities", "development-tools"]
+exclude = [
+    "scripts/",
+    "platforms/",
+    ".github/",
+    "*.log",
+    ".vscode/",
+    ".idea/",
+    "package.json",
+    "package-lock.json",
+    "lib/",
+    "bin/*.js",
+    "bin/*.ps1",
+    "bin/*.bat",
+    "bin/*.cmd",
+    ".npmignore",
+]
 
 [dependencies]
 clap = { version = "4.4", features = ["derive"] }
