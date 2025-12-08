@@ -371,3 +371,50 @@ jobs:
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  crates-io-publish:
+    name: Publish to crates.io
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-crate-publish-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-crate-publish-
+            ${{ runner.os }}-cargo-
+
+      - name: Publish crate
+        shell: bash
+        env:
+          CARGO_TOKEN: ${{ secrets.CARGO_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          cargo package --locked
+
+          publish_log=$(mktemp)
+          if cargo publish --locked --token "$CARGO_TOKEN" 2>&1 | tee "$publish_log"; then
+            echo "Crate published to crates.io"
+          else
+            if grep -q "crate version .* is already uploaded" "$publish_log"; then
+              echo "Crate version already published on crates.io, skipping."
+            else
+              echo "cargo publish failed (see log above)"
+              exit 1
+            fi
+          fi
