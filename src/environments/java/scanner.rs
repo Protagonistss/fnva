@@ -142,7 +142,7 @@ impl JavaScanner {
             // 动态添加用户相关的路径
             if let Some(home_dir) = dirs::home_dir() {
                 let home_str = home_dir.to_string_lossy();
-                paths.push(format!("{}\\.fnva\\java-packages", home_str));
+                paths.push(format!("{home_str}\\.fnva\\java-packages"));
             }
 
             // 从配置文件读取自定义路径（如果存在）
@@ -161,7 +161,7 @@ impl JavaScanner {
             // 动态添加用户相关的路径
             if let Some(home_dir) = dirs::home_dir() {
                 let home_str = home_dir.to_string_lossy();
-                paths.push(format!("{}/.fnva/java-packages", home_str));
+                paths.push(format!("{home_str}/.fnva/java-packages"));
             }
 
             // 从配置文件读取自定义路径
@@ -181,7 +181,7 @@ impl JavaScanner {
             // 动态添加用户相关的路径
             if let Some(home_dir) = dirs::home_dir() {
                 let home_str = home_dir.to_string_lossy();
-                paths.push(format!("{}/.fnva/java-packages", home_str));
+                paths.push(format!("{home_str}/.fnva/java-packages"));
             }
 
             // 从配置文件读取自定义路径
@@ -197,7 +197,7 @@ impl JavaScanner {
     fn get_custom_scan_paths() -> Result<Vec<String>, String> {
         use crate::infrastructure::config::Config;
 
-        let config = Config::load().map_err(|e| format!("Failed to load config: {}", e))?;
+        let config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
 
         let mut custom_paths = Vec::new();
 
@@ -298,7 +298,7 @@ impl JavaScanner {
         let output = Command::new(java_exe)
             .arg("-version")
             .output()
-            .map_err(|e| format!("Failed to execute java -version: {}", e))?;
+            .map_err(|e| format!("Failed to execute java -version: {e}"))?;
 
         if output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);

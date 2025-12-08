@@ -12,7 +12,7 @@ impl JavaValidator {
 
         // 验证 Java Home 路径
         if !ValidationUtils::validate_java_home(java_home) {
-            return Err(format!("Invalid JAVA_HOME path: {}", java_home));
+            return Err(format!("Invalid JAVA_HOME path: {java_home}"));
         }
 
         // 检查版本信息
@@ -24,21 +24,21 @@ impl JavaValidator {
     /// 验证 Java 版本是否可获取
     fn validate_java_version(java_home: &str) -> Result<(), String> {
         let java_exe = if cfg!(target_os = "windows") {
-            format!("{}\\bin\\java.exe", java_home)
+            format!("{java_home}\\bin\\java.exe")
         } else {
-            format!("{}/bin/java", java_home)
+            format!("{java_home}/bin/java")
         };
 
         let java_path = Path::new(&java_exe);
         if !java_path.exists() {
-            return Err(format!("Java executable not found: {}", java_exe));
+            return Err(format!("Java executable not found: {java_exe}"));
         }
 
         use std::process::Command;
         let output = Command::new(java_exe)
             .arg("-version")
             .output()
-            .map_err(|e| format!("Failed to execute java -version: {}", e))?;
+            .map_err(|e| format!("Failed to execute java -version: {e}"))?;
 
         if !output.status.success() {
             return Err(format!("java -version command failed: {}", output.status));
@@ -84,7 +84,7 @@ impl JavaValidator {
         }
 
         // 如果不在已知列表中，给出警告但不阻止
-        eprintln!("Warning: Unknown Java vendor: {}", vendor);
+        eprintln!("Warning: Unknown Java vendor: {vendor}");
         Ok(())
     }
 }

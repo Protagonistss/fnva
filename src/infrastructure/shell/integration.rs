@@ -1,5 +1,5 @@
 use crate::config::Config;
-use std::path::PathBuf;
+use std::path::Path;
 
 /// Shell 集成管理器
 pub struct ShellIntegration;
@@ -9,7 +9,7 @@ impl ShellIntegration {
     pub fn generate_env_script(config: &Config, env_name: &str) -> Result<String, String> {
         let env = config
             .get_java_env(env_name)
-            .ok_or_else(|| format!("Java 环境 '{}' 不存在", env_name))?;
+            .ok_or_else(|| format!("Java 环境 '{env_name}' 不存在"))?;
 
         // 验证 Java Home 路径
         if !crate::utils::validate_java_home(&env.java_home) {
@@ -22,7 +22,7 @@ impl ShellIntegration {
             .join(".fnva");
 
         // 确保目录存在
-        std::fs::create_dir_all(&script_dir).map_err(|e| format!("创建脚本目录失败: {}", e))?;
+        std::fs::create_dir_all(&script_dir).map_err(|e| format!("创建脚本目录失败: {e}"))?;
 
         let powershell_script = script_dir.join("fnva-env.ps1");
         let batch_script = script_dir.join("fnva-env.bat");
@@ -30,12 +30,12 @@ impl ShellIntegration {
         // 生成 PowerShell 脚本
         let ps1_content = Self::generate_powershell_script(config, env_name)?;
         std::fs::write(&powershell_script, ps1_content)
-            .map_err(|e| format!("写入 PowerShell 脚本失败: {}", e))?;
+            .map_err(|e| format!("写入 PowerShell 脚本失败: {e}"))?;
 
         // 生成批处理脚本
         let bat_content = Self::generate_batch_script(config, env_name)?;
         std::fs::write(&batch_script, bat_content)
-            .map_err(|e| format!("写入批处理脚本失败: {}", e))?;
+            .map_err(|e| format!("写入批处理脚本失败: {e}"))?;
 
         Ok(format!(
             "✅ 环境切换脚本已生成\n\
@@ -83,7 +83,7 @@ impl ShellIntegration {
 
         // 当前激活环境（从配置读取）
         if let Some(current) = &config.current_java_env {
-            script_content.push_str(&format!("$CurrentEnv = \"{}\"\n\n", current));
+            script_content.push_str(&format!("$CurrentEnv = \"{current}\"\n\n"));
         }
 
         // 确定目标环境
@@ -188,8 +188,7 @@ impl ShellIntegration {
 
             // 输出和验证
             script_content.push_str(&format!(
-                "echo Successfully switched to Java environment: {}\n",
-                target_env
+                "echo Successfully switched to Java environment: {target_env}\n"
             ));
             script_content.push_str(&format!("echo JAVA_HOME: {}\n", env.java_home));
             script_content.push_str(&format!(
@@ -205,7 +204,7 @@ impl ShellIntegration {
             script_content.push_str("    echo Warning: Java executable not found\n");
             script_content.push_str(")\n");
         } else {
-            return Err(format!("Environment not found: {}", target_env));
+            return Err(format!("Environment not found: {target_env}"));
         }
 
         Ok(script_content)
@@ -221,13 +220,13 @@ impl ShellIntegration {
         let ps_profile_script = Self::generate_powershell_profile_integration(&script_dir)?;
         let ps_profile_path = script_dir.join("powershell-integration.ps1");
         std::fs::write(&ps_profile_path, ps_profile_script)
-            .map_err(|e| format!("Failed to write PowerShell integration script: {}", e))?;
+            .map_err(|e| format!("Failed to write PowerShell integration script: {e}"))?;
 
         // CMD 集成
         let cmd_integration_script = Self::generate_cmd_integration(&script_dir)?;
         let cmd_integration_path = script_dir.join("cmd-integration.bat");
         std::fs::write(&cmd_integration_path, cmd_integration_script)
-            .map_err(|e| format!("Failed to write CMD integration script: {}", e))?;
+            .map_err(|e| format!("Failed to write CMD integration script: {e}"))?;
 
         Ok(format!(
             "✅ Shell 集成脚本已生成\n\
@@ -254,7 +253,7 @@ impl ShellIntegration {
     }
 
     /// 生成 PowerShell Profile 集成脚本
-    fn generate_powershell_profile_integration(_script_dir: &PathBuf) -> Result<String, String> {
+    fn generate_powershell_profile_integration(_script_dir: &Path) -> Result<String, String> {
         let script_content = r#"# fnva PowerShell 集成
 # 添加到你的 PowerShell Profile 中
 
@@ -283,7 +282,7 @@ if (Test-Path $fnvaScript) {
     }
 
     /// 生成 CMD 集成脚本
-    fn generate_cmd_integration(_script_dir: &PathBuf) -> Result<String, String> {
+    fn generate_cmd_integration(_script_dir: &Path) -> Result<String, String> {
         let script_content = r#"@echo off
 REM fnva CMD 集成
 REM 添加到你的环境变量或启动脚本中
@@ -313,7 +312,7 @@ if exist "%fnvaScript%" (
 
         let env = config
             .get_java_env(env_name)
-            .ok_or_else(|| format!("Java 环境 '{}' 不存在", env_name))?
+            .ok_or_else(|| format!("Java 环境 '{env_name}' 不存在"))?
             .clone(); // 提前克隆以避免借用冲突
 
         // 验证路径
@@ -330,7 +329,7 @@ if exist "%fnvaScript%" (
 
         let bin_path = format!("{}\\bin", env.java_home);
         if let Ok(current_path) = std::env::var("PATH") {
-            let new_path = format!("{};{}", bin_path, current_path);
+            let new_path = format!("{bin_path};{current_path}");
             std::env::set_var("PATH", new_path);
         }
 

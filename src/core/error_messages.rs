@@ -59,7 +59,7 @@ impl ErrorMessageFormatter {
     pub fn format(&self, template: &str, args: &[&str]) -> String {
         let mut result = template.to_string();
         for (i, arg) in args.iter().enumerate() {
-            result = result.replace(&format!("{{{}}}", i), arg);
+            result = result.replace(&format!("{{{i}}}"), arg);
         }
         result
     }
@@ -68,13 +68,10 @@ impl ErrorMessageFormatter {
     pub fn format_env_error(&self, env_type: &str, env_name: &str, details: &str) -> String {
         match self.language {
             Language::Chinese => {
-                format!("{}环境 '{}' 操作失败: {}", env_type, env_name, details)
+                format!("{env_type}环境 '{env_name}' 操作失败: {details}")
             }
             Language::English => {
-                format!(
-                    "Failed to {} '{}' environment: {}",
-                    env_type, env_name, details
-                )
+                format!("Failed to {env_type} '{env_name}' environment: {details}")
             }
         }
     }
@@ -83,15 +80,11 @@ impl ErrorMessageFormatter {
     pub fn format_network_error(&self, operation: &str, url: &str, details: &str) -> String {
         match self.language {
             Language::Chinese => {
-                format!(
-                    "网络请求失败 - 操作: {}, URL: {}, 详情: {}",
-                    operation, url, details
-                )
+                format!("网络请求失败 - 操作: {operation}, URL: {url}, 详情: {details}")
             }
             Language::English => {
                 format!(
-                    "Network request failed - operation: {}, URL: {}, details: {}",
-                    operation, url, details
+                    "Network request failed - operation: {operation}, URL: {url}, details: {details}"
                 )
             }
         }
@@ -101,15 +94,11 @@ impl ErrorMessageFormatter {
     pub fn format_fs_error(&self, operation: &str, path: &str, details: &str) -> String {
         match self.language {
             Language::Chinese => {
-                format!(
-                    "文件系统错误 - 操作: {}, 路径: {}, 详情: {}",
-                    operation, path, details
-                )
+                format!("文件系统错误 - 操作: {operation}, 路径: {path}, 详情: {details}")
             }
             Language::English => {
                 format!(
-                    "File system error - operation: {}, path: {}, details: {}",
-                    operation, path, details
+                    "File system error - operation: {operation}, path: {path}, details: {details}"
                 )
             }
         }
@@ -119,13 +108,10 @@ impl ErrorMessageFormatter {
     pub fn format_config_error(&self, section: &str, details: &str) -> String {
         match self.language {
             Language::Chinese => {
-                format!("配置错误 - 节: {}, 详情: {}", section, details)
+                format!("配置错误 - 节: {section}, 详情: {details}")
             }
             Language::English => {
-                format!(
-                    "Configuration error - section: {}, details: {}",
-                    section, details
-                )
+                format!("Configuration error - section: {section}, details: {details}")
             }
         }
     }
@@ -134,16 +120,10 @@ impl ErrorMessageFormatter {
     pub fn format_validation_error(&self, field: &str, value: &str, rule: &str) -> String {
         match self.language {
             Language::Chinese => {
-                format!(
-                    "验证失败 - 字段: '{}' (值: '{}'), 规则: {}",
-                    field, value, rule
-                )
+                format!("验证失败 - 字段: '{field}' (值: '{value}'), 规则: {rule}")
             }
             Language::English => {
-                format!(
-                    "Validation failed - field: '{}' (value: '{}'), rule: {}",
-                    field, value, rule
-                )
+                format!("Validation failed - field: '{field}' (value: '{value}'), rule: {rule}")
             }
         }
     }

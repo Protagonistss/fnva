@@ -262,18 +262,13 @@ pub struct JavaEnvironment {
 }
 
 /// 环境来源
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum EnvironmentSource {
     #[serde(rename = "manual")]
+    #[default]
     Manual,
     #[serde(rename = "scanned")]
     Scanned,
-}
-
-impl Default for EnvironmentSource {
-    fn default() -> Self {
-        EnvironmentSource::Manual
-    }
 }
 
 /// LLM 环境配置
@@ -308,6 +303,12 @@ pub struct CcEnvironment {
     pub model: String,
     #[serde(default)]
     pub description: String,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Config {
@@ -350,9 +351,9 @@ impl Config {
         }
 
         let content =
-            fs::read_to_string(&config_path).map_err(|e| format!("无法读取配置文件: {}", e))?;
+            fs::read_to_string(&config_path).map_err(|e| format!("无法读取配置文件: {e}"))?;
 
-        toml::from_str(&content).map_err(|e| format!("解析配置文件失败: {}", e))
+        toml::from_str(&content).map_err(|e| format!("解析配置文件失败: {e}"))
     }
 
     /// 保存配置到文件
@@ -361,13 +362,13 @@ impl Config {
 
         // 确保配置目录存在
         if let Some(parent) = config_path.parent() {
-            fs::create_dir_all(parent).map_err(|e| format!("无法创建配置目录: {}", e))?;
+            fs::create_dir_all(parent).map_err(|e| format!("无法创建配置目录: {e}"))?;
         }
 
         let toml_content =
-            toml::to_string_pretty(self).map_err(|e| format!("序列化配置失败: {}", e))?;
+            toml::to_string_pretty(self).map_err(|e| format!("序列化配置失败: {e}"))?;
 
-        fs::write(&config_path, toml_content).map_err(|e| format!("写入配置文件失败: {}", e))?;
+        fs::write(&config_path, toml_content).map_err(|e| format!("写入配置文件失败: {e}"))?;
 
         Ok(())
     }
@@ -387,7 +388,7 @@ impl Config {
         let original_len = self.java_environments.len();
         self.java_environments.retain(|e| e.name != name);
         if self.java_environments.len() == original_len {
-            return Err(format!("Java 环境 '{}' 不存在", name));
+            return Err(format!("Java 环境 '{name}' 不存在"));
         }
         Ok(())
     }
@@ -401,7 +402,7 @@ impl Config {
     pub fn set_current_java_env(&mut self, name: String) -> Result<(), String> {
         // 验证环境是否存在
         if !self.java_environments.iter().any(|e| e.name == name) {
-            return Err(format!("Java 环境 '{}' 不存在", name));
+            return Err(format!("Java 环境 '{name}' 不存在"));
         }
         self.current_java_env = Some(name);
         Ok(())
@@ -436,7 +437,7 @@ impl Config {
         let original_len = self.llm_environments.len();
         self.llm_environments.retain(|e| e.name != name);
         if self.llm_environments.len() == original_len {
-            return Err(format!("LLM 环境 '{}' 不存在", name));
+            return Err(format!("LLM 环境 '{name}' 不存在"));
         }
         Ok(())
     }
@@ -517,9 +518,9 @@ impl Config {
 
         let mut config = if existed {
             // 如果配置文件存在，加载现有配置
-            let content = fs::read_to_string(&config_path)
-                .map_err(|e| format!("无法读取配置文件: {}", e))?;
-            toml::from_str(&content).map_err(|e| format!("解析配置文件失败: {}", e))?
+            let content =
+                fs::read_to_string(&config_path).map_err(|e| format!("无法读取配置文件: {e}"))?;
+            toml::from_str(&content).map_err(|e| format!("解析配置文件失败: {e}"))?
         } else {
             // 如果配置文件不存在，创建默认配置
             Config::new()
@@ -531,7 +532,11 @@ impl Config {
 
         // 添加缺失的默认 CC 环境
         for default_env in default_cc_envs {
-            if !config.cc_environments.iter().any(|env| env.name == default_env.name) {
+            if !config
+                .cc_environments
+                .iter()
+                .any(|env| env.name == default_env.name)
+            {
                 config.cc_environments.push(default_env);
                 updated = true;
             }
@@ -545,7 +550,7 @@ impl Config {
 
         // 序列化配置
         let serialized =
-            toml::to_string_pretty(&config).map_err(|e| format!("序列化配置失败: {}", e))?;
+            toml::to_string_pretty(&config).map_err(|e| format!("序列化配置失败: {e}"))?;
 
         // 检查是否有变更
         if existed {

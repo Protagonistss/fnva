@@ -76,7 +76,7 @@ impl AliyunJavaDownloader {
             .map(|c| c.java_version_cache.ttl)
             .unwrap_or(3600);
         let cache = crate::remote::cache::VersionCacheManager::new()
-            .map_err(|e| DownloadError::from(format!("初始化缓存失败: {}", e)))?
+            .map_err(|e| DownloadError::from(format!("初始化缓存失败: {e}")))?
             .with_ttl(ttl);
         if let Ok(Some(cached)) = cache
             .load::<Vec<UnifiedJavaVersion>>(
@@ -99,7 +99,7 @@ impl AliyunJavaDownloader {
 
             for (key, source) in v.download_urls.iter() {
                 let url = &source.primary;
-                if let Some(filename) = url.split('/').last() {
+                if let Some(filename) = url.split('/').next_back() {
                     let mirror_url = format!(
                         "{}/{}/{}{}{}",
                         self.base_url,
@@ -207,7 +207,7 @@ impl JavaDownloader for AliyunJavaDownloader {
             // 允许同 OS 任意架构兜底
             for (platform_key, entry) in version_clone.download_urls.iter() {
                 if platform_key.starts_with(&platform_clone.os) {
-                    println!("⚠️  使用邻近平台包: {} -> {}", platform_key, key);
+                    println!("⚠️  使用邻近平台包: {platform_key} -> {key}");
                     match mirror_utils::pick_available_url(&self.client, entry).await {
                         Ok(url) => {
                             if url != entry.primary {
@@ -220,10 +220,7 @@ impl JavaDownloader for AliyunJavaDownloader {
                 }
             }
 
-            Err(DownloadError::from(format!(
-                "未找到匹配 {} 的下载地址",
-                key
-            )))
+            Err(DownloadError::from(format!("未找到匹配 {key} 的下载地址")))
         })
     }
 
@@ -245,7 +242,7 @@ impl JavaDownloader for AliyunJavaDownloader {
                 .await?;
 
             println!("⬇️  下载 Java {}...", version_clone.version);
-            println!("📥 地址: {}", url);
+            println!("📥 地址: {url}");
 
             // 创建持久化文件路径而不是临时目录
             let cache_dir = dirs::home_dir()
@@ -257,7 +254,7 @@ impl JavaDownloader for AliyunJavaDownloader {
             // 确保缓存目录存在
             tokio::fs::create_dir_all(&cache_dir)
                 .await
-                .map_err(|e| DownloadError::Io(format!("创建缓存目录失败: {}", e)))?;
+                .map_err(|e| DownloadError::Io(format!("创建缓存目录失败: {e}")))?;
 
             let extension = platform_clone.archive_ext();
             let file_name = format!(
@@ -274,23 +271,20 @@ impl JavaDownloader for AliyunJavaDownloader {
 
                     // 验证文件确实存在
                     if !file_path.exists() {
-                        return Err(DownloadError::Io(format!(
-                            "缓存文件不存在: {:?}",
-                            file_path
-                        )));
+                        return Err(DownloadError::Io(format!("缓存文件不存在: {file_path:?}")));
                     }
 
                     // 使用规范化路径，确保在 Windows 上正确处理
                     let canonical_path = file_path
                         .canonicalize()
-                        .map_err(|e| DownloadError::Io(format!("无法获取规范路径: {}", e)))?;
+                        .map_err(|e| DownloadError::Io(format!("无法获取规范路径: {e}")))?;
 
                     let path_str = canonical_path
                         .to_str()
                         .ok_or_else(|| DownloadError::Io("路径包含无效字符".to_string()))?
                         .to_string();
 
-                    println!("-> 文件保存位置: {}", path_str);
+                    println!("-> 文件保存位置: {path_str}");
                     return Ok(DownloadTarget::File(path_str));
                 }
             }
@@ -299,33 +293,32 @@ impl JavaDownloader for AliyunJavaDownloader {
                 progress_callback(d, t)
             })
             .await
-            .map_err(|e| DownloadError::from(format!("下载失败: {}", e)))?;
+            .map_err(|e| DownloadError::from(format!("下载失败: {e}")))?;
 
             let file_size = tokio::fs::metadata(&file_path)
                 .await
-                .map_err(|e| DownloadError::Io(format!("获取文件大小失败: {}", e)))?
+                .map_err(|e| DownloadError::Io(format!("获取文件大小失败: {e}")))?
                 .len();
             println!("✓ 下载完成，大小: {} MB", file_size / (1024 * 1024));
 
             // 验证文件确实存在
             if !file_path.exists() {
                 return Err(DownloadError::Io(format!(
-                    "下载的文件不存在: {:?}",
-                    file_path
+                    "下载的文件不存在: {file_path:?}"
                 )));
             }
 
             // 使用规范化路径，确保在 Windows 上正确处理
             let canonical_path = file_path
                 .canonicalize()
-                .map_err(|e| DownloadError::Io(format!("无法获取规范路径: {}", e)))?;
+                .map_err(|e| DownloadError::Io(format!("无法获取规范路径: {e}")))?;
 
             let path_str = canonical_path
                 .to_str()
                 .ok_or_else(|| DownloadError::Io("路径包含无效字符".to_string()))?
                 .to_string();
 
-            println!("-> 文件保存位置: {}", path_str);
+            println!("-> 文件保存位置: {path_str}");
 
             // 返回持久化文件路径
             Ok(DownloadTarget::File(path_str))

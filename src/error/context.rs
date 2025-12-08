@@ -1,4 +1,4 @@
-use crate::error::{AppError, ContextualError, ErrorContext};
+use crate::error::{AppError, ContextualError, ContextualResult, ErrorContext};
 use std::sync::{Arc, Mutex};
 
 /// 提供安全的 Mutex 操作，避免 unwrap()
@@ -16,29 +16,33 @@ impl<T> SafeMutex<T> {
     }
 
     /// 安全地获取锁，如果锁定失败返回错误
-    pub fn lock(&self) -> Result<std::sync::MutexGuard<'_, T>, ContextualError> {
-        self.inner.lock().map_err(|_| ContextualError {
-            error: AppError::lock_failed(&format!("锁定失败: {}", self.name)),
-            context: ErrorContext {
-                operation: format!("获取 {} 锁时发生死锁", self.name),
-                suggestions: vec![
-                    "检查是否存在死锁".to_string(),
-                    "确保其他线程正确释放锁".to_string(),
-                ],
-                help_url: None,
-            },
+    pub fn lock(&self) -> ContextualResult<std::sync::MutexGuard<'_, T>> {
+        self.inner.lock().map_err(|_| {
+            Box::new(ContextualError {
+                error: AppError::lock_failed(&format!("锁定失败: {}", self.name)),
+                context: ErrorContext {
+                    operation: format!("获取 {} 锁时发生死锁", self.name),
+                    suggestions: vec![
+                        "检查是否存在死锁".to_string(),
+                        "确保其他线程正确释放锁".to_string(),
+                    ],
+                    help_url: None,
+                },
+            })
         })
     }
 
     /// 尝试获取锁，非阻塞
-    pub fn try_lock(&self) -> Result<std::sync::MutexGuard<'_, T>, ContextualError> {
-        self.inner.try_lock().map_err(|_| ContextualError {
-            error: AppError::lock_failed(&format!("无法获取锁: {}", self.name)),
-            context: ErrorContext {
-                operation: format!("尝试获取 {} 锁时被占用", self.name),
-                suggestions: vec!["稍后重试".to_string(), "检查锁的持有者".to_string()],
-                help_url: None,
-            },
+    pub fn try_lock(&self) -> ContextualResult<std::sync::MutexGuard<'_, T>> {
+        self.inner.try_lock().map_err(|_| {
+            Box::new(ContextualError {
+                error: AppError::lock_failed(&format!("无法获取锁: {}", self.name)),
+                context: ErrorContext {
+                    operation: format!("尝试获取 {} 锁时被占用", self.name),
+                    suggestions: vec!["稍后重试".to_string(), "检查锁的持有者".to_string()],
+                    help_url: None,
+                },
+            })
         })
     }
 }
@@ -55,14 +59,14 @@ impl<T> Clone for SafeMutex<T> {
 /// 提供安全的路径转换，避免 unwrap()
 pub fn safe_path_to_str(path: &std::path::Path) -> Result<&str, AppError> {
     path.to_str()
-        .ok_or_else(|| AppError::path_conversion_failed(&format!("{:?}", path)))
+        .ok_or_else(|| AppError::path_conversion_failed(&format!("{path:?}")))
 }
 
 /// 提供安全的路径字符串转换
 pub fn safe_path_to_string(path: &std::path::Path) -> Result<String, AppError> {
     path.to_str()
         .map(|s| s.to_string())
-        .ok_or_else(|| AppError::path_conversion_failed(&format!("{:?}", path)))
+        .ok_or_else(|| AppError::path_conversion_failed(&format!("{path:?}")))
 }
 
 /// 安全的 JSON 序列化
@@ -88,14 +92,16 @@ pub fn option_with_context<T>(
     option: Option<T>,
     error: AppError,
     operation: &str,
-) -> Result<T, ContextualError> {
-    option.ok_or_else(|| ContextualError {
-        error,
-        context: ErrorContext {
-            operation: operation.to_string(),
-            suggestions: Vec::new(),
-            help_url: None,
-        },
+) -> ContextualResult<T> {
+    option.ok_or_else(|| {
+        Box::new(ContextualError {
+            error,
+            context: ErrorContext {
+                operation: operation.to_string(),
+                suggestions: Vec::new(),
+                help_url: None,
+            },
+        })
     })
 }
 
@@ -128,7 +134,9 @@ mod tests {
 
     #[test]
     fn test_with_context() {
-        let result: Result<i32, &str> = Err("test error");
+        let result: Result<i32, AppError> = Err(AppError::Internal {
+            message: "test error".to_string(),
+        });
         let contextual_result = with_context(result, "test operation");
         assert!(contextual_result.is_err());
     }

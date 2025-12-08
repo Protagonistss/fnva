@@ -9,13 +9,13 @@ async fn main() {
     let mut handler = match CommandHandler::new() {
         Ok(handler) => handler,
         Err(e) => {
-            eprintln!("Error: {}", e);
+            eprintln!("Error: {e}");
             process::exit(1);
         }
     };
 
     if let Err(e) = handler.handle_command(cli.command).await {
-        eprintln!("Error: {}", e);
+        eprintln!("Error: {e}");
         process::exit(1);
     }
 }

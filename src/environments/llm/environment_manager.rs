@@ -11,6 +11,12 @@ pub struct LlmEnvironmentManager {
     environments: HashMap<String, LlmEnvironment>,
 }
 
+impl Default for LlmEnvironmentManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LlmEnvironmentManager {
     /// 创建新的 LLM 环境管理器
     pub fn new() -> Self {
@@ -20,10 +26,7 @@ impl LlmEnvironmentManager {
 
         // 从配置文件加载 LLM 环境
         if let Err(e) = manager.load_from_config() {
-            eprintln!(
-                "Warning: Failed to load LLM environments from config: {}",
-                e
-            );
+            eprintln!("Warning: Failed to load LLM environments from config: {e}");
         }
 
         manager
@@ -86,8 +89,8 @@ impl EnvironmentManager for LlmEnvironmentManager {
 
     fn add(&mut self, name: &str, config_str: &str) -> Result<(), String> {
         // Parse config as JSON
-        let config: serde_json::Value = serde_json::from_str(config_str)
-            .map_err(|e| format!("Failed to parse config: {}", e))?;
+        let config: serde_json::Value =
+            serde_json::from_str(config_str).map_err(|e| format!("Failed to parse config: {e}"))?;
 
         let provider = config
             .get("provider")
@@ -115,7 +118,7 @@ impl EnvironmentManager for LlmEnvironmentManager {
             .and_then(|v| v.as_u64())
             .map(|v| v as u32);
 
-        let default_desc = format!("LLM: {} ({})", name, model);
+        let default_desc = format!("LLM: {name} ({model})");
         let description = config
             .get("description")
             .and_then(|v| v.as_str())
@@ -132,8 +135,7 @@ impl EnvironmentManager for LlmEnvironmentManager {
         };
 
         // 持久化到配置文件
-        let mut file_config =
-            Config::load().map_err(|e| format!("Failed to load config: {}", e))?;
+        let mut file_config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
         if let Some(existing) = file_config
             .llm_environments
             .iter_mut()
@@ -161,7 +163,7 @@ impl EnvironmentManager for LlmEnvironmentManager {
 
         file_config
             .save()
-            .map_err(|e| format!("Failed to save config: {}", e))?;
+            .map_err(|e| format!("Failed to save config: {e}"))?;
 
         self.environments.insert(name.to_string(), llm_environment);
         Ok(())
@@ -169,19 +171,19 @@ impl EnvironmentManager for LlmEnvironmentManager {
 
     fn remove(&mut self, name: &str) -> Result<(), String> {
         if self.environments.remove(name).is_none() {
-            return Err(format!("LLM environment '{}' not found", name));
+            return Err(format!("LLM environment '{name}' not found"));
         }
 
-        let mut config = Config::load().map_err(|e| format!("Failed to load config: {}", e))?;
+        let mut config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
         let original_len = config.llm_environments.len();
         config.llm_environments.retain(|env| env.name != name);
         if config.llm_environments.len() == original_len {
-            return Err(format!("LLM environment '{}' not found", name));
+            return Err(format!("LLM environment '{name}' not found"));
         }
 
         config
             .save()
-            .map_err(|e| format!("Failed to save config: {}", e))?;
+            .map_err(|e| format!("Failed to save config: {e}"))?;
 
         Ok(())
     }
@@ -190,7 +192,7 @@ impl EnvironmentManager for LlmEnvironmentManager {
         let llm_env = self
             .environments
             .get(name)
-            .ok_or_else(|| format!("LLM environment '{}' not found", name))?;
+            .ok_or_else(|| format!("LLM environment '{name}' not found"))?;
 
         let shell_type =
             shell_type.unwrap_or_else(crate::infrastructure::shell::platform::detect_shell);
@@ -232,7 +234,7 @@ impl EnvironmentManager for LlmEnvironmentManager {
             Some(shell_type),
         ) {
             Ok(script) => Ok(script),
-            Err(e) => Err(format!("Failed to generate script: {}", e)),
+            Err(e) => Err(format!("Failed to generate script: {e}")),
         }
     }
 
@@ -271,7 +273,7 @@ impl EnvironmentManager for LlmEnvironmentManager {
                 provider: "anthropic".to_string(),
                 description: "Detected Anthropic environment from system variables".to_string(),
                 api_key: auth_token,
-                base_url: base_url,
+                base_url,
                 model: std::env::var("ANTHROPIC_MODEL")
                     .unwrap_or_else(|_| "claude-3-sonnet-20240229".to_string()),
             };

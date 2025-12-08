@@ -22,7 +22,7 @@ impl ShellHook {
         }
 
         let content = std::fs::read_to_string(&current_env_file)
-            .map_err(|e| format!("Failed to read current environment file: {}", e))?;
+            .map_err(|e| format!("Failed to read current environment file: {e}"))?;
 
         let env_name = content.trim().to_string();
         if env_name.is_empty() {
@@ -39,11 +39,11 @@ impl ShellHook {
         // 确保目录存在
         if let Some(parent) = current_env_file.parent() {
             std::fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create fnva directory: {}", e))?;
+                .map_err(|e| format!("Failed to create fnva directory: {e}"))?;
         }
 
         std::fs::write(&current_env_file, env_name)
-            .map_err(|e| format!("Failed to write current environment file: {}", e))?;
+            .map_err(|e| format!("Failed to write current environment file: {e}"))?;
 
         Ok(())
     }
@@ -54,7 +54,7 @@ impl ShellHook {
 
         if current_env_file.exists() {
             std::fs::remove_file(&current_env_file)
-                .map_err(|e| format!("Failed to remove current environment file: {}", e))?;
+                .map_err(|e| format!("Failed to remove current environment file: {e}"))?;
         }
 
         Ok(())
@@ -67,7 +67,7 @@ impl ShellHook {
 
         let env = config
             .get_java_env(env_name)
-            .ok_or_else(|| format!("Java environment '{}' not found", env_name))?;
+            .ok_or_else(|| format!("Java environment '{env_name}' not found"))?;
 
         // 验证路径（更详细的验证）
         if !std::path::Path::new(&env.java_home).exists() {
@@ -86,7 +86,7 @@ impl ShellHook {
         };
 
         if !std::path::Path::new(&java_exe).exists() {
-            return Err(format!("Java executable not found: {}", java_exe));
+            return Err(format!("Java executable not found: {java_exe}"));
         }
 
         // 清理 PATH 中的现有 Java 路径
@@ -111,9 +111,9 @@ impl ShellHook {
     /// 清理 PATH 中的现有 Java 路径，并添加新的 Java 路径
     fn clean_java_paths(new_java_home: &str) -> Result<String, String> {
         let bin_path = if cfg!(target_os = "windows") {
-            format!("{}\\bin", new_java_home)
+            format!("{new_java_home}\\bin")
         } else {
-            format!("{}/bin", new_java_home)
+            format!("{new_java_home}/bin")
         };
 
         let current_path = std::env::var("PATH").unwrap_or_default();
@@ -171,7 +171,7 @@ impl ShellHook {
                         if let Some(old_path_val) = old_path {
                             std::env::set_var("PATH", old_path_val);
                         }
-                        Err(format!("Environment switch failed, rolled back: {}", e))
+                        Err(format!("Environment switch failed, rolled back: {e}"))
                     }
                 }
             }
@@ -191,7 +191,7 @@ impl ShellHook {
         let output = Command::new(java_exe)
             .arg("-version")
             .output()
-            .map_err(|e| format!("Failed to execute java -version: {}", e))?;
+            .map_err(|e| format!("Failed to execute java -version: {e}"))?;
 
         if output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -372,10 +372,10 @@ echo 📋 Add %fnvaDir% to your PATH for easy access"#;
             "✅ Shell Hook installation scripts generated\n\
             \n\
             📋 PowerShell Hook:\n\
-            {}\n\
+            {ps_hook}\n\
             \n\
             📋 CMD Hook:\n\
-            {}\n\
+            {cmd_hook}\n\
             \n\
             🚀 Installation Instructions:\n\
             \n\
@@ -390,8 +390,7 @@ echo 📋 Add %fnvaDir% to your PATH for easy access"#;
             3. Restart CMD\n\
             \n\
             📖 After installation:\n\
-            fnva java use jdk21  # Will work immediately in current shell!",
-            ps_hook, cmd_hook
+            fnva java use jdk21  # Will work immediately in current shell!"
         ))
     }
 

@@ -103,12 +103,12 @@ impl ContextualError {
         if !self.context.suggestions.is_empty() {
             msg.push_str("💡 建议:\n");
             for suggestion in &self.context.suggestions {
-                msg.push_str(&format!("  • {}\n", suggestion));
+                msg.push_str(&format!("  • {suggestion}\n"));
             }
         }
 
         if let Some(help_url) = &self.context.help_url {
-            msg.push_str(&format!("📖 更多帮助: {}\n", help_url));
+            msg.push_str(&format!("📖 更多帮助: {help_url}\n"));
         }
 
         msg
@@ -117,19 +117,19 @@ impl ContextualError {
 
 /// 应用程序 Result 类型
 pub type AppResult<T> = Result<T, AppError>;
-pub type ContextualResult<T> = Result<T, ContextualError>;
+pub type ContextualResult<T> = Result<T, Box<ContextualError>>;
 
 /// 便捷的错误创建函数
 impl AppError {
     pub fn env_not_found(name: &str) -> Self {
         Self::Environment {
-            message: format!("未找到环境: {}", name),
+            message: format!("未找到环境: {name}"),
         }
     }
 
     pub fn config_load_failed(path: &str, reason: &str) -> Self {
         Self::Config {
-            message: format!("无法加载配置文件 {}: {}", path, reason),
+            message: format!("无法加载配置文件 {path}: {reason}"),
         }
     }
 
@@ -239,20 +239,28 @@ impl From<ContextualError> for String {
     }
 }
 
+impl From<Box<ContextualError>> for String {
+    fn from(error: Box<ContextualError>) -> Self {
+        error.user_message()
+    }
+}
+
 /// 为 Result 添加上下文信息的扩展 trait
 pub trait ResultExt<T> {
-    fn with_context(self, operation: &str) -> Result<T, ContextualError>;
+    fn with_context(self, operation: &str) -> Result<T, Box<ContextualError>>;
 }
 
 impl<T, E: Into<AppError>> ResultExt<T> for Result<T, E> {
-    fn with_context(self, operation: &str) -> Result<T, ContextualError> {
-        self.map_err(|e| ContextualError {
-            error: e.into(),
-            context: ErrorContext {
-                operation: operation.to_string(),
-                suggestions: Vec::new(),
-                help_url: None,
-            },
+    fn with_context(self, operation: &str) -> Result<T, Box<ContextualError>> {
+        self.map_err(|e| {
+            Box::new(ContextualError {
+                error: e.into(),
+                context: ErrorContext {
+                    operation: operation.to_string(),
+                    suggestions: Vec::new(),
+                    help_url: None,
+                },
+            })
         })
     }
 }
@@ -261,6 +269,18 @@ impl<T, E: Into<AppError>> ResultExt<T> for Result<T, E> {
 pub fn with_context<T, E: Into<AppError>>(
     result: Result<T, E>,
     operation: &str,
-) -> Result<T, ContextualError> {
+) -> Result<T, Box<ContextualError>> {
     result.with_context(operation)
+}
+
+impl From<AppError> for Box<ContextualError> {
+    fn from(error: AppError) -> Self {
+        Box::new(ContextualError::from(error))
+    }
+}
+
+impl<T> From<std::sync::PoisonError<T>> for Box<ContextualError> {
+    fn from(error: std::sync::PoisonError<T>) -> Self {
+        Box::new(ContextualError::from(error))
+    }
 }

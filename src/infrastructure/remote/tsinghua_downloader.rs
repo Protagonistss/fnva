@@ -38,7 +38,7 @@ impl TsinghuaJavaDownloader {
                 let iter = e.assets_tsinghua.as_ref().unwrap_or(&e.assets);
                 for (k, filename) in iter.iter() {
                     let parts: Vec<&str> = k.split('-').collect();
-                    let os = parts.get(0).cloned().unwrap_or("");
+                    let os = parts.first().cloned().unwrap_or("");
                     let arch = parts.get(1).cloned().unwrap_or("");
                     let mirror_os = if os == "macos" { "mac" } else { os };
                     let url = format!(
@@ -142,10 +142,7 @@ impl JavaDownloader for TsinghuaJavaDownloader {
             // Try similar OS even if arch key differs
             for (platform_key, entry) in version_clone.download_urls.iter() {
                 if platform_key.starts_with(&platform_clone.os) {
-                    println!(
-                        "-> Using closest platform match: {} -> {}",
-                        platform_key, key
-                    );
+                    println!("-> Using closest platform match: {platform_key} -> {key}");
                     match mirror_utils::pick_available_url(&self.client, entry).await {
                         Ok(url) => {
                             if url != entry.primary {
@@ -159,8 +156,7 @@ impl JavaDownloader for TsinghuaJavaDownloader {
             }
 
             Err(DownloadError::from(format!(
-                "No download url matches {}",
-                key
+                "No download url matches {key}"
             )))
         })
     }
@@ -180,14 +176,13 @@ impl JavaDownloader for TsinghuaJavaDownloader {
         Box::pin(async move {
             let url = self
                 .get_download_url(&version_clone, &platform_clone)
-                .await
-                .map_err(DownloadError::from)?;
+                .await?;
 
             println!(
                 "-> Downloading Java {} from mirror...",
                 version_clone.version
             );
-            println!("-> URL: {}", url);
+            println!("-> URL: {url}");
 
             // 创建持久化文件路径而不是临时目录
             let cache_dir = dirs::home_dir()
@@ -199,7 +194,7 @@ impl JavaDownloader for TsinghuaJavaDownloader {
             // 确保缓存目录存在
             tokio::fs::create_dir_all(&cache_dir)
                 .await
-                .map_err(|e| DownloadError::Io(format!("创建缓存目录失败: {}", e)))?;
+                .map_err(|e| DownloadError::Io(format!("创建缓存目录失败: {e}")))?;
 
             let extension = platform_clone.archive_ext();
             let file_name = format!(
@@ -223,33 +218,32 @@ impl JavaDownloader for TsinghuaJavaDownloader {
                 progress_callback(d, t)
             })
             .await
-            .map_err(|e| DownloadError::from(format!("下载失败: {}", e)))?;
+            .map_err(|e| DownloadError::from(format!("下载失败: {e}")))?;
 
             let file_size = tokio::fs::metadata(&file_path)
                 .await
-                .map_err(|e| DownloadError::Io(format!("获取文件大小失败: {}", e)))?
+                .map_err(|e| DownloadError::Io(format!("获取文件大小失败: {e}")))?
                 .len();
             println!("<- Downloaded size: {} MB", file_size / (1024 * 1024));
 
             // 验证文件确实存在
             if !file_path.exists() {
                 return Err(DownloadError::Io(format!(
-                    "下载的文件不存在: {:?}",
-                    file_path
+                    "下载的文件不存在: {file_path:?}"
                 )));
             }
 
             // 使用规范化路径，确保在 Windows 上正确处理
             let canonical_path = file_path
                 .canonicalize()
-                .map_err(|e| DownloadError::Io(format!("无法获取规范路径: {}", e)))?;
+                .map_err(|e| DownloadError::Io(format!("无法获取规范路径: {e}")))?;
 
             let path_str = canonical_path
                 .to_str()
                 .ok_or_else(|| DownloadError::Io("路径包含无效字符".to_string()))?
                 .to_string();
 
-            println!("-> 文件保存位置: {}", path_str);
+            println!("-> 文件保存位置: {path_str}");
 
             // 返回持久化文件路径
             Ok(DownloadTarget::File(path_str))
@@ -297,18 +291,18 @@ mod tests {
                                     assert!(url.contains("tsinghua") || url.contains("github"));
                                 }
                                 Err(e) => {
-                                    println!("  ⚠️  获取下载链接失败: {}", e);
+                                    println!("  ⚠️  获取下载链接失败: {e}");
                                 }
                             }
                         }
                         Err(e) => {
-                            println!("⚠️  清华版本解析 '{}' 失败: {}", spec, e);
+                            println!("⚠️  清华版本解析 '{spec}' 失败: {e}");
                         }
                     }
                 }
             }
             Err(e) => {
-                println!("❌ 清华版本列表获取失败: {}", e);
+                println!("❌ 清华版本列表获取失败: {e}");
                 // 不标记为测试失败，因为可能是网络问题
             }
         }

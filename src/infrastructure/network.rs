@@ -39,13 +39,13 @@ impl NetworkTester {
         for (name, address) in test_urls {
             match tokio::time::timeout(Duration::from_secs(5), TcpStream::connect(address)).await {
                 Ok(Ok(_)) => {
-                    println!("  ✅ {}: 连接成功", name);
+                    println!("  ✅ {name}: 连接成功");
                 }
                 Ok(Err(e)) => {
-                    println!("  ❌ {}: 连接失败 - {}", name, e);
+                    println!("  ❌ {name}: 连接失败 - {e}");
                 }
                 Err(_) => {
-                    println!("  ⏰ {}: 连接超时", name);
+                    println!("  ⏰ {name}: 连接超时");
                 }
             }
         }
@@ -60,7 +60,7 @@ impl NetworkTester {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(10))
             .build()
-            .map_err(|e| format!("创建客户端失败: {}", e))?;
+            .map_err(|e| format!("创建客户端失败: {e}"))?;
 
         let test_urls = vec![
             (
@@ -83,7 +83,7 @@ impl NetworkTester {
                     }
                 }
                 Err(e) => {
-                    println!("  ❌ {}: 请求失败 - {}", name, e);
+                    println!("  ❌ {name}: 请求失败 - {e}");
                 }
             }
         }
@@ -98,7 +98,7 @@ impl NetworkTester {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(10))
             .build()
-            .map_err(|e| format!("创建客户端失败: {}", e))?;
+            .map_err(|e| format!("创建客户端失败: {e}"))?;
 
         let test_url = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.1+12/OpenJDK21U-jdk_x64_windows_hotspot_21.0.1_12.msi";
 
@@ -114,7 +114,7 @@ impl NetworkTester {
                 }
             }
             Err(e) => {
-                println!("  ❌ GitHub: 连接失败 - {}", e);
+                println!("  ❌ GitHub: 连接失败 - {e}");
             }
         }
 
@@ -128,17 +128,17 @@ impl NetworkTester {
         let hosts = vec!["github.com", "api.adoptium.net", "api.adoptopenjdk.net"];
 
         for host in hosts {
-            match tokio::net::lookup_host(format!("{}:443", host)).await {
+            match tokio::net::lookup_host(format!("{host}:443")).await {
                 Ok(addresses) => {
                     let addr_vec: Vec<_> = addresses.collect();
                     if !addr_vec.is_empty() {
                         println!("  ✅ {}: 解析成功 ({})", host, addr_vec.first().unwrap());
                     } else {
-                        println!("  ⚠️  {}: 解析成功但无地址", host);
+                        println!("  ⚠️  {host}: 解析成功但无地址");
                     }
                 }
                 Err(e) => {
-                    println!("  ❌ {}: 解析失败 - {}", host, e);
+                    println!("  ❌ {host}: 解析失败 - {e}");
                 }
             }
         }
@@ -148,24 +148,24 @@ impl NetworkTester {
 
     /// 测试特定 URL 的可访问性
     pub async fn test_url_accessibility(url: &str) -> Result<(), String> {
-        println!("🔍 测试 URL 可访问性: {}", url);
+        println!("🔍 测试 URL 可访问性: {url}");
 
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
             .build()
-            .map_err(|e| format!("创建客户端失败: {}", e))?;
+            .map_err(|e| format!("创建客户端失败: {e}"))?;
 
         let start_time = std::time::Instant::now();
 
         match client.head(url).send().await {
             Ok(response) => {
                 let duration = start_time.elapsed();
-                println!("  ✅ 响应时间: {:?}", duration);
+                println!("  ✅ 响应时间: {duration:?}");
                 println!("  📊 状态码: {}", response.status());
 
                 if let Some(size) = response.headers().get("content-length") {
                     if let Ok(size_str) = size.to_str() {
-                        println!("  📊 内容长度: {}", size_str);
+                        println!("  📊 内容长度: {size_str}");
                     }
                 }
 
@@ -175,7 +175,7 @@ impl NetworkTester {
                     Err(format!("服务器返回错误: {}", response.status()))
                 }
             }
-            Err(e) => Err(format!("请求失败: {}", e)),
+            Err(e) => Err(format!("请求失败: {e}")),
         }
     }
 

@@ -23,16 +23,16 @@ impl OutputFormatter {
             OutputFormat::Text => {
                 let mut output = String::new();
                 if environments.is_empty() {
-                    output.push_str(&format!("No {} environments found\n", env_type));
+                    output.push_str(&format!("No {env_type} environments found\n"));
                 } else {
-                    output.push_str(&format!("Available {} environments:\n", env_type));
+                    output.push_str(&format!("Available {env_type} environments:\n"));
                     for env in environments {
                         // 这里需要根据具体类型来格式化
                         // 暂时使用简单的序列化
-                        output.push_str(&format!("  {:?}\n", env));
+                        output.push_str(&format!("  {env:?}\n"));
                     }
                     if let Some(current) = current {
-                        output.push_str(&format!("Current: {}\n", current));
+                        output.push_str(&format!("Current: {current}\n"));
                     }
                 }
                 Ok(output)
@@ -75,7 +75,7 @@ impl OutputFormatter {
     /// 格式化错误信息
     pub fn format_error(&self, error: &str, format: OutputFormat) -> String {
         match format {
-            OutputFormat::Text => format!("Error: {}\n", error),
+            OutputFormat::Text => format!("Error: {error}\n"),
             OutputFormat::Json => {
                 let json_output = serde_json::json!({
                     "error": error,
@@ -89,7 +89,7 @@ impl OutputFormatter {
     /// 格式化成功信息
     pub fn format_success(&self, message: &str, format: OutputFormat) -> String {
         match format {
-            OutputFormat::Text => format!("{}\n", message),
+            OutputFormat::Text => format!("{message}\n"),
             OutputFormat::Json => {
                 let json_output = serde_json::json!({
                     "message": message,

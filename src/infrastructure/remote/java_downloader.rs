@@ -21,10 +21,10 @@ pub enum DownloadError {
 impl fmt::Display for DownloadError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            DownloadError::Network(msg) => write!(f, "Network error: {}", msg),
+            DownloadError::Network(msg) => write!(f, "Network error: {msg}"),
             DownloadError::NotFound => write!(f, "Resource not found"),
-            DownloadError::Invalid(msg) => write!(f, "Invalid data: {}", msg),
-            DownloadError::Io(msg) => write!(f, "IO error: {}", msg),
+            DownloadError::Invalid(msg) => write!(f, "Invalid data: {msg}"),
+            DownloadError::Io(msg) => write!(f, "IO error: {msg}"),
             DownloadError::VersionParse => write!(f, "Version parse error"),
         }
     }
