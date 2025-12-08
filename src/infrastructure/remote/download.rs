@@ -68,9 +68,9 @@ fn classify_error(error: &str, status_code: Option<u16>) -> ErrorType {
     if let Some(code) = status_code {
         match code {
             404 | 403 | 401 => {
-                return ErrorType::Permanent(format!("资源不存在或无权访问 (HTTP {})", code))
+                return ErrorType::Permanent(format!("资源不存在或无权访问 (HTTP {code})"))
             }
-            500..=599 => return ErrorType::Transient(format!("服务器错误 (HTTP {})", code)),
+            500..=599 => return ErrorType::Transient(format!("服务器错误 (HTTP {code})")),
             _ => {}
         }
     }
@@ -101,8 +101,7 @@ fn verify_sha256(data: &[u8], expected: &str) -> Result<(), String> {
         Ok(())
     } else {
         Err(format!(
-            "SHA256 mismatch: expected {}, got {}",
-            expected, actual
+            "SHA256 mismatch: expected {expected}, got {actual}"
         ))
     }
 }
@@ -131,8 +130,7 @@ async fn verify_file_sha256(path: &Path, expected: &str) -> Result<(), String> {
         Ok(())
     } else {
         Err(format!(
-            "SHA256 mismatch: expected {}, got {}",
-            expected, actual
+            "SHA256 mismatch: expected {expected}, got {actual}"
         ))
     }
 }
@@ -193,7 +191,6 @@ pub async fn download_to_bytes_with_options(
                 if e.contains("状态码:") {
                     if let Some(code_str) = e.split("状态码:").nth(1) {
                         if let Ok(code) = code_str
-                            .trim()
                             .split_whitespace()
                             .next()
                             .unwrap_or("")
@@ -253,17 +250,17 @@ async fn download_to_bytes_internal(
         .map_err(|e| {
             let error_msg = e.to_string();
             if error_msg.contains("timeout") {
-                format!("连接超时: {}", error_msg)
+                format!("连接超时: {error_msg}")
             } else if error_msg.contains("dns") || error_msg.contains("resolve") {
-                format!("DNS 解析失败: {}", error_msg)
+                format!("DNS 解析失败: {error_msg}")
             } else {
-                format!("网络请求失败: {} (URL: {})", error_msg, url)
+                format!("网络请求失败: {error_msg} (URL: {url})")
             }
         })?;
 
     let status = response.status();
     if !status.is_success() {
-        return Err(format!("服务器返回状态码: {} (URL: {})", status, url));
+        return Err(format!("服务器返回状态码: {status} (URL: {url})"));
     }
 
     let total_size = response.content_length().unwrap_or(0);
@@ -272,7 +269,7 @@ async fn download_to_bytes_internal(
     let mut stream = response.bytes_stream();
 
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| format!("读取数据失败: {}", e))?;
+        let chunk = chunk.map_err(|e| format!("读取数据失败: {e}"))?;
         downloaded += chunk.len() as u64;
         progress(downloaded, total_size);
         data.extend_from_slice(&chunk);
@@ -335,7 +332,6 @@ pub async fn download_to_file_with_options(
                 if e.contains("状态码:") {
                     if let Some(code_str) = e.split("状态码:").nth(1) {
                         if let Ok(code) = code_str
-                            .trim()
                             .split_whitespace()
                             .next()
                             .unwrap_or("")
@@ -403,17 +399,17 @@ async fn download_to_file_internal(
         .map_err(|e| {
             let error_msg = e.to_string();
             if error_msg.contains("timeout") {
-                format!("连接超时: {}", error_msg)
+                format!("连接超时: {error_msg}")
             } else if error_msg.contains("dns") || error_msg.contains("resolve") {
-                format!("DNS 解析失败: {}", error_msg)
+                format!("DNS 解析失败: {error_msg}")
             } else {
-                format!("网络请求失败: {} (URL: {})", error_msg, url)
+                format!("网络请求失败: {error_msg} (URL: {url})")
             }
         })?;
 
     let status = response.status();
     if !status.is_success() {
-        return Err(format!("服务器返回状态码: {} (URL: {})", status, url));
+        return Err(format!("服务器返回状态码: {status} (URL: {url})"));
     }
 
     let total_size = response.content_length().unwrap_or(0);
@@ -424,26 +420,26 @@ async fn download_to_file_internal(
     let temp_path = file_path.with_extension("downloading");
     let mut file = tokio::fs::File::create(&temp_path)
         .await
-        .map_err(|e| format!("创建文件失败: {}", e))?;
+        .map_err(|e| format!("创建文件失败: {e}"))?;
 
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| format!("读取数据失败: {}", e))?;
+        let chunk = chunk.map_err(|e| format!("读取数据失败: {e}"))?;
         downloaded += chunk.len() as u64;
         progress(downloaded, total_size);
         file.write_all(&chunk)
             .await
-            .map_err(|e| format!("写入文件失败: {}", e))?;
+            .map_err(|e| format!("写入文件失败: {e}"))?;
     }
 
     file.flush()
         .await
-        .map_err(|e| format!("刷新文件失败: {}", e))?;
+        .map_err(|e| format!("刷新文件失败: {e}"))?;
     drop(file); // 关闭文件
 
     // 重命名为目标文件
     tokio::fs::rename(&temp_path, file_path)
         .await
-        .map_err(|e| format!("重命名文件失败: {}", e))?;
+        .map_err(|e| format!("重命名文件失败: {e}"))?;
 
     Ok(())
 }

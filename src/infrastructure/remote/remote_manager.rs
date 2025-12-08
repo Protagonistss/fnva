@@ -94,6 +94,12 @@ pub struct MavenArtifact {
     pub timestamp: Option<u64>,
 }
 
+impl Default for RemoteManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RemoteManager {
     /// 创建新的远程管理器
     pub fn new() -> Self {
@@ -138,17 +144,17 @@ impl RemoteManager {
         let versions = downloader
             .list_available_versions()
             .await
-            .map_err(|e| format!("{:?}", e))?;
+            .map_err(|e| format!("{e:?}"))?;
 
         let filtered = versions
             .into_iter()
-            .filter(|v| feature_version.map_or(true, |mv| v.major == mv))
+            .filter(|v| feature_version.is_none_or(|mv| v.major == mv))
             .collect::<Vec<_>>();
 
         if filtered.is_empty() {
             return Err(feature_version.map_or_else(
                 || "未找到可用版本".to_string(),
-                |mv| format!("未找到 Java {}", mv),
+                |mv| format!("未找到 Java {mv}"),
             ));
         }
 
@@ -176,22 +182,22 @@ impl RemoteManager {
         let client = reqwest::Client::new();
 
         // 构造查询 URL
-        let query = format!("g:{} AND a:{}", group_id, artifact_id);
+        let query = format!("g:{group_id} AND a:{artifact_id}");
         let url = format!("?q={}&rows=100&wt=json", urlencoding::encode(&query));
         let full_url = if repo_url.contains("/solrsearch/select") {
             format!("{}{}", repo_url, &url[1..]) // 去掉开头的 ?
         } else {
-            format!("{}/solrsearch/select{}", repo_url, url)
+            format!("{repo_url}/solrsearch/select{url}")
         };
 
-        println!("正在查询 Maven 仓库: {}", full_url);
+        println!("正在查询 Maven 仓库: {full_url}");
 
         let response = client
             .get(&full_url)
             .header("User-Agent", "fnva/0.0.4")
             .send()
             .await
-            .map_err(|e| format!("请求失败: {}", e))?;
+            .map_err(|e| format!("请求失败: {e}"))?;
 
         if !response.status().is_success() {
             return Err(format!("API 请求失败: {}", response.status()));
@@ -200,7 +206,7 @@ impl RemoteManager {
         let search_result: MavenSearchResponse = response
             .json()
             .await
-            .map_err(|e| format!("解析响应失败: {}", e))?;
+            .map_err(|e| format!("解析响应失败: {e}"))?;
 
         let mut versions = Vec::new();
 
@@ -233,17 +239,17 @@ impl RemoteManager {
         let full_url = if repo_url.contains("/solrsearch/select") {
             format!("{}{}", repo_url, &search_query[1..])
         } else {
-            format!("{}/solrsearch/select?{}", repo_url, search_query)
+            format!("{repo_url}/solrsearch/select?{search_query}")
         };
 
-        println!("正在搜索 Maven 仓库: {}", full_url);
+        println!("正在搜索 Maven 仓库: {full_url}");
 
         let response = client
             .get(&full_url)
             .header("User-Agent", "fnva/0.0.4")
             .send()
             .await
-            .map_err(|e| format!("请求失败: {}", e))?;
+            .map_err(|e| format!("请求失败: {e}"))?;
 
         if !response.status().is_success() {
             return Err(format!("API 请求失败: {}", response.status()));
@@ -252,14 +258,14 @@ impl RemoteManager {
         let search_result: MavenSearchResponse = response
             .json()
             .await
-            .map_err(|e| format!("解析响应失败: {}", e))?;
+            .map_err(|e| format!("解析响应失败: {e}"))?;
 
         let mut artifacts = Vec::new();
 
         for artifact in search_result.response.docs {
             let group_id = artifact.g.clone();
             let artifact_id = artifact.a.clone();
-            let description = format!("{}:{}", group_id, artifact_id);
+            let description = format!("{group_id}:{artifact_id}");
             artifacts.push(MavenArtifactInfo {
                 group_id,
                 artifact_id,

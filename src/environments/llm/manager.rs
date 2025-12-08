@@ -19,7 +19,7 @@ impl LlmManager {
     ) -> Result<String, String> {
         let env = config
             .get_llm_env(name)
-            .ok_or_else(|| format!("LLM 环境 '{}' 不存在", name))?;
+            .ok_or_else(|| format!("LLM 环境 '{name}' 不存在"))?;
 
         let shell = shell.unwrap_or_else(detect_shell);
         let mut commands = Vec::new();
@@ -35,6 +35,7 @@ impl LlmManager {
     }
 
     /// 添加 LLM 环境到配置
+    #[allow(clippy::too_many_arguments)]
     pub fn add(
         config: &mut Config,
         name: String,

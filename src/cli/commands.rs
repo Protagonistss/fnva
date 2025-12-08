@@ -401,7 +401,7 @@ pub fn parse_environment_type(env_type_str: &str) -> Result<EnvironmentType, Str
         "gradle" => Ok(EnvironmentType::Gradle),
         "python" => Ok(EnvironmentType::Python),
         "node" | "nodejs" => Ok(EnvironmentType::Node),
-        _ => Err(format!("Unsupported environment type: {}", env_type_str)),
+        _ => Err(format!("Unsupported environment type: {env_type_str}")),
     }
 }
 

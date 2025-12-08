@@ -68,7 +68,7 @@ impl CommandHandler {
                         },
                     )
                     .await?;
-                print!("{}", output);
+                print!("{output}");
             }
             JavaCommands::Use { name, shell, json } => {
                 let shell_type = match shell {
@@ -89,14 +89,14 @@ impl CommandHandler {
                 // 对于 JSON 输出，格式化显示结果
                 if json {
                     let output = FORMATTER.format_switch_result(&result, OutputFormat::Json)?;
-                    print!("{}", output);
+                    print!("{output}");
                 } else if result.success {
                     // 对于非 JSON 输出，直接输出切换脚本（类似 fnm 的行为）
                     if !result.script.is_empty() {
                         print!("{}", result.script);
                     } else {
                         // 如果没有脚本，显示成功消息
-                        println!("Switched to Java environment: {}", name);
+                        println!("Switched to Java environment: {name}");
                     }
                 } else {
                     // 如果切换失败，显示错误信息
@@ -119,14 +119,14 @@ impl CommandHandler {
                         },
                     )
                     .await?;
-                print!("{}", output);
+                print!("{output}");
             }
             JavaCommands::Scan => {
                 let output = self
                     .switcher
                     .scan_environments(EnvironmentType::Java)
                     .await?;
-                print!("{}", output);
+                print!("{output}");
             }
             JavaCommands::LsRemote {
                 query_type,
@@ -139,9 +139,9 @@ impl CommandHandler {
                 if query_type == "java" {
                     // 使用新的版本管理器查询 Java 版本
                     let output = self.handle_java_ls_remote(java_version, repository).await?;
-                    print!("{}", output);
+                    print!("{output}");
                 } else {
-                    return Err(format!("查询类型 '{}' 尚不支持", query_type));
+                    return Err(format!("查询类型 '{query_type}' 尚不支持"));
                 }
             }
             JavaCommands::Install {
@@ -151,14 +151,14 @@ impl CommandHandler {
                 use crate::environments::java::installer::JavaInstaller;
                 use crate::infrastructure::config::Config;
 
-                let mut config = Config::load().map_err(|e| format!("加载配置失败: {}", e))?;
+                let mut config = Config::load().map_err(|e| format!("加载配置失败: {e}"))?;
                 match JavaInstaller::install_java(&version, &mut config, auto_switch).await {
                     Ok(java_home) => {
-                        println!("✅ Java {} 安装成功！", version);
-                        println!("📁 安装路径: {}", java_home);
+                        println!("✅ Java {version} 安装成功！");
+                        println!("📁 安装路径: {java_home}");
                     }
                     Err(e) => {
-                        return Err(format!("安装失败: {}", e));
+                        return Err(format!("安装失败: {e}"));
                     }
                 }
             }
@@ -174,14 +174,14 @@ impl CommandHandler {
                     .switcher
                     .add_environment(EnvironmentType::Java, &name, config_value)
                     .await?;
-                print!("{}", output);
+                print!("{output}");
             }
             JavaCommands::Remove { name } => {
                 let output = self
                     .switcher
                     .remove_environment(EnvironmentType::Java, &name)
                     .await?;
-                print!("{}", output);
+                print!("{output}");
             }
             JavaCommands::Default {
                 name,
@@ -195,14 +195,14 @@ impl CommandHandler {
                         .switcher
                         .clear_default_environment(EnvironmentType::Java)
                         .await?;
-                    print!("{}", output);
+                    print!("{output}");
                 } else if let Some(env_name) = name {
                     // 设置默认环境
                     let output = self
                         .switcher
                         .set_default_environment(EnvironmentType::Java, &env_name)
                         .await?;
-                    print!("{}", output);
+                    print!("{output}");
                 } else {
                     // 显示当前默认环境
                     match self
@@ -231,12 +231,12 @@ impl CommandHandler {
                                                 OutputFormat::Text
                                             },
                                         )?;
-                                        print!("{}", output);
+                                        print!("{output}");
                                     }
                                     Err(e) => return Err(e),
                                 }
                             } else {
-                                println!("Default Java environment: {}", env_name);
+                                println!("Default Java environment: {env_name}");
                             }
                         }
                         None => println!("No default Java environment set"),
@@ -266,7 +266,7 @@ impl CommandHandler {
                         },
                     )
                     .await?;
-                print!("{}", output);
+                print!("{output}");
             }
             LlmCommands::Use { name, shell, json } => {
                 let shell_type = match shell {
@@ -305,7 +305,7 @@ impl CommandHandler {
                         },
                     )
                     .await?;
-                print!("{}", output);
+                print!("{output}");
             }
             // 其他 LLM 命令...
             _ => {
@@ -330,7 +330,7 @@ impl CommandHandler {
                         },
                     )
                     .await?;
-                print!("{}", output);
+                print!("{output}");
             }
             CcCommands::Use { name, shell, json } => {
                 let shell_type = match shell {
@@ -350,14 +350,14 @@ impl CommandHandler {
                 // 对于 JSON 输出，格式化显示结果
                 if json {
                     let output = FORMATTER.format_switch_result(&result, OutputFormat::Json)?;
-                    print!("{}", output);
+                    print!("{output}");
                 } else if result.success {
                     // 对于非 JSON 输出，直接输出切换脚本（类似 fnm 的行为）
                     if !result.script.is_empty() {
                         print!("{}", result.script);
                     } else {
                         // 如果没有脚本，显示成功消息
-                        println!("Switched to CC environment: {}", name);
+                        println!("Switched to CC environment: {name}");
                     }
                 } else {
                     // 如果切换失败，显示错误信息
@@ -379,13 +379,13 @@ impl CommandHandler {
                         .switcher
                         .clear_default_environment(EnvironmentType::Cc)
                         .await?;
-                    print!("{}", output);
+                    print!("{output}");
                 } else if let Some(env_name) = name {
                     let output = self
                         .switcher
                         .set_default_environment(EnvironmentType::Cc, &env_name)
                         .await?;
-                    print!("{}", output);
+                    print!("{output}");
                 } else {
                     match self
                         .switcher
@@ -413,12 +413,12 @@ impl CommandHandler {
                                                 OutputFormat::Text
                                             },
                                         )?;
-                                        print!("{}", output);
+                                        print!("{output}");
                                     }
                                     Err(e) => return Err(e),
                                 }
                             } else {
-                                println!("Default CC environment: {}", env_name);
+                                println!("Default CC environment: {env_name}");
                             }
                         }
                         None => println!("No default CC environment set"),
@@ -437,7 +437,7 @@ impl CommandHandler {
                         },
                     )
                     .await?;
-                print!("{}", output);
+                print!("{output}");
             }
             // 其他 CC 命令...
             _ => {
@@ -549,7 +549,7 @@ function fnva {
                     }
                 };
 
-                print!("{}", script);
+                print!("{script}");
             }
             EnvCommands::Switch {
                 env_type,
@@ -594,7 +594,7 @@ function fnva {
                         },
                     )
                     .await?;
-                print!("{}", output);
+                print!("{output}");
             }
             EnvCommands::Current { env_type, json } => {
                 let env_type = match env_type {
@@ -612,7 +612,7 @@ function fnva {
                         },
                     )
                     .await?;
-                print!("{}", output);
+                print!("{output}");
             }
             EnvCommands::ShellIntegration { shell } => {
                 let shell_type = match shell {
@@ -623,7 +623,7 @@ function fnva {
                     .switcher
                     .generate_shell_integration(shell_type.unwrap())
                     .await?;
-                print!("{}", output);
+                print!("{output}");
             }
             // 其他环境命令...
             _ => {
@@ -681,17 +681,17 @@ function fnva {
                         .collect();
 
                     if filtered_versions.is_empty() {
-                        output.push_str(&format!("❌ 未找到 Java {} 的可用版本\n", major));
+                        output.push_str(&format!("❌ 未找到 Java {major} 的可用版本\n"));
                     } else {
-                        output.push_str(&format!("🎯 Java {} 可用版本:\n", major));
+                        output.push_str(&format!("🎯 Java {major} 可用版本:\n"));
                         for version in filtered_versions {
-                            output.push_str(&format!("  {}\n", version));
+                            output.push_str(&format!("  {version}\n"));
                         }
                     }
                 } else {
                     output.push_str("🌟 所有可用版本:\n");
                     for version in versions {
-                        output.push_str(&format!("  {}\n", version));
+                        output.push_str(&format!("  {version}\n"));
                     }
                 }
 
@@ -702,7 +702,7 @@ function fnva {
 
                 Ok(output)
             }
-            Err(e) => Err(format!("查询版本失败: {}", e)),
+            Err(e) => Err(format!("查询版本失败: {e}")),
         }
     }
 
@@ -715,7 +715,7 @@ function fnva {
     ) -> Result<(), String> {
         let env_type = env_type.map(|t| parse_environment_type(&t)).transpose()?;
         let output = self.switcher.get_switch_history(env_type, limit).await?;
-        print!("{}", output);
+        print!("{output}");
         Ok(())
     }
 }

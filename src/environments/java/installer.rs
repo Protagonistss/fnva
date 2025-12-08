@@ -13,12 +13,12 @@ impl JavaInstaller {
         config: &mut Config,
         auto_switch: bool,
     ) -> Result<String, String> {
-        println!("🚀 正在准备安装 Java {}...", version_spec);
+        println!("🚀 正在准备安装 Java {version_spec}...");
 
         // 在开始安装前，检查本地是否已有对应的Java包（避免重复下载）
         if let Ok(java_home) = Self::check_local_java_package(version_spec, config) {
-            println!("🎉 检测到本地Java包: {}", version_spec);
-            println!("📁 使用本地安装: {}", java_home);
+            println!("🎉 检测到本地Java包: {version_spec}");
+            println!("📁 使用本地安装: {java_home}");
 
             // 直接完成安装流程（使用本地包）
             return Self::complete_installation_simple(
@@ -46,7 +46,7 @@ impl JavaInstaller {
                 "aliyun" => Box::new(crate::remote::AliyunJavaDownloader::new()),
                 "tsinghua" => Box::new(crate::remote::TsinghuaJavaDownloader::new()),
                 _ => {
-                    println!("⚠️  未知的下载器类型: '{}' , 跳过", source);
+                    println!("⚠️  未知的下载器类型: '{source}' , 跳过");
                     continue;
                 }
             };
@@ -63,7 +63,7 @@ impl JavaInstaller {
             match res {
                 Ok(java_home) => return Ok(java_home),
                 Err(e) => {
-                    println!("↩️  源 '{}' 失败: {}", source, e);
+                    println!("↩️  源 '{source}' 失败: {e}");
                     last_err = Some(e);
                     continue;
                 }
@@ -88,12 +88,12 @@ impl JavaInstaller {
                 version
             }
             Err(_) => {
-                println!("无法从 '{}' 解析版本，使用最新版本", version_spec);
+                println!("无法从 '{version_spec}' 解析版本，使用最新版本");
                 // 获取最新版本
                 downloader
                     .list_available_versions()
                     .await
-                    .map_err(|e| format!("{:?}", e))?
+                    .map_err(|e| format!("{e:?}"))?
                     .into_iter()
                     .next()
                     .ok_or_else(|| "无法获取最新版本".to_string())?
@@ -105,7 +105,8 @@ impl JavaInstaller {
         let platform = Platform::current();
         // 恢复使用用户输入的原始格式
         let java_home =
-            Self::download_and_install(&downloader, &java_version, &platform, version_spec).await?;
+            Self::download_and_install(downloader.as_ref(), &java_version, &platform, version_spec)
+                .await?;
         Self::complete_installation_simple(
             version_spec,
             config,
@@ -131,11 +132,11 @@ impl JavaInstaller {
 
         // 检查是否已安装
         if config.get_java_env(&install_name).is_some() {
-            return Err(format!("Java {} 已经安装", version));
+            return Err(format!("Java {version} 已经安装"));
         }
 
         // 添加到配置
-        let description = format!("Java {} ({})", version, java_home);
+        let description = format!("Java {version} ({java_home})");
         config.add_java_env(crate::config::JavaEnvironment {
             name: install_name.clone(),
             java_home: java_home.to_string(),
@@ -144,16 +145,16 @@ impl JavaInstaller {
         })?;
         config.save()?;
 
-        println!("✅ Java {} 安装成功！", version);
-        println!("📁 安装路径: {}", java_home);
+        println!("✅ Java {version} 安装成功！");
+        println!("📁 安装路径: {java_home}");
 
         // 自动切换
         if auto_switch {
-            println!("🔄 自动切换到 Java {}", version);
+            println!("🔄 自动切换到 Java {version}");
             if let Err(e) = Self::switch_to_java(&install_name, config) {
-                println!("⚠️  自动切换失败: {}", e);
+                println!("⚠️  自动切换失败: {e}");
             } else {
-                println!("✅ 已切换到 Java {}", version);
+                println!("✅ 已切换到 Java {version}");
             }
         }
 
@@ -161,7 +162,7 @@ impl JavaInstaller {
     }
 
     async fn download_and_install(
-        downloader: &Box<dyn JavaDownloader>,
+        downloader: &dyn JavaDownloader,
         version_info: &UnifiedJavaVersion,
         platform: &Platform,
         env_name: &str,
@@ -201,7 +202,7 @@ impl JavaInstaller {
                 }),
             )
             .await
-            .map_err(|e| format!("下载失败: {:?}", e))?;
+            .map_err(|e| format!("下载失败: {e:?}"))?;
         pb.finish_with_message("下载完成");
 
         // 下载器现在直接下载到文件，避免内存占用
@@ -237,7 +238,7 @@ impl JavaInstaller {
             .join(".fnva")
             .join("java-packages");
 
-        fs::create_dir_all(&fnva_dir).map_err(|e| format!("创建安装目录失败: {}", e))?;
+        fs::create_dir_all(&fnva_dir).map_err(|e| format!("创建安装目录失败: {e}"))?;
 
         let java_home = fnva_dir.join(env_name);
 
@@ -261,9 +262,9 @@ impl JavaInstaller {
         }
 
         // 搜索子目录
-        for entry in fs::read_dir(install_dir).map_err(|e| format!("读取安装目录失败: {}", e))?
+        for entry in fs::read_dir(install_dir).map_err(|e| format!("读取安装目录失败: {e}"))?
         {
-            let entry = entry.map_err(|e| format!("读取目录项失败: {}", e))?;
+            let entry = entry.map_err(|e| format!("读取目录项失败: {e}"))?;
             let path = entry.path();
 
             if path.is_dir() && crate::utils::validate_java_home(&path.to_string_lossy()) {
@@ -288,7 +289,7 @@ impl JavaInstaller {
     fn switch_to_java(version_name: &str, config: &Config) -> Result<(), String> {
         let java_env = config
             .get_java_env(version_name)
-            .ok_or_else(|| format!("Java 环境 '{}' 不存在", version_name))?;
+            .ok_or_else(|| format!("Java 环境 '{version_name}' 不存在"))?;
 
         // 验证 Java Home 路径
         if !crate::utils::validate_java_home(&java_env.java_home) {
@@ -297,7 +298,7 @@ impl JavaInstaller {
 
         println!("🔄 切换到 Java: {} ({})", version_name, java_env.java_home);
         println!("💡 请在新的终端中运行以下命令来激活环境:");
-        println!("   fnva java use {}", version_name);
+        println!("   fnva java use {version_name}");
 
         Ok(())
     }
@@ -305,7 +306,7 @@ impl JavaInstaller {
     /// 列出可安装的 Java 版本
     pub async fn list_installable_versions() -> Result<Vec<String>, String> {
         let config = crate::infrastructure::config::Config::load()
-            .map_err(|e| format!("加载配置失败: {}", e))?;
+            .map_err(|e| format!("加载配置失败: {e}"))?;
 
         let downloader_type = &config.repositories.java.downloader;
 
@@ -319,7 +320,7 @@ impl JavaInstaller {
         let versions = downloader
             .list_available_versions()
             .await
-            .map_err(|e| format!("{:?}", e))?;
+            .map_err(|e| format!("{e:?}"))?;
 
         let mut result = Vec::new();
 
@@ -335,7 +336,7 @@ impl JavaInstaller {
             };
             versions_by_major
                 .entry(version.major)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(version_str);
         }
 
@@ -343,21 +344,20 @@ impl JavaInstaller {
         major_versions.sort_by(|a, b| b.cmp(a));
 
         result.push(format!(
-            "🌟 所有可用版本 (源: {}, 带*的为LTS版本):",
-            downloader_type
+            "🌟 所有可用版本 (源: {downloader_type}, 带*的为LTS版本):"
         ));
         result.push("".to_string());
 
         for major in major_versions.iter().take(15) {
             let versions_for_major = &versions_by_major[major];
-            let mut line = format!("Java {}: ", major);
+            let mut line = format!("Java {major}: ");
 
             for (i, version) in versions_for_major.iter().take(8).enumerate() {
                 if i > 0 && i % 4 == 0 {
                     result.push(line.clone());
-                    line = format!("        ");
+                    line = "        ".to_string();
                 }
-                line.push_str(&format!("{:<12}", version));
+                line.push_str(&format!("{version:<12}"));
             }
             result.push(line);
 
@@ -369,12 +369,11 @@ impl JavaInstaller {
             }
         }
 
-        let total_versions: usize = versions.iter().count();
+        let total_versions: usize = versions.len();
         let lts_count: usize = versions.iter().filter(|v| v.is_lts).count();
         result.push("".to_string());
         result.push(format!(
-            "📊 总计: {} 个版本，其中 {} 个LTS版本",
-            total_versions, lts_count
+            "📊 总计: {total_versions} 个版本，其中 {lts_count} 个LTS版本"
         ));
 
         Ok(result)
@@ -384,7 +383,7 @@ impl JavaInstaller {
     pub fn uninstall_java(version_name: &str, config: &mut Config) -> Result<(), String> {
         let java_env = config
             .get_java_env(version_name)
-            .ok_or_else(|| format!("Java 环境 '{}' 不存在", version_name))?;
+            .ok_or_else(|| format!("Java 环境 '{version_name}' 不存在"))?;
 
         let java_home = &java_env.java_home;
 
@@ -393,11 +392,11 @@ impl JavaInstaller {
             return Err("只能卸载通过 fnva 安装的 Java 版本".to_string());
         }
 
-        println!("🗑️  正在卸载 Java {}...", version_name);
-        println!("📁 删除路径: {}", java_home);
+        println!("🗑️  正在卸载 Java {version_name}...");
+        println!("📁 删除路径: {java_home}");
 
         // 删除安装目录
-        fs::remove_dir_all(java_home).map_err(|e| format!("删除安装目录失败: {}", e))?;
+        fs::remove_dir_all(java_home).map_err(|e| format!("删除安装目录失败: {e}"))?;
 
         // 从配置中移除
         config.remove_java_env(version_name)?;
@@ -406,14 +405,14 @@ impl JavaInstaller {
         if config
             .default_java_env
             .as_ref()
-            .map_or(false, |default| default == version_name)
+            .is_some_and(|default| default == version_name)
         {
             config.default_java_env = None;
         }
 
         config.save()?;
 
-        println!("✅ Java {} 卸载成功", version_name);
+        println!("✅ Java {version_name} 卸载成功");
         Ok(())
     }
 
@@ -430,7 +429,7 @@ impl JavaInstaller {
 
         // 如果在配置中已经存在该环境，则不认为是可用的本地包
         if config.get_java_env(version_spec).is_some() {
-            return Err(format!("Java {} 已经在配置中存在", version_spec));
+            return Err(format!("Java {version_spec} 已经在配置中存在"));
         }
 
         let java_home = fnva_dir.join(version_spec);
@@ -442,7 +441,7 @@ impl JavaInstaller {
             return Ok(actual_java_home);
         }
 
-        Err(format!("本地未找到Java包: {}", version_spec))
+        Err(format!("本地未找到Java包: {version_spec}"))
     }
 }
 

@@ -53,7 +53,7 @@ impl GitHubJavaDownloader {
         let version_part = if let Some(version) = tag_name.strip_prefix("jdk-") {
             version
         } else {
-            return Err(format!("无效的标签格式: {}", tag_name));
+            return Err(format!("无效的标签格式: {tag_name}"));
         };
 
         // 移除构建号部分，如 "17.0.8+7" -> "17.0.8"
@@ -79,7 +79,7 @@ impl GitHubJavaDownloader {
         for asset in &release.assets {
             if let Some((os, arch)) = Platform::parse_from_filename(&asset.name) {
                 download_urls.insert(
-                    format!("{}-{}", os, arch),
+                    format!("{os}-{arch}"),
                     DownloadSource {
                         primary: asset.browser_download_url.clone(),
                         fallback: None,
@@ -151,7 +151,7 @@ impl GitHubJavaDownloader {
             .map(|c| c.java_version_cache.ttl)
             .unwrap_or(3600);
         let cache = crate::remote::cache::VersionCacheManager::new()
-            .map_err(|e| DownloadError::from(format!("初始化缓存失败: {}", e)))?
+            .map_err(|e| DownloadError::from(format!("初始化缓存失败: {e}")))?
             .with_ttl(ttl);
         if let Ok(Some(cached)) = cache
             .load::<Vec<UnifiedJavaVersion>>(
@@ -176,7 +176,7 @@ impl GitHubJavaDownloader {
         let mut seen_versions = std::collections::HashSet::new();
 
         for repo in repositories {
-            println!("📦 检查仓库: {}", repo);
+            println!("📦 检查仓库: {repo}");
 
             let url = format!("{}/repos/{}/releases", self.api_base_url, repo);
 
@@ -187,7 +187,7 @@ impl GitHubJavaDownloader {
                 .header("Accept", "application/vnd.github.v3+json")
                 .send()
                 .await
-                .map_err(|e| DownloadError::from(format!("请求 GitHub API 失败: {}", e)))?;
+                .map_err(|e| DownloadError::from(format!("请求 GitHub API 失败: {e}")))?;
 
             if !response.status().is_success() {
                 println!("⚠️  仓库 {} 访问失败: {}", repo, response.status());
@@ -197,7 +197,7 @@ impl GitHubJavaDownloader {
             let releases: Vec<GitHubJavaRelease> = match response.json().await {
                 Ok(r) => r,
                 Err(e) => {
-                    println!("⚠️  解析仓库 {} 响应失败: {}", repo, e);
+                    println!("⚠️  解析仓库 {repo} 响应失败: {e}");
                     continue;
                 }
             };
@@ -300,7 +300,7 @@ impl JavaDownloader for GitHubJavaDownloader {
             // 尝试匹配相似的配置
             for (platform_key, source) in &version_clone.download_urls {
                 if platform_key.starts_with(&platform_clone.os) {
-                    println!("⚠️  使用相似的架构: {} -> {}", platform_key, key);
+                    println!("⚠️  使用相似的架构: {platform_key} -> {key}");
                     return Ok(source.primary.clone());
                 }
             }
@@ -329,7 +329,7 @@ impl JavaDownloader for GitHubJavaDownloader {
                 .await?;
 
             println!("📥 正在下载 Java {}...", version_clone.version);
-            println!("🔗 下载地址: {}", url);
+            println!("🔗 下载地址: {url}");
 
             // 创建持久化文件路径而不是临时目录
             let cache_dir = dirs::home_dir()
@@ -341,7 +341,7 @@ impl JavaDownloader for GitHubJavaDownloader {
             // 确保缓存目录存在
             tokio::fs::create_dir_all(&cache_dir)
                 .await
-                .map_err(|e| DownloadError::Io(format!("创建缓存目录失败: {}", e)))?;
+                .map_err(|e| DownloadError::Io(format!("创建缓存目录失败: {e}")))?;
 
             let extension = platform_clone.archive_ext();
             let file_name = format!(
@@ -358,23 +358,20 @@ impl JavaDownloader for GitHubJavaDownloader {
 
                     // 验证文件确实存在
                     if !file_path.exists() {
-                        return Err(DownloadError::Io(format!(
-                            "缓存文件不存在: {:?}",
-                            file_path
-                        )));
+                        return Err(DownloadError::Io(format!("缓存文件不存在: {file_path:?}")));
                     }
 
                     // 使用规范化路径，确保在 Windows 上正确处理
                     let canonical_path = file_path
                         .canonicalize()
-                        .map_err(|e| DownloadError::Io(format!("无法获取规范路径: {}", e)))?;
+                        .map_err(|e| DownloadError::Io(format!("无法获取规范路径: {e}")))?;
 
                     let path_str = canonical_path
                         .to_str()
                         .ok_or_else(|| DownloadError::Io("路径包含无效字符".to_string()))?
                         .to_string();
 
-                    println!("-> 文件保存位置: {}", path_str);
+                    println!("-> 文件保存位置: {path_str}");
                     return Ok(DownloadTarget::File(path_str));
                 }
             }
@@ -383,33 +380,32 @@ impl JavaDownloader for GitHubJavaDownloader {
                 progress_callback(c, t)
             })
             .await
-            .map_err(|e| DownloadError::from(format!("下载失败: {}", e)))?;
+            .map_err(|e| DownloadError::from(format!("下载失败: {e}")))?;
 
             let file_size = tokio::fs::metadata(&file_path)
                 .await
-                .map_err(|e| DownloadError::Io(format!("获取文件大小失败: {}", e)))?
+                .map_err(|e| DownloadError::Io(format!("获取文件大小失败: {e}")))?
                 .len();
             println!("✅ 下载完成，大小: {} MB", file_size / (1024 * 1024));
 
             // 验证文件确实存在
             if !file_path.exists() {
                 return Err(DownloadError::Io(format!(
-                    "下载的文件不存在: {:?}",
-                    file_path
+                    "下载的文件不存在: {file_path:?}"
                 )));
             }
 
             // 使用规范化路径，确保在 Windows 上正确处理
             let canonical_path = file_path
                 .canonicalize()
-                .map_err(|e| DownloadError::Io(format!("无法获取规范路径: {}", e)))?;
+                .map_err(|e| DownloadError::Io(format!("无法获取规范路径: {e}")))?;
 
             let path_str = canonical_path
                 .to_str()
                 .ok_or_else(|| DownloadError::Io("路径包含无效字符".to_string()))?
                 .to_string();
 
-            println!("-> 文件保存位置: {}", path_str);
+            println!("-> 文件保存位置: {path_str}");
 
             // 返回持久化文件路径
             Ok(DownloadTarget::File(path_str))

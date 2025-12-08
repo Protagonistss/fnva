@@ -37,7 +37,7 @@ impl JavaVersion {
 
         let version_parts: Vec<&str> = version_part.split('.').collect();
         if version_parts.len() < 2 {
-            return Err(format!("无效的版本格式: {}", semver));
+            return Err(format!("无效的版本格式: {semver}"));
         }
 
         let major = version_parts[0]
@@ -211,7 +211,7 @@ impl VersionManager {
                 let base_version = cleaned.trim_end_matches('+');
                 let major = base_version
                     .parse::<u32>()
-                    .map_err(|_| format!("无效的版本号: {}", base_version))?;
+                    .map_err(|_| format!("无效的版本号: {base_version}"))?;
                 Ok(VersionSpec::Range(major, 999)) // 999 表示无上限
             } else {
                 // 尝试解析为主版本号
@@ -252,7 +252,7 @@ impl VersionManager {
             .header("User-Agent", "fnva/0.0.5")
             .send()
             .await
-            .map_err(|e| format!("获取可用版本失败: {}", e))?;
+            .map_err(|e| format!("获取可用版本失败: {e}"))?;
 
         if !available_response.status().is_success() {
             return Err(format!("API 请求失败: {}", available_response.status()));
@@ -261,7 +261,7 @@ impl VersionManager {
         let available: AdoptiumAvailableResponse = available_response
             .json()
             .await
-            .map_err(|e| format!("解析版本信息失败: {}", e))?;
+            .map_err(|e| format!("解析版本信息失败: {e}"))?;
 
         // 构建版本列表
         let mut versions = Vec::new();
@@ -295,9 +295,9 @@ impl VersionManager {
         // 暂时使用基本版本信息
         let is_lts = [8, 11, 17, 21].contains(&major);
         let version = JavaVersion::new(
-            format!("{}.0.0", major),
+            format!("{major}.0.0"),
             major,
-            format!("{}.0.0+0", major),
+            format!("{major}.0.0+0"),
             is_lts,
         );
         Ok(version)
@@ -316,7 +316,7 @@ impl VersionManager {
                     .collect();
 
                 if matches.is_empty() {
-                    return Err(format!("未找到 Java {} 的可用版本", major));
+                    return Err(format!("未找到 Java {major} 的可用版本"));
                 }
 
                 // 返回最新的匹配版本
@@ -329,7 +329,7 @@ impl VersionManager {
                 {
                     Ok(found.clone())
                 } else {
-                    Err(format!("未找到版本: {}", version))
+                    Err(format!("未找到版本: {version}"))
                 }
             }
             VersionSpec::LatestLts => {
@@ -374,7 +374,7 @@ impl VersionManager {
                     .collect();
 
                 if matches.is_empty() {
-                    return Err(format!("未找到版本范围 {}-{} 的可用版本", start, end));
+                    return Err(format!("未找到版本范围 {start}-{end} 的可用版本"));
                 }
 
                 // 返回范围内最新的版本
@@ -394,7 +394,7 @@ impl VersionManager {
                     let diff = (*available as i32 - requested_major as i32).abs();
                     if diff <= 2 && diff != 0 {
                         // 相差不超过 2 个版本
-                        suggestions.push(format!("Java {}", available));
+                        suggestions.push(format!("Java {available}"));
                     }
                 }
             }

@@ -13,6 +13,12 @@ pub struct JavaEnvironmentManager {
     installations: HashMap<String, crate::environments::java::scanner::JavaInstallation>,
 }
 
+impl Default for JavaEnvironmentManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl JavaEnvironmentManager {
     /// 创建新的 Java 环境管理器（仅从配置文件加载，不进行系统扫描）
     pub fn new() -> Self {
@@ -22,7 +28,7 @@ impl JavaEnvironmentManager {
 
         // 仅从配置文件加载环境
         if let Err(e) = manager.load_from_config() {
-            eprintln!("Warning: Failed to load environments from config: {}", e);
+            eprintln!("Warning: Failed to load environments from config: {e}");
         }
 
         manager
@@ -37,16 +43,13 @@ impl JavaEnvironmentManager {
             for installation in installations {
                 let name = installation.name.clone();
                 // 只有当环境中不存在时才添加
-                if !manager.installations.contains_key(&name) {
+                manager.installations.entry(name).or_insert_with(|| {
                     // 将扫描发现的环境也保存到配置文件中
                     if let Err(e) = Self::save_scanned_environment_to_config(&installation) {
-                        eprintln!(
-                            "Warning: Failed to save scanned environment to config: {}",
-                            e
-                        );
+                        eprintln!("Warning: Failed to save scanned environment to config: {e}");
                     }
-                    manager.installations.insert(name, installation);
-                }
+                    installation
+                });
             }
         }
 
@@ -61,16 +64,13 @@ impl JavaEnvironmentManager {
         for installation in installations {
             let name = installation.name.clone();
             // 只有当环境中不存在时才添加
-            if !self.installations.contains_key(&name) {
+            self.installations.entry(name).or_insert_with(|| {
                 // 将扫描发现的环境保存到配置文件中
                 if let Err(e) = Self::save_scanned_environment_to_config(&installation) {
-                    eprintln!(
-                        "Warning: Failed to save scanned environment to config: {}",
-                        e
-                    );
+                    eprintln!("Warning: Failed to save scanned environment to config: {e}");
                 }
-                self.installations.insert(name, installation);
-            }
+                installation
+            });
         }
 
         Ok(())
@@ -196,14 +196,14 @@ impl JavaEnvironmentManager {
         config.java_environments.retain(|env| env.name != name);
 
         if config.java_environments.len() == original_len {
-            return Err(format!("Java environment '{}' not found in config", name));
+            return Err(format!("Java environment '{name}' not found in config"));
         }
 
         // 如果删除的是默认环境，清理默认环境设置
         if config
             .default_java_env
             .as_ref()
-            .map_or(false, |default| default == name)
+            .is_some_and(|default| default == name)
         {
             config.default_java_env = None;
         }
@@ -222,15 +222,15 @@ impl JavaEnvironmentManager {
         use std::process::Command;
 
         let java_exe = if cfg!(target_os = "windows") {
-            format!("{}\\bin\\java.exe", java_home)
+            format!("{java_home}\\bin\\java.exe")
         } else {
-            format!("{}/bin/java", java_home)
+            format!("{java_home}/bin/java")
         };
 
         let output = Command::new(&java_exe)
             .arg("-version")
             .output()
-            .map_err(|e| format!("Failed to execute java -version: {}", e))?;
+            .map_err(|e| format!("Failed to execute java -version: {e}"))?;
 
         if output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -315,8 +315,8 @@ impl EnvironmentManager for JavaEnvironmentManager {
 
     fn add(&mut self, name: &str, config_str: &str) -> Result<(), String> {
         // Parse config as JSON to extract java_home
-        let config: serde_json::Value = serde_json::from_str(config_str)
-            .map_err(|e| format!("Failed to parse config: {}", e))?;
+        let config: serde_json::Value =
+            serde_json::from_str(config_str).map_err(|e| format!("Failed to parse config: {e}"))?;
 
         let java_home = config
             .get("java_home")
@@ -333,7 +333,7 @@ impl EnvironmentManager for JavaEnvironmentManager {
             crate::environments::java::scanner::JavaScanner::create_installation_from_path(
                 java_home,
             )
-            .map_err(|e| format!("Failed to create Java installation: {}", e))?;
+            .map_err(|e| format!("Failed to create Java installation: {e}"))?;
 
         // Extract version info before moving
         let version_info = installation.version.as_deref().unwrap_or("unknown");
@@ -341,7 +341,7 @@ impl EnvironmentManager for JavaEnvironmentManager {
         // Override the name with the provided one
         let java_installation = crate::environments::java::scanner::JavaInstallation {
             name: name.to_string(),
-            description: format!("Java {} ({})", version_info, java_home),
+            description: format!("Java {version_info} ({java_home})"),
             java_home: java_home.to_string(),
             version: installation.version.clone(),
             vendor: installation.vendor,
@@ -358,7 +358,7 @@ impl EnvironmentManager for JavaEnvironmentManager {
         Self::save_to_config_impl(
             name,
             java_home,
-            &format!("Java {} ({})", version_info, java_home),
+            &format!("Java {version_info} ({java_home})"),
         )?;
 
         Ok(())
@@ -371,11 +371,11 @@ impl EnvironmentManager for JavaEnvironmentManager {
             if let Err(e) = Self::remove_from_config(name) {
                 // 如果配置文件中没有这个环境，那也没关系
                 // 可能是通过扫描发现的环境
-                eprintln!("Note: {}", e);
+                eprintln!("Note: {e}");
             }
             Ok(())
         } else {
-            Err(format!("Java environment '{}' not found", name))
+            Err(format!("Java environment '{name}' not found"))
         }
     }
 
@@ -383,7 +383,7 @@ impl EnvironmentManager for JavaEnvironmentManager {
         let java_installation = self
             .installations
             .get(name)
-            .ok_or_else(|| format!("Java environment '{}' not found", name))?;
+            .ok_or_else(|| format!("Java environment '{name}' not found"))?;
 
         let shell_type =
             shell_type.unwrap_or_else(crate::infrastructure::shell::platform::detect_shell);
@@ -400,7 +400,7 @@ impl EnvironmentManager for JavaEnvironmentManager {
             Some(shell_type),
         ) {
             Ok(script) => Ok(script),
-            Err(e) => Err(format!("Failed to generate script: {}", e)),
+            Err(e) => Err(format!("Failed to generate script: {e}")),
         }
     }
 

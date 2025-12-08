@@ -7,6 +7,7 @@ use std::collections::HashMap;
 
 /// Shell 脚本构建器（向后兼容的包装器）
 #[deprecated(note = "使用 ScriptGenerator 替代")]
+#[derive(Default)]
 pub struct ScriptBuilder {
     generator: ScriptGenerator,
 }
@@ -17,13 +18,6 @@ impl ScriptBuilder {
         Ok(Self {
             generator: ScriptGenerator::new()?,
         })
-    }
-
-    /// 使用默认生成器
-    pub fn default() -> Self {
-        Self {
-            generator: ScriptGenerator::default(),
-        }
     }
 }
 
@@ -103,7 +97,7 @@ impl ScriptBuilder {
                     java_home.replace('\\', "\\\\")
                 ));
 
-                let bin_path = format!("{}\\bin", java_home);
+                let bin_path = format!("{java_home}\\bin");
                 script.push_str(&format!(
                     "$env:PATH = \"{};\" + ($cleanPath -join ';')\r\n",
                     bin_path.replace('\\', "\\\\")
@@ -111,8 +105,7 @@ impl ScriptBuilder {
 
                 // Verify the switch
                 script.push_str(&format!(
-                    "Write-Host \"Switched to Java environment: {}\" -ForegroundColor Green\r\n",
-                    env_name
+                    "Write-Host \"Switched to Java environment: {env_name}\" -ForegroundColor Green\r\n"
                 ));
                 script.push_str(
                     "Write-Host \"JAVA_HOME: $env:JAVA_HOME\" -ForegroundColor Yellow\r\n",
@@ -127,18 +120,17 @@ impl ScriptBuilder {
                     if let Some(auth_token) =
                         config.get("anthropic_auth_token").and_then(|v| v.as_str())
                     {
-                        script
-                            .push_str(&format!("$env:ANTHROPIC_AUTH_TOKEN = \"{}\"\n", auth_token));
+                        script.push_str(&format!("$env:ANTHROPIC_AUTH_TOKEN = \"{auth_token}\"\n"));
                     }
 
                     if let Some(base_url) =
                         config.get("anthropic_base_url").and_then(|v| v.as_str())
                     {
-                        script.push_str(&format!("$env:ANTHROPIC_BASE_URL = \"{}\"\n", base_url));
+                        script.push_str(&format!("$env:ANTHROPIC_BASE_URL = \"{base_url}\"\n"));
                     }
 
                     if let Some(timeout) = config.get("api_timeout_ms").and_then(|v| v.as_str()) {
-                        script.push_str(&format!("$env:API_TIMEOUT_MS = \"{}\"\n", timeout));
+                        script.push_str(&format!("$env:API_TIMEOUT_MS = \"{timeout}\"\n"));
                     }
 
                     if let Some(disable_traffic) =
@@ -150,13 +142,11 @@ impl ScriptBuilder {
                     }
 
                     // Set default Sonnet model if specified
-                    if let Some(default_model) = config
-                        .get("default_model")
-                        .and_then(|v| v.as_str())
+                    if let Some(default_model) =
+                        config.get("default_model").and_then(|v| v.as_str())
                     {
                         script.push_str(&format!(
-                            "$env:ANTHROPIC_DEFAULT_SONNET_MODEL = \"{}\"\n",
-                            default_model
+                            "$env:ANTHROPIC_DEFAULT_SONNET_MODEL = \"{default_model}\"\n"
                         ));
                     }
 
@@ -169,19 +159,19 @@ impl ScriptBuilder {
                         .and_then(|v| v.as_str())
                         .ok_or("Missing api_key in config")?;
 
-                    script.push_str(&format!("$env:OPENAI_API_KEY = \"{}\"\n", api_key));
+                    script.push_str(&format!("$env:OPENAI_API_KEY = \"{api_key}\"\n"));
 
                     if let Some(model) = config.get("model").and_then(|v| v.as_str()) {
-                        script.push_str(&format!("$env:OPENAI_MODEL = \"{}\"\n", model));
+                        script.push_str(&format!("$env:OPENAI_MODEL = \"{model}\"\n"));
                     }
 
                     if let Some(base_url) = config.get("base_url").and_then(|v| v.as_str()) {
-                        script.push_str(&format!("$env:OPENAI_BASE_URL = \"{}\"\n", base_url));
+                        script.push_str(&format!("$env:OPENAI_BASE_URL = \"{base_url}\"\n"));
                     }
                 }
             }
             _ => {
-                return Err(format!("Environment type {:?} not yet supported", env_type));
+                return Err(format!("Environment type {env_type:?} not yet supported"));
             }
         }
 
@@ -207,13 +197,12 @@ impl ScriptBuilder {
                 script.push_str("# Remove existing Java paths from PATH\n");
                 script.push_str("clean_path=$(echo \"$PATH\" | tr ':' '\\n' | grep -v java | grep -v jdk | tr '\\n' ':' | sed 's/:$//')\n");
 
-                script.push_str(&format!("export JAVA_HOME=\"{}\"\n", java_home));
-                script.push_str(&format!("export PATH=\"{}\\bin:$clean_path\"\n", java_home));
+                script.push_str(&format!("export JAVA_HOME=\"{java_home}\"\n"));
+                script.push_str(&format!("export PATH=\"{java_home}\\bin:$clean_path\"\n"));
 
                 // Verify the switch
                 script.push_str(&format!(
-                    "echo \"Switched to Java environment: {}\"\n",
-                    env_name
+                    "echo \"Switched to Java environment: {env_name}\"\n"
                 ));
                 script.push_str("echo \"JAVA_HOME: $JAVA_HOME\"\n");
             }
@@ -226,18 +215,17 @@ impl ScriptBuilder {
                     if let Some(auth_token) =
                         config.get("anthropic_auth_token").and_then(|v| v.as_str())
                     {
-                        script
-                            .push_str(&format!("export ANTHROPIC_AUTH_TOKEN=\"{}\"\n", auth_token));
+                        script.push_str(&format!("export ANTHROPIC_AUTH_TOKEN=\"{auth_token}\"\n"));
                     }
 
                     if let Some(base_url) =
                         config.get("anthropic_base_url").and_then(|v| v.as_str())
                     {
-                        script.push_str(&format!("export ANTHROPIC_BASE_URL=\"{}\"\n", base_url));
+                        script.push_str(&format!("export ANTHROPIC_BASE_URL=\"{base_url}\"\n"));
                     }
 
                     if let Some(timeout) = config.get("api_timeout_ms").and_then(|v| v.as_str()) {
-                        script.push_str(&format!("export API_TIMEOUT_MS=\"{}\"\n", timeout));
+                        script.push_str(&format!("export API_TIMEOUT_MS=\"{timeout}\"\n"));
                     }
 
                     if let Some(disable_traffic) =
@@ -249,13 +237,11 @@ impl ScriptBuilder {
                     }
 
                     // Set default Sonnet model if specified
-                    if let Some(default_model) = config
-                        .get("default_model")
-                        .and_then(|v| v.as_str())
+                    if let Some(default_model) =
+                        config.get("default_model").and_then(|v| v.as_str())
                     {
                         script.push_str(&format!(
-                            "export ANTHROPIC_DEFAULT_SONNET_MODEL=\"{}\"\n",
-                            default_model
+                            "export ANTHROPIC_DEFAULT_SONNET_MODEL=\"{default_model}\"\n"
                         ));
                     }
 
@@ -268,19 +254,19 @@ impl ScriptBuilder {
                         .and_then(|v| v.as_str())
                         .ok_or("Missing api_key in config")?;
 
-                    script.push_str(&format!("export OPENAI_API_KEY=\"{}\"\n", api_key));
+                    script.push_str(&format!("export OPENAI_API_KEY=\"{api_key}\"\n"));
 
                     if let Some(model) = config.get("model").and_then(|v| v.as_str()) {
-                        script.push_str(&format!("export OPENAI_MODEL=\"{}\"\n", model));
+                        script.push_str(&format!("export OPENAI_MODEL=\"{model}\"\n"));
                     }
 
                     if let Some(base_url) = config.get("base_url").and_then(|v| v.as_str()) {
-                        script.push_str(&format!("export OPENAI_BASE_URL=\"{}\"\n", base_url));
+                        script.push_str(&format!("export OPENAI_BASE_URL=\"{base_url}\"\n"));
                     }
                 }
             }
             _ => {
-                return Err(format!("Environment type {:?} not yet supported", env_type));
+                return Err(format!("Environment type {env_type:?} not yet supported"));
             }
         }
 
@@ -306,16 +292,12 @@ impl ScriptBuilder {
                 script.push_str("# Remove existing Java paths from PATH\n");
                 script.push_str("set clean_path (echo $PATH | tr ' ' '\\n' | grep -v java | grep -v jdk | tr '\\n' ' ' | string trim)\n");
 
-                script.push_str(&format!("set -gx JAVA_HOME \"{}\"\n", java_home));
-                script.push_str(&format!(
-                    "set -gx PATH \"{}\\bin\" $clean_path\n",
-                    java_home
-                ));
+                script.push_str(&format!("set -gx JAVA_HOME \"{java_home}\"\n"));
+                script.push_str(&format!("set -gx PATH \"{java_home}\\bin\" $clean_path\n"));
 
                 // Verify the switch
                 script.push_str(&format!(
-                    "echo \"Switched to Java environment: {}\"\n",
-                    env_name
+                    "echo \"Switched to Java environment: {env_name}\"\n"
                 ));
                 script.push_str("echo \"JAVA_HOME: $JAVA_HOME\"\n");
             }
@@ -325,14 +307,14 @@ impl ScriptBuilder {
                     .and_then(|v| v.as_str())
                     .ok_or("Missing api_key in config")?;
 
-                script.push_str(&format!("set -gx OPENAI_API_KEY \"{}\"\n", api_key));
+                script.push_str(&format!("set -gx OPENAI_API_KEY \"{api_key}\"\n"));
             }
             EnvironmentType::Cc => {
                 // CC environments use Anthropic variables, not OpenAI
                 // No OpenAI variables should be set for Claude Code environments
             }
             _ => {
-                return Err(format!("Environment type {:?} not yet supported", env_type));
+                return Err(format!("Environment type {env_type:?} not yet supported"));
             }
         }
 
@@ -371,14 +353,11 @@ impl ScriptBuilder {
                 script.push_str("    )\n");
                 script.push_str(")\n");
 
-                script.push_str(&format!("set \"JAVA_HOME={}\"\n", java_home));
-                script.push_str(&format!("set \"PATH={}\\bin;!clean_path!\"\n", java_home));
+                script.push_str(&format!("set \"JAVA_HOME={java_home}\"\n"));
+                script.push_str(&format!("set \"PATH={java_home}\\bin;!clean_path!\"\n"));
 
                 // Verify the switch
-                script.push_str(&format!(
-                    "echo Switched to Java environment: {}\n",
-                    env_name
-                ));
+                script.push_str(&format!("echo Switched to Java environment: {env_name}\n"));
                 script.push_str("echo JAVA_HOME: %JAVA_HOME%\n");
             }
             EnvironmentType::Llm => {
@@ -387,14 +366,14 @@ impl ScriptBuilder {
                     .and_then(|v| v.as_str())
                     .ok_or("Missing api_key in config")?;
 
-                script.push_str(&format!("set OPENAI_API_KEY={}\n", api_key));
+                script.push_str(&format!("set OPENAI_API_KEY={api_key}\n"));
 
                 if let Some(model) = config.get("model").and_then(|v| v.as_str()) {
-                    script.push_str(&format!("set OPENAI_MODEL={}\n", model));
+                    script.push_str(&format!("set OPENAI_MODEL={model}\n"));
                 }
 
                 if let Some(base_url) = config.get("base_url").and_then(|v| v.as_str()) {
-                    script.push_str(&format!("set OPENAI_BASE_URL={}\n", base_url));
+                    script.push_str(&format!("set OPENAI_BASE_URL={base_url}\n"));
                 }
             }
             EnvironmentType::Cc => {
@@ -402,7 +381,7 @@ impl ScriptBuilder {
                 // No OpenAI variables should be set for Claude Code environments
             }
             _ => {
-                return Err(format!("Environment type {:?} not yet supported", env_type));
+                return Err(format!("Environment type {env_type:?} not yet supported"));
             }
         }
 
@@ -419,10 +398,9 @@ impl ScriptBuilder {
         let mut script = String::new();
 
         script.push_str("# fnva PowerShell Integration - fnm style\n");
-        script.push_str(&format!("# Add this to your PowerShell profile:\n"));
+        script.push_str("# Add this to your PowerShell profile:\n");
         script.push_str(&format!(
-            "# C:\\Users\\{}\\Documents\\PowerShell\\Microsoft.PowerShell_profile.ps1\n\n",
-            username
+            "# C:\\Users\\{username}\\Documents\\PowerShell\\Microsoft.PowerShell_profile.ps1\n\n"
         ));
 
         // 核心的 fnm 风格集成逻辑

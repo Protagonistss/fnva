@@ -252,7 +252,7 @@ impl ProviderFactory {
             "anthropic" => Ok(Box::new(AnthropicProvider)),
             "azure-openai" => Ok(Box::new(AzureOpenAIProvider)),
             "google-gemini" => Ok(Box::new(GoogleGeminiProvider)),
-            _ => Err(format!("Unsupported provider: {}", provider_name)),
+            _ => Err(format!("Unsupported provider: {provider_name}")),
         }
     }
 

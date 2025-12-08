@@ -8,7 +8,7 @@ impl EnvVarUtils {
     /// 获取环境变量，处理变量引用
     pub fn get_with_expansion(var_name: &str) -> Result<String, String> {
         let value = env::var(var_name)
-            .map_err(|_| format!("Environment variable '{}' not found", var_name))?;
+            .map_err(|_| format!("Environment variable '{var_name}' not found"))?;
         Ok(Self::expand_variables(&value))
     }
 
@@ -246,7 +246,7 @@ impl EnvVarUtils {
         }
 
         // 不能以数字开头
-        if name.chars().next().map_or(false, |c| c.is_ascii_digit()) {
+        if name.chars().next().is_some_and(|c| c.is_ascii_digit()) {
             return Err("Environment variable name cannot start with a number".to_string());
         }
 
@@ -255,8 +255,7 @@ impl EnvVarUtils {
 
     /// 获取环境变量的详细信息
     pub fn get_info(key: &str) -> Result<EnvVarInfo, String> {
-        let value =
-            env::var(key).map_err(|_| format!("Environment variable '{}' not found", key))?;
+        let value = env::var(key).map_err(|_| format!("Environment variable '{key}' not found"))?;
 
         Ok(EnvVarInfo {
             name: key.to_string(),
@@ -274,19 +273,19 @@ impl EnvVarUtils {
         for (key, value) in vars {
             match shell_type {
                 ShellType::PowerShell => {
-                    result.push_str(&format!("$env:{} = \"{}\"\n", key, value));
+                    result.push_str(&format!("$env:{key} = \"{value}\"\n"));
                 }
                 ShellType::Bash | ShellType::Zsh => {
-                    result.push_str(&format!("export {}=\"{}\"\n", key, value));
+                    result.push_str(&format!("export {key}=\"{value}\"\n"));
                 }
                 ShellType::Fish => {
-                    result.push_str(&format!("set -gx {} \"{}\"\n", key, value));
+                    result.push_str(&format!("set -gx {key} \"{value}\"\n"));
                 }
                 ShellType::Cmd => {
-                    result.push_str(&format!("set {}={}\n", key, value));
+                    result.push_str(&format!("set {key}={value}\n"));
                 }
                 ShellType::Unknown => {
-                    result.push_str(&format!("{}={}\n", key, value));
+                    result.push_str(&format!("{key}={value}\n"));
                 }
             }
         }
@@ -373,7 +372,7 @@ mod tests {
         assert!(paths_after_add.iter().any(|p| p == test_path));
 
         // 验证路径数量增加
-        assert!(paths_after_add.len() >= original_path.len() + 1);
+        assert!(paths_after_add.len() > original_path.len());
 
         // 清理重复项 - 在添加到后面之前先获取当前状态
         EnvVarUtils::add_to_path(test_path, PathPosition::Back).unwrap();

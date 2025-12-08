@@ -86,7 +86,7 @@ impl TemplateEngine {
     pub fn render(&self, template_name: &str, data: &Value) -> Result<String, AppError> {
         self.handlebars
             .render(template_name, data)
-            .map_err(|e| AppError::Serialization(format!("模板渲染失败: {}", e)))
+            .map_err(|e| AppError::Serialization(format!("模板渲染失败: {e}")))
     }
 }
 
@@ -116,7 +116,7 @@ impl ScriptGenerationStrategy for PowerShellStrategy {
             _ => {
                 return Err(AppError::ScriptGeneration {
                     shell_type: "PowerShell".to_string(),
-                    reason: format!("不支持的环境类型: {:?}", env_type),
+                    reason: format!("不支持的环境类型: {env_type:?}"),
                 })
             }
         };
@@ -181,7 +181,7 @@ impl ScriptGenerationStrategy for BashStrategy {
             _ => {
                 return Err(AppError::ScriptGeneration {
                     shell_type: "Bash".to_string(),
-                    reason: format!("不支持的环境类型: {:?}", env_type),
+                    reason: format!("不支持的环境类型: {env_type:?}"),
                 })
             }
         };
@@ -245,7 +245,7 @@ impl ScriptGenerationStrategy for FishStrategy {
             _ => {
                 return Err(AppError::ScriptGeneration {
                     shell_type: "Fish".to_string(),
-                    reason: format!("不支持的环境类型: {:?}", env_type),
+                    reason: format!("不支持的环境类型: {env_type:?}"),
                 })
             }
         };
@@ -309,7 +309,7 @@ impl ScriptGenerationStrategy for CmdStrategy {
             _ => {
                 return Err(AppError::ScriptGeneration {
                     shell_type: "CMD".to_string(),
-                    reason: format!("不支持的环境类型: {:?}", env_type),
+                    reason: format!("不支持的环境类型: {env_type:?}"),
                 })
             }
         };
@@ -402,8 +402,8 @@ fn handlebars_env_var_name(
 ) -> handlebars::HelperResult {
     if let Some(param) = h.param(0) {
         let value = param.value().as_str().unwrap_or("");
-        let env_name = value.to_uppercase().replace('-', "_").replace('.', "_");
-        out.write(&format!("FNVA_{}", env_name))?;
+        let env_name = value.to_uppercase().replace(['-', '.'], "_");
+        out.write(&format!("FNVA_{env_name}"))?;
     }
     Ok(())
 }
@@ -908,13 +908,6 @@ mod tests {
 
     #[test]
     fn test_template_engine() {
-        let engine = TemplateEngine::new().unwrap();
-
-        let data = json!({
-            "env_name": "test",
-            "shell_type": "PowerShell"
-        });
-
         // 测试 helper 函数
         let template = "{{escape_backslash path}}";
         handlebars::Handlebars::new()

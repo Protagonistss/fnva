@@ -67,7 +67,7 @@ impl LlmValidator {
 
     /// 验证提供商的 Base URL
     pub fn validate_provider_base_url(provider: &str, base_url: &str) -> Result<(), String> {
-        let url = Url::parse(base_url).map_err(|e| format!("Invalid URL: {}", e))?;
+        let url = Url::parse(base_url).map_err(|e| format!("Invalid URL: {e}"))?;
 
         match provider.to_lowercase().as_str() {
             "openai" => {
@@ -154,7 +154,7 @@ impl LlmValidator {
             return Ok(());
         }
 
-        eprintln!("Warning: Unusual OpenAI model name: {}", model);
+        eprintln!("Warning: Unusual OpenAI model name: {model}");
         Ok(())
     }
 
@@ -170,7 +170,7 @@ impl LlmValidator {
             return Ok(());
         }
 
-        eprintln!("Warning: Unusual Anthropic model name: {}", model);
+        eprintln!("Warning: Unusual Anthropic model name: {model}");
         Ok(())
     }
 
@@ -185,7 +185,7 @@ impl LlmValidator {
         let invalid_chars = ['/', '\\', '?', '#', '%', '"'];
         for &ch in &invalid_chars {
             if model.contains(ch) {
-                return Err(format!("Azure deployment name cannot contain '{}'", ch));
+                return Err(format!("Azure deployment name cannot contain '{ch}'"));
             }
         }
 

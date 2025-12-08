@@ -68,7 +68,7 @@ impl ValidationUtils {
         let invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
         for &ch in &invalid_chars {
             if name.contains(ch) {
-                return Err(format!("Environment name cannot contain '{}'", ch));
+                return Err(format!("Environment name cannot contain '{ch}'"));
             }
         }
 
@@ -94,7 +94,7 @@ impl ValidationUtils {
         // 使用 url crate 进行更详细的验证
         match url::Url::parse(url) {
             Ok(_) => Ok(()),
-            Err(e) => Err(format!("Invalid URL: {}", e)),
+            Err(e) => Err(format!("Invalid URL: {e}")),
         }
     }
 
@@ -164,7 +164,7 @@ impl ValidationUtils {
                 let invalid_chars = ['<', '>', ':', '"', '|', '?', '*'];
                 for &ch in &invalid_chars {
                     if name_str.contains(ch) {
-                        return Err(format!("Path contains invalid character '{}'", ch));
+                        return Err(format!("Path contains invalid character '{ch}'"));
                     }
                 }
             }
@@ -189,7 +189,7 @@ impl ValidationUtils {
 
     /// 验证温度参数（用于 LLM）
     pub fn validate_temperature(temperature: f64) -> Result<(), String> {
-        if temperature < 0.0 || temperature > 2.0 {
+        if !(0.0..=2.0).contains(&temperature) {
             return Err("Temperature must be between 0.0 and 2.0".to_string());
         }
         Ok(())
@@ -210,10 +210,7 @@ impl ValidationUtils {
 
     /// 清理和标准化名称
     pub fn sanitize_name(name: &str) -> String {
-        name.trim()
-            .to_lowercase()
-            .replace(' ', "_")
-            .replace('-', "_")
+        name.trim().to_lowercase().replace([' ', '-'], "_")
     }
 }
 

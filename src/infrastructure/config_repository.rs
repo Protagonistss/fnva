@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -17,24 +17,20 @@ pub trait ConfigRepository: Send + Sync {
     /// 保存Java环境配置
     async fn save_java_environments(
         &self,
-        environments: &Vec<JavaEnvironment>,
+        environments: &[JavaEnvironment],
     ) -> Result<(), AppError>;
 
     /// 加载LLM环境配置
     async fn load_llm_environments(&self) -> Result<Vec<LlmEnvironment>, AppError>;
 
     /// 保存LLM环境配置
-    async fn save_llm_environments(
-        &self,
-        environments: &Vec<LlmEnvironment>,
-    ) -> Result<(), AppError>;
+    async fn save_llm_environments(&self, environments: &[LlmEnvironment]) -> Result<(), AppError>;
 
     /// 加载CC环境配置
     async fn load_cc_environments(&self) -> Result<Vec<CcEnvironment>, AppError>;
 
     /// 保存CC环境配置
-    async fn save_cc_environments(&self, environments: &Vec<CcEnvironment>)
-        -> Result<(), AppError>;
+    async fn save_cc_environments(&self, environments: &[CcEnvironment]) -> Result<(), AppError>;
 
     /// 加载全局设置
     async fn load_global_settings(&self) -> Result<GlobalSettings, AppError>;
@@ -44,7 +40,7 @@ pub trait ConfigRepository: Send + Sync {
 }
 
 /// 全局设置配置
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GlobalSettings {
     /// 当前激活的Java环境名称
     pub current_java_env: Option<String>,
@@ -56,18 +52,6 @@ pub struct GlobalSettings {
     pub custom_java_scan_paths: Vec<String>,
     /// 已移除的Java环境名称列表
     pub removed_java_names: Vec<String>,
-}
-
-impl Default for GlobalSettings {
-    fn default() -> Self {
-        Self {
-            current_java_env: None,
-            default_java_env: None,
-            default_cc_env: None,
-            custom_java_scan_paths: Vec::new(),
-            removed_java_names: Vec::new(),
-        }
-    }
 }
 
 /// 基于文件的配置仓储实现
@@ -111,7 +95,7 @@ impl FileSystemConfigRepository {
     }
 
     /// 读取TOML文件
-    async fn read_toml_file<T>(&self, path: &PathBuf) -> Result<T, AppError>
+    async fn read_toml_file<T>(&self, path: &Path) -> Result<T, AppError>
     where
         T: for<'de> Deserialize<'de> + Default,
     {
@@ -127,7 +111,7 @@ impl FileSystemConfigRepository {
     }
 
     /// 写入TOML文件
-    async fn write_toml_file<T>(&self, path: &PathBuf, data: &T) -> Result<(), AppError>
+    async fn write_toml_file<T>(&self, path: &Path, data: &T) -> Result<(), AppError>
     where
         T: Serialize,
     {
@@ -144,7 +128,7 @@ impl FileSystemConfigRepository {
     /// 获取文件修改时间用于缓存
     async fn get_file_modified(
         &self,
-        path: &PathBuf,
+        path: &Path,
     ) -> Result<Option<std::time::SystemTime>, AppError> {
         if !path.exists() {
             return Ok(None);
@@ -162,7 +146,7 @@ impl FileSystemConfigRepository {
     }
 
     /// 检查缓存是否有效
-    async fn is_cache_valid(&self, _path: &PathBuf) -> bool {
+    async fn is_cache_valid(&self, _path: &Path) -> bool {
         // 简化实现：暂时禁用缓存，后续可以基于文件修改时间实现
         false
     }
@@ -185,7 +169,7 @@ impl ConfigRepository for FileSystemConfigRepository {
 
     async fn save_java_environments(
         &self,
-        environments: &Vec<JavaEnvironment>,
+        environments: &[JavaEnvironment],
     ) -> Result<(), AppError> {
         let path = self.java_config_path();
 
@@ -195,7 +179,7 @@ impl ConfigRepository for FileSystemConfigRepository {
         }
 
         let config = JavaConfig {
-            environments: environments.clone(),
+            environments: environments.to_vec(),
         };
 
         self.write_toml_file(&path, &config).await
@@ -214,10 +198,7 @@ impl ConfigRepository for FileSystemConfigRepository {
         Ok(config.environments)
     }
 
-    async fn save_llm_environments(
-        &self,
-        environments: &Vec<LlmEnvironment>,
-    ) -> Result<(), AppError> {
+    async fn save_llm_environments(&self, environments: &[LlmEnvironment]) -> Result<(), AppError> {
         let path = self.llm_config_path();
 
         #[derive(Debug, Serialize)]
@@ -226,7 +207,7 @@ impl ConfigRepository for FileSystemConfigRepository {
         }
 
         let config = LlmConfig {
-            environments: environments.clone(),
+            environments: environments.to_vec(),
         };
 
         self.write_toml_file(&path, &config).await
@@ -245,10 +226,7 @@ impl ConfigRepository for FileSystemConfigRepository {
         Ok(config.environments)
     }
 
-    async fn save_cc_environments(
-        &self,
-        environments: &Vec<CcEnvironment>,
-    ) -> Result<(), AppError> {
+    async fn save_cc_environments(&self, environments: &[CcEnvironment]) -> Result<(), AppError> {
         let path = self.cc_config_path();
 
         #[derive(Debug, Serialize)]
@@ -257,7 +235,7 @@ impl ConfigRepository for FileSystemConfigRepository {
         }
 
         let config = CcConfig {
-            environments: environments.clone(),
+            environments: environments.to_vec(),
         };
 
         self.write_toml_file(&path, &config).await
@@ -315,7 +293,7 @@ impl ConfigManager {
 
         if environments.len() == original_len {
             return Err(AppError::Environment {
-                message: format!("Java环境 '{}' 不存在", name),
+                message: format!("Java环境 '{name}' 不存在"),
             });
         }
 
@@ -360,7 +338,7 @@ impl ConfigManager {
 
         if environments.len() == original_len {
             return Err(AppError::Environment {
-                message: format!("LLM环境 '{}' 不存在", name),
+                message: format!("LLM环境 '{name}' 不存在"),
             });
         }
 
@@ -405,7 +383,7 @@ impl ConfigManager {
 
         if environments.len() == original_len {
             return Err(AppError::Environment {
-                message: format!("CC环境 '{}' 不存在", name),
+                message: format!("CC环境 '{name}' 不存在"),
             });
         }
 
@@ -443,7 +421,7 @@ impl ConfigManager {
         // 验证环境是否存在
         if self.get_java_environment(name).await?.is_none() {
             return Err(AppError::Environment {
-                message: format!("Java环境 '{}' 不存在", name),
+                message: format!("Java环境 '{name}' 不存在"),
             });
         }
 

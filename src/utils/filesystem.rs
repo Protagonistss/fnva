@@ -227,7 +227,7 @@ impl FileSystemUtils {
         if !file_path.exists() {
             return Err(io::Error::new(
                 io::ErrorKind::NotFound,
-                format!("File not found: {:?}", file_path),
+                format!("File not found: {file_path:?}"),
             ));
         }
 

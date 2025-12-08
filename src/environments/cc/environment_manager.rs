@@ -11,6 +11,12 @@ pub struct CcEnvironmentManager {
     environments: HashMap<String, ConfigCcEnvironment>,
 }
 
+impl Default for CcEnvironmentManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CcEnvironmentManager {
     /// 创建新的 CC 环境管理器
     pub fn new() -> Self {
@@ -20,7 +26,7 @@ impl CcEnvironmentManager {
 
         // 从配置文件加载 CC 环境
         if let Err(e) = manager.load_from_config() {
-            eprintln!("Warning: Failed to load CC environments from config: {}", e);
+            eprintln!("Warning: Failed to load CC environments from config: {e}");
         }
 
         manager
@@ -83,8 +89,8 @@ impl EnvironmentManager for CcEnvironmentManager {
 
     fn add(&mut self, name: &str, config_str: &str) -> Result<(), String> {
         // Parse config as JSON
-        let config: serde_json::Value = serde_json::from_str(config_str)
-            .map_err(|e| format!("Failed to parse config: {}", e))?;
+        let config: serde_json::Value =
+            serde_json::from_str(config_str).map_err(|e| format!("Failed to parse config: {e}"))?;
 
         let provider = config
             .get("provider")
@@ -103,7 +109,7 @@ impl EnvironmentManager for CcEnvironmentManager {
             .and_then(|v| v.as_str())
             .unwrap_or("claude-3-sonnet-20240229");
 
-        let default_desc = format!("CC: {} ({})", name, model);
+        let default_desc = format!("CC: {name} ({model})");
         let description = config
             .get("description")
             .and_then(|v| v.as_str())
@@ -120,8 +126,7 @@ impl EnvironmentManager for CcEnvironmentManager {
         };
 
         // 持久化到配置文件
-        let mut file_config =
-            Config::load().map_err(|e| format!("Failed to load config: {}", e))?;
+        let mut file_config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
         if let Some(existing) = file_config
             .cc_environments
             .iter_mut()
@@ -137,7 +142,7 @@ impl EnvironmentManager for CcEnvironmentManager {
         }
         file_config
             .save()
-            .map_err(|e| format!("Failed to save config: {}", e))?;
+            .map_err(|e| format!("Failed to save config: {e}"))?;
 
         self.environments.insert(name.to_string(), cc_environment);
         Ok(())
@@ -145,19 +150,19 @@ impl EnvironmentManager for CcEnvironmentManager {
 
     fn remove(&mut self, name: &str) -> Result<(), String> {
         if self.environments.remove(name).is_none() {
-            return Err(format!("CC environment '{}' not found", name));
+            return Err(format!("CC environment '{name}' not found"));
         }
 
-        let mut config = Config::load().map_err(|e| format!("Failed to load config: {}", e))?;
+        let mut config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
         let original_len = config.cc_environments.len();
         config.cc_environments.retain(|env| env.name != name);
         if config.cc_environments.len() == original_len {
-            return Err(format!("CC environment '{}' not found", name));
+            return Err(format!("CC environment '{name}' not found"));
         }
 
         config
             .save()
-            .map_err(|e| format!("Failed to save config: {}", e))?;
+            .map_err(|e| format!("Failed to save config: {e}"))?;
 
         Ok(())
     }
@@ -166,7 +171,7 @@ impl EnvironmentManager for CcEnvironmentManager {
         let cc_env = self
             .environments
             .get(name)
-            .ok_or_else(|| format!("CC environment '{}' not found", name))?;
+            .ok_or_else(|| format!("CC environment '{name}' not found"))?;
 
         let shell_type =
             shell_type.unwrap_or_else(crate::infrastructure::shell::platform::detect_shell);
@@ -202,8 +207,7 @@ impl EnvironmentManager for CcEnvironmentManager {
             // Add environment-specific model configuration
             match name {
                 "glmcc" => {
-                    config["default_model"] =
-                        serde_json::Value::String("glm-4.6".to_string());
+                    config["default_model"] = serde_json::Value::String("glm-4.6".to_string());
                 }
                 "anycc" => {
                     config["default_model"] =
@@ -216,8 +220,7 @@ impl EnvironmentManager for CcEnvironmentManager {
                 _ => {
                     // For other environments, use the model specified in config
                     if !cc_env.model.is_empty() {
-                        config["default_model"] =
-                            serde_json::Value::String(cc_env.model.clone());
+                        config["default_model"] = serde_json::Value::String(cc_env.model.clone());
                     }
                 }
             }
@@ -227,7 +230,7 @@ impl EnvironmentManager for CcEnvironmentManager {
         match generator.generate_switch_script(EnvironmentType::Cc, name, &config, Some(shell_type))
         {
             Ok(script) => Ok(script),
-            Err(e) => Err(format!("Failed to generate script: {}", e)),
+            Err(e) => Err(format!("Failed to generate script: {e}")),
         }
     }
 
@@ -270,7 +273,7 @@ impl EnvironmentManager for CcEnvironmentManager {
                 provider: "anthropic".to_string(),
                 description: "Detected CC environment from system variables".to_string(),
                 api_key: auth_token,
-                base_url: base_url,
+                base_url,
                 model: std::env::var("ANTHROPIC_MODEL")
                     .unwrap_or_else(|_| "claude-3-sonnet-20240229".to_string()),
             };

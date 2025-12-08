@@ -41,7 +41,7 @@ impl SessionManager {
 
         // 确保目录存在
         fs::create_dir_all(&config_dir)
-            .map_err(|e| format!("Failed to create config directory: {}", e))?;
+            .map_err(|e| format!("Failed to create config directory: {e}"))?;
 
         let config_path = config_dir.join("session.toml");
 
@@ -52,7 +52,7 @@ impl SessionManager {
 
         // 加载现有的会话状态
         if let Err(e) = session_manager.load_state() {
-            eprintln!("Warning: Failed to load session state: {}", e);
+            eprintln!("Warning: Failed to load session state: {e}");
         }
 
         Ok(session_manager)
@@ -65,10 +65,10 @@ impl SessionManager {
         }
 
         let content = fs::read_to_string(&self.config_path)
-            .map_err(|e| format!("Failed to read session file: {}", e))?;
+            .map_err(|e| format!("Failed to read session file: {e}"))?;
 
         let state: SessionState =
-            toml::from_str(&content).map_err(|e| format!("Failed to parse session file: {}", e))?;
+            toml::from_str(&content).map_err(|e| format!("Failed to parse session file: {e}"))?;
 
         self.current_environments = state.current_environments;
 
@@ -83,10 +83,10 @@ impl SessionManager {
         };
 
         let content = toml::to_string_pretty(&state)
-            .map_err(|e| format!("Failed to serialize session state: {}", e))?;
+            .map_err(|e| format!("Failed to serialize session state: {e}"))?;
 
         fs::write(&self.config_path, content)
-            .map_err(|e| format!("Failed to write session file: {}", e))?;
+            .map_err(|e| format!("Failed to write session file: {e}"))?;
 
         Ok(())
     }
@@ -236,7 +236,7 @@ impl HistoryManager {
             .join(".fnva");
 
         fs::create_dir_all(&config_dir)
-            .map_err(|e| format!("Failed to create config directory: {}", e))?;
+            .map_err(|e| format!("Failed to create config directory: {e}"))?;
 
         let history_path = config_dir.join("history.toml");
 
@@ -248,7 +248,7 @@ impl HistoryManager {
 
         // 加载现有历史
         if let Err(e) = history_manager.load_history() {
-            eprintln!("Warning: Failed to load history: {}", e);
+            eprintln!("Warning: Failed to load history: {e}");
         }
 
         Ok(history_manager)
@@ -261,7 +261,7 @@ impl HistoryManager {
         }
 
         let content = fs::read_to_string(&self.history_path)
-            .map_err(|e| format!("Failed to read history file: {}", e))?;
+            .map_err(|e| format!("Failed to read history file: {e}"))?;
 
         #[derive(Deserialize)]
         struct HistoryFile {
@@ -271,7 +271,7 @@ impl HistoryManager {
         let parsed_history = toml::from_str::<HistoryFile>(&content)
             .map(|file| file.history)
             .or_else(|_| toml::from_str::<Vec<SwitchHistory>>(&content))
-            .map_err(|e| format!("Failed to parse history file: {}", e))?;
+            .map_err(|e| format!("Failed to parse history file: {e}"))?;
 
         self.history = parsed_history;
 
@@ -295,16 +295,13 @@ impl HistoryManager {
         }) {
             Ok(content) => content,
             Err(e) => {
-                eprintln!(
-                    "Warning: Failed to serialize history: {}. Skipping history save.",
-                    e
-                );
+                eprintln!("Warning: Failed to serialize history: {e}. Skipping history save.");
                 return Ok(());
             }
         };
 
         fs::write(&self.history_path, content)
-            .map_err(|e| format!("Failed to write history file: {}", e))?;
+            .map_err(|e| format!("Failed to write history file: {e}"))?;
 
         Ok(())
     }
@@ -334,7 +331,7 @@ impl HistoryManager {
 
         // 尝试保存历史，但不影响主要功能
         if let Err(e) = self.save_history() {
-            eprintln!("Warning: Failed to save history: {}", e);
+            eprintln!("Warning: Failed to save history: {e}");
         }
 
         Ok(())

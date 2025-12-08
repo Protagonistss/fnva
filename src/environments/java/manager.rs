@@ -3,7 +3,7 @@ use crate::infrastructure::shell::platform::{
     detect_shell, generate_env_command, generate_path_command, ShellType,
 };
 use crate::utils::validate_java_home;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use which::which;
 
 /// Java 环境管理器
@@ -23,7 +23,7 @@ impl JavaManager {
     ) -> Result<String, String> {
         let env = config
             .get_java_env(name)
-            .ok_or_else(|| format!("Java 环境 '{}' 不存在", name))?;
+            .ok_or_else(|| format!("Java 环境 '{name}' 不存在"))?;
 
         // 验证 Java Home 路径
         if !validate_java_home(&env.java_home) {
@@ -55,7 +55,7 @@ impl JavaManager {
     pub fn generate_switch_script(config: &Config, name: &str) -> Result<String, String> {
         let env = config
             .get_java_env(name)
-            .ok_or_else(|| format!("Java 环境 '{}' 不存在", name))?;
+            .ok_or_else(|| format!("Java 环境 '{name}' 不存在"))?;
 
         // 验证 Java Home 路径
         if !validate_java_home(&env.java_home) {
@@ -68,7 +68,7 @@ impl JavaManager {
             .join(".fnva");
 
         // 确保目录存在
-        std::fs::create_dir_all(&script_dir).map_err(|e| format!("创建脚本目录失败: {}", e))?;
+        std::fs::create_dir_all(&script_dir).map_err(|e| format!("创建脚本目录失败: {e}"))?;
 
         let script_path = script_dir.join("switch-java.ps1");
 
@@ -124,7 +124,7 @@ try {{
 
         // 写入脚本文件
         std::fs::write(&script_path, script_content)
-            .map_err(|e| format!("写入脚本文件失败: {}", e))?;
+            .map_err(|e| format!("写入脚本文件失败: {e}"))?;
 
         Ok(format!("✅ 已生成切换脚本: {}\n使用方法: .\\switch-java.ps1 [环境名称]\n\n💡 提示: 将此目录添加到 PATH 或使用完整路径执行", script_path.display()))
     }
@@ -137,7 +137,7 @@ try {{
     ) -> Result<(), String> {
         let env = config
             .get_java_env(name)
-            .ok_or_else(|| format!("Java 环境 '{}' 不存在", name))?;
+            .ok_or_else(|| format!("Java 环境 '{name}' 不存在"))?;
 
         // 验证 Java Home 路径
         if !validate_java_home(&env.java_home) {
@@ -157,13 +157,13 @@ try {{
         // 执行命令
         let output = cmd
             .output()
-            .map_err(|e| format!("执行 Java 命令失败: {}", e))?;
+            .map_err(|e| format!("执行 Java 命令失败: {e}"))?;
 
         if output.status.success() {
             println!("{}", String::from_utf8_lossy(&output.stdout));
         } else {
             let error = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("Java 命令执行失败: {}", error));
+            return Err(format!("Java 命令执行失败: {error}"));
         }
 
         Ok(())
@@ -213,7 +213,7 @@ try {{
     ) -> Result<(), String> {
         // 验证路径
         if !validate_java_home(&java_home) {
-            return Err(format!("无效的 JAVA_HOME 路径: {}", java_home));
+            return Err(format!("无效的 JAVA_HOME 路径: {java_home}"));
         }
 
         let env = JavaEnvironment {
@@ -245,7 +245,7 @@ pub struct JavaInstallation {
 }
 
 /// 检查路径是否是有效的 Java 安装
-fn check_java_installation(path: &PathBuf) -> Option<JavaInstallation> {
+fn check_java_installation(path: &Path) -> Option<JavaInstallation> {
     // 检查是否存在 java 可执行文件
     let java_exe = if cfg!(target_os = "windows") {
         path.join("bin").join("java.exe")
@@ -263,7 +263,7 @@ fn check_java_installation(path: &PathBuf) -> Option<JavaInstallation> {
     // 生成描述
     let path_str = path.to_string_lossy();
     let description = if let Some(ver) = &version {
-        format!("Java {} ({})", ver, path_str)
+        format!("Java {ver} ({path_str})")
     } else {
         path_str.to_string()
     };
@@ -276,13 +276,13 @@ fn check_java_installation(path: &PathBuf) -> Option<JavaInstallation> {
 }
 
 /// 获取 Java 版本
-fn get_java_version(java_exe: &PathBuf) -> Result<String, String> {
+fn get_java_version(java_exe: &Path) -> Result<String, String> {
     use std::process::Command;
 
     let output = Command::new(java_exe)
         .arg("-version")
         .output()
-        .map_err(|e| format!("执行 java -version 失败: {}", e))?;
+        .map_err(|e| format!("执行 java -version 失败: {e}"))?;
 
     if !output.status.success() {
         return Err("无法获取 Java 版本".to_string());
@@ -304,9 +304,9 @@ fn get_java_version(java_exe: &PathBuf) -> Result<String, String> {
 }
 
 /// 从 java 可执行文件路径找到 JAVA_HOME
-fn find_java_home_from_path(java_path: &PathBuf) -> Option<PathBuf> {
+fn find_java_home_from_path(java_path: &Path) -> Option<PathBuf> {
     // java 通常在 $JAVA_HOME/bin/java，所以向上两级
-    let mut current = java_path.clone();
+    let mut current = java_path.to_path_buf();
 
     // 移除文件名
     if let Some(parent) = current.parent() {
@@ -331,23 +331,23 @@ fn get_common_java_paths() -> Vec<String> {
 
     if cfg!(target_os = "windows") {
         // Windows 常见路径
-        if let Some(program_files) = std::env::var("ProgramFiles").ok() {
-            paths.push(format!("{}\\Java", program_files));
+        if let Ok(program_files) = std::env::var("ProgramFiles") {
+            paths.push(format!("{program_files}\\Java"));
         }
-        if let Some(program_files_x86) = std::env::var("ProgramFiles(x86)").ok() {
-            paths.push(format!("{}\\Java", program_files_x86));
+        if let Ok(program_files_x86) = std::env::var("ProgramFiles(x86)") {
+            paths.push(format!("{program_files_x86}\\Java"));
         }
         // 扫描常见目录
-        if let Some(local_appdata) = std::env::var("LOCALAPPDATA").ok() {
-            paths.push(format!("{}\\Programs\\Java", local_appdata));
+        if let Ok(local_appdata) = std::env::var("LOCALAPPDATA") {
+            paths.push(format!("{local_appdata}\\Programs\\Java"));
         }
     } else if cfg!(target_os = "macos") {
         // macOS 常见路径
         paths.push("/Library/Java/JavaVirtualMachines".to_string());
         paths.push("/usr/libexec/java_home".to_string());
         // 用户目录
-        if let Some(home) = std::env::var("HOME").ok() {
-            paths.push(format!("{}/Library/Java/JavaVirtualMachines", home));
+        if let Ok(home) = std::env::var("HOME") {
+            paths.push(format!("{home}/Library/Java/JavaVirtualMachines"));
         }
         // 扫描 /Library/Java/JavaVirtualMachines 下的子目录
         let jvm_path = PathBuf::from("/Library/Java/JavaVirtualMachines");
