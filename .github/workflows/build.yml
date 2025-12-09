@@ -75,19 +75,23 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: |
+          set -euo pipefail
           if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            UBUNTU_CODENAME=$(lsb_release -cs)
             sudo dpkg --add-architecture arm64
             # 仅调整主 sources.list，避免破坏第三方源格式
             sudo sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list
-            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble main universe multiverse restricted" | sudo tee /etc/apt/sources.list.d/arm64-ports.list >/dev/null
-            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-updates main universe multiverse restricted" | sudo tee -a /etc/apt/sources.list.d/arm64-ports.list >/dev/null
-            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-backports main universe multiverse restricted" | sudo tee -a /etc/apt/sources.list.d/arm64-ports.list >/dev/null
+            {
+              echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${UBUNTU_CODENAME} main universe multiverse restricted"
+              echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${UBUNTU_CODENAME}-updates main universe multiverse restricted"
+              echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${UBUNTU_CODENAME}-backports main universe multiverse restricted"
+            } | sudo tee /etc/apt/sources.list.d/arm64-ports.list >/dev/null
           fi
 
-          sudo apt-get update || true
+          sudo apt-get update
           sudo apt-get install -y pkg-config libssl-dev build-essential
           if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
-            sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libssl-dev:arm64 pkg-config:arm64 || true
+            sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libssl-dev:arm64 pkg-config:arm64
             {
               echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc"
               echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++"
