@@ -27,11 +27,11 @@ jobs:
             arch: aarch64
             target: aarch64-unknown-linux-gnu
             platform: linux-arm64
-          - os: macos-13-large
+          - os: macos-latest
             arch: x86_64
             target: x86_64-apple-darwin
             platform: darwin-x64
-          - os: macos-14
+          - os: macos-latest
             arch: aarch64
             target: aarch64-apple-darwin
             platform: darwin-arm64
@@ -76,15 +76,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          # 安装基本的依赖
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libssl-dev build-essential
+
+          # 为 ARM64 交叉编译安装依赖
           if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
             UBUNTU_CODENAME=$(lsb_release -cs)
             sudo dpkg --add-architecture arm64
 
             # 备份原始源文件
             sudo cp /etc/apt/sources.list /etc/apt/sources.list.bak 2>/dev/null || true
-            sudo cp /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/ubuntu.sources.bak 2>/dev/null || true
 
-            # 创建新的 sources.list，明确区分架构
+            # 创建新的 sources.list，只包含 AMD64 源
             {
               echo "# AMD64 sources"
               echo "deb [arch=amd64] http://azure.archive.ubuntu.com/ubuntu ${UBUNTU_CODENAME} main restricted universe multiverse"
@@ -99,16 +104,21 @@ jobs:
               echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${UBUNTU_CODENAME} main restricted universe multiverse"
               echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${UBUNTU_CODENAME}-updates main restricted universe multiverse"
               echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${UBUNTU_CODENAME}-backports main restricted universe multiverse"
+              echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${UBUNTU_CODENAME}-security main restricted universe multiverse"
             } | sudo tee /etc/apt/sources.list.d/arm64.list > /dev/null
 
-            # 移除可能导致冲突的其他源文件（保留我们刚创建的 arm64.list）
-            sudo find /etc/apt/sources.list.d/ -name "*.list" ! -name "arm64.list" -delete 2>/dev/null || true
-          fi
+            # 清理可能冲突的源文件
+            sudo rm -f /etc/apt/sources.list.d/*.list 2>/dev/null || true
+            sudo mv /etc/apt/sources.list.d/arm64.list /etc/apt/sources.list.d/arm64.list.tmp 2>/dev/null || true
+            sudo mv /etc/apt/sources.list.d/arm64.list.tmp /etc/apt/sources.list.d/arm64.list 2>/dev/null || true
 
-          sudo apt-get update
-          sudo apt-get install -y pkg-config libssl-dev build-essential
-          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
-            sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libssl-dev:arm64 pkg-config:arm64
+            # 更新包列表
+            sudo apt-get update
+
+            # 安装 ARM64 交叉编译工具链
+            sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+            # 设置环境变量
             {
               echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc"
               echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++"
