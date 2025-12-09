@@ -81,32 +81,30 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y pkg-config libssl-dev build-essential
 
-          # 为 ARM64 交叉编译安装依赖
+          # 为 ARM64 交叉编译安装 cross
           if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
-            # 只安装交叉编译工具链，不添加 arm64 架构
-            sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+            # 安装 Docker
+            sudo apt-get install -y docker.io
+            # 启动 Docker 服务
+            sudo systemctl start docker
+            sudo systemctl enable docker
+            # 将用户添加到 docker 组（可能需要重新登录）
+            sudo usermod -aG docker $USER || true
 
-            # 设置环境变量
-            {
-              echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc"
-              echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++"
-              echo "AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar"
-              echo "RANLIB_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ranlib"
-              echo "PKG_CONFIG_ALLOW_CROSS=1"
-              echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc"
-            } >> $GITHUB_ENV
+            # 安装 cross
+            curl -L https://github.com/cross-rs/cross/releases/latest/download/cross-x86_64-unknown-linux-gnu.tar.gz | sudo tar -xz -C /usr/local/bin
           fi
 
       - name: Build binary
         shell: bash
         run: |
           if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
-            export CC=aarch64-linux-gnu-gcc
-            export CXX=aarch64-linux-gnu-g++
-            export AR=aarch64-linux-gnu-ar
-            export RANLIB=aarch64-linux-gnu-ranlib
+            # 使用 cross 进行 ARM64 交叉编译
+            cross build --release --target ${{ matrix.target }}
+          else
+            # 使用 cargo 进行原生构建
+            cargo build --release --target ${{ matrix.target }}
           fi
-          cargo build --release --target ${{ matrix.target }}
 
       - name: Strip binary (Unix)
         if: runner.os != 'Windows'
