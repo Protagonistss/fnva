@@ -119,10 +119,16 @@ jobs:
         with:
           targets: ${{ env.TARGET }}
 
-      - name: Install cross
+      - name: Install system dependencies
         shell: bash
         run: |
-          curl -L https://github.com/cross-rs/cross/releases/latest/download/cross-x86_64-unknown-linux-gnu.tar.gz | sudo tar -xz -C /usr/local/bin
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc-aarch64-linux-gnu \
+            g++-aarch64-linux-gnu \
+            pkg-config \
+            libssl-dev \
+            qemu-user-static
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -141,7 +147,18 @@ jobs:
       - name: Build binary
         shell: bash
         run: |
-          cross build --release --target ${{ env.TARGET }}
+          # 设置交叉编译环境变量
+          export CC=aarch64-linux-gnu-gcc
+          export CXX=aarch64-linux-gnu-g++
+          export AR=aarch64-linux-gnu-ar
+          export RANLIB=aarch64-linux-gnu-ranlib
+          export PKG_CONFIG_ALLOW_CROSS=1
+          # 设置 OpenSSL 静态链接
+          export OPENSSL_STATIC=1
+          export OPENSSL_DIR=/usr
+
+          # 使用 cargo 直接构建
+          cargo build --release --target ${{ env.TARGET }}
 
       - name: Strip binary
         shell: bash
