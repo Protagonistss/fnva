@@ -83,12 +83,15 @@ jobs:
 
           # 为 ARM64 交叉编译安装 cross
           if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            # 解决 Docker 安装冲突
+            sudo apt-get remove -y containerd || true
+            sudo apt-get autoremove -y
             # 安装 Docker
             sudo apt-get install -y docker.io
             # 启动 Docker 服务
             sudo systemctl start docker
             sudo systemctl enable docker
-            # 将用户添加到 docker 组（可能需要重新登录）
+            # 将用户添加到 docker 组
             sudo usermod -aG docker $USER || true
 
             # 安装 cross
