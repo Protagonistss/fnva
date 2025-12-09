@@ -36,6 +36,9 @@ jobs:
             target: x86_64-pc-windows-msvc
             platform: win32-x64
 
+  # ARM64 Linux 构建暂时跳过
+  # build-arm64:
+
     steps:
       - uses: actions/checkout@v4
 
@@ -104,84 +107,84 @@ jobs:
           path: platforms/${{ matrix.platform }}/
           retention-days: 7
 
-  build-arm64:
-    name: Build for ARM64 Linux
-    runs-on: ubuntu-latest
-    env:
-      TARGET: aarch64-unknown-linux-gnu
-      PLATFORM: linux-arm64
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ env.TARGET }}
-
-      - name: Install system dependencies
-        shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            gcc-aarch64-linux-gnu \
-            g++-aarch64-linux-gnu \
-            pkg-config \
-            libssl-dev \
-            qemu-user-static
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-arm64-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-arm64-cargo-
-            ${{ runner.os }}-cargo-
-
-      - name: Build binary
-        shell: bash
-        run: |
-          # 设置交叉编译环境变量
-          export CC=aarch64-linux-gnu-gcc
-          export CXX=aarch64-linux-gnu-g++
-          export AR=aarch64-linux-gnu-ar
-          export RANLIB=aarch64-linux-gnu-ranlib
-          export PKG_CONFIG_ALLOW_CROSS=1
-          # 设置 OpenSSL 静态链接
-          export OPENSSL_STATIC=1
-          export OPENSSL_DIR=/usr
-
-          # 使用 cargo 直接构建
-          cargo build --release --target ${{ env.TARGET }}
-
-      - name: Strip binary
-        shell: bash
-        run: strip target/${{ env.TARGET }}/release/fnva || true
-
-      - name: Prepare binary directory
-        shell: bash
-        run: |
-          mkdir -p platforms/${{ env.PLATFORM }}
-          cp target/${{ env.TARGET }}/release/fnva platforms/${{ env.PLATFORM }}/fnva
-          chmod +x platforms/${{ env.PLATFORM }}/fnva
-          file platforms/${{ env.PLATFORM }}/fnva || true
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: binary-${{ env.PLATFORM }}
-          path: platforms/${{ env.PLATFORM }}/
-          retention-days: 7
+  # build-arm64:
+#   name: Build for ARM64 Linux
+#   runs-on: ubuntu-latest
+#   env:
+#     TARGET: aarch64-unknown-linux-gnu
+#     PLATFORM: linux-arm64
+#
+#   steps:
+#     - uses: actions/checkout@v4
+#
+#     - name: Install Rust toolchain
+#       uses: dtolnay/rust-toolchain@stable
+#       with:
+#         targets: ${{ env.TARGET }}
+#
+#     - name: Install system dependencies
+#       shell: bash
+#       run: |
+#         sudo apt-get update
+#         sudo apt-get install -y \
+#           gcc-aarch64-linux-gnu \
+#           g++-aarch64-linux-gnu \
+#           pkg-config \
+#           libssl-dev \
+#           qemu-user-static
+#
+#     - name: Cache cargo registry
+#       uses: actions/cache@v4
+#       with:
+#         path: |
+#           ~/.cargo/bin/
+#           ~/.cargo/registry/index/
+#           ~/.cargo/registry/cache/
+#           ~/.cargo/git/db/
+#           target/
+#         key: ${{ runner.os }}-arm64-cargo-${{ hashFiles('**/Cargo.lock') }}
+#         restore-keys: |
+#           ${{ runner.os }}-arm64-cargo-
+#           ${{ runner.os }}-cargo-
+#
+#     - name: Build binary
+#       shell: bash
+#       run: |
+#         # 设置交叉编译环境变量
+#         export CC=aarch64-linux-gnu-gcc
+#         export CXX=aarch64-linux-gnu-g++
+#         export AR=aarch64-linux-gnu-ar
+#         export RANLIB=aarch64-linux-gnu-ranlib
+#         export PKG_CONFIG_ALLOW_CROSS=1
+#         # 设置 OpenSSL 静态链接
+#         export OPENSSL_STATIC=1
+#         export OPENSSL_DIR=/usr
+#
+#         # 使用 cargo 直接构建
+#         cargo build --release --target ${{ env.TARGET }}
+#
+#     - name: Strip binary
+#       shell: bash
+#       run: strip target/${{ env.TARGET }}/release/fnva || true
+#
+#     - name: Prepare binary directory
+#       shell: bash
+#       run: |
+#         mkdir -p platforms/${{ env.PLATFORM }}
+#         cp target/${{ env.TARGET }}/release/fnva platforms/${{ env.PLATFORM }}/fnva
+#         chmod +x platforms/${{ env.PLATFORM }}/fnva
+#         file platforms/${{ env.PLATFORM }}/fnva || true
+#
+#     - name: Upload artifact
+#       uses: actions/upload-artifact@v4
+#       with:
+#         name: binary-${{ env.PLATFORM }}
+#         path: platforms/${{ env.PLATFORM }}/
+#         retention-days: 7
 
   prepare-release:
     name: Prepare Release
-    needs: [build, build-arm64]
+    needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
 
@@ -242,7 +245,7 @@ jobs:
           # Define platforms and their executable names
           declare -A PLATFORM_EXECS
           PLATFORM_EXECS["linux-x64"]="fnva"
-          PLATFORM_EXECS["linux-arm64"]="fnva"
+          # PLATFORM_EXECS["linux-arm64"]="fnva"  # 暂时跳过
           PLATFORM_EXECS["darwin-x64"]="fnva"
           PLATFORM_EXECS["darwin-arm64"]="fnva"
           PLATFORM_EXECS["win32-x64"]="fnva.exe"
@@ -340,7 +343,7 @@ jobs:
 
   npm-publish:
     name: Publish to npm
-    needs: [build, build-arm64]
+    needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
 
@@ -418,7 +421,7 @@ jobs:
 
   crates-io-publish:
     name: Publish to crates.io
-    needs: [build, build-arm64]
+    needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
 
