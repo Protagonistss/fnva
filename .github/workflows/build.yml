@@ -83,39 +83,7 @@ jobs:
 
           # 为 ARM64 交叉编译安装依赖
           if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
-            UBUNTU_CODENAME=$(lsb_release -cs)
-            sudo dpkg --add-architecture arm64
-
-            # 备份原始源文件
-            sudo cp /etc/apt/sources.list /etc/apt/sources.list.bak 2>/dev/null || true
-
-            # 创建新的 sources.list，只包含 AMD64 源
-            {
-              echo "# AMD64 sources"
-              echo "deb [arch=amd64] http://azure.archive.ubuntu.com/ubuntu ${UBUNTU_CODENAME} main restricted universe multiverse"
-              echo "deb [arch=amd64] http://azure.archive.ubuntu.com/ubuntu ${UBUNTU_CODENAME}-updates main restricted universe multiverse"
-              echo "deb [arch=amd64] http://azure.archive.ubuntu.com/ubuntu ${UBUNTU_CODENAME}-backports main restricted universe multiverse"
-              echo "deb [arch=amd64] http://security.ubuntu.com/ubuntu ${UBUNTU_CODENAME}-security main restricted universe multiverse"
-            } | sudo tee /etc/apt/sources.list > /dev/null
-
-            # 创建 ARM64 专用源文件
-            {
-              echo "# ARM64 sources"
-              echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${UBUNTU_CODENAME} main restricted universe multiverse"
-              echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${UBUNTU_CODENAME}-updates main restricted universe multiverse"
-              echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${UBUNTU_CODENAME}-backports main restricted universe multiverse"
-              echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${UBUNTU_CODENAME}-security main restricted universe multiverse"
-            } | sudo tee /etc/apt/sources.list.d/arm64.list > /dev/null
-
-            # 清理可能冲突的源文件
-            sudo rm -f /etc/apt/sources.list.d/*.list 2>/dev/null || true
-            sudo mv /etc/apt/sources.list.d/arm64.list /etc/apt/sources.list.d/arm64.list.tmp 2>/dev/null || true
-            sudo mv /etc/apt/sources.list.d/arm64.list.tmp /etc/apt/sources.list.d/arm64.list 2>/dev/null || true
-
-            # 更新包列表
-            sudo apt-get update
-
-            # 安装 ARM64 交叉编译工具链
+            # 只安装交叉编译工具链，不添加 arm64 架构
             sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
             # 设置环境变量
@@ -125,8 +93,6 @@ jobs:
               echo "AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar"
               echo "RANLIB_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ranlib"
               echo "PKG_CONFIG_ALLOW_CROSS=1"
-              echo "PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig"
-              echo "PKG_CONFIG_SYSROOT_DIR=/"
               echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc"
             } >> $GITHUB_ENV
           fi
