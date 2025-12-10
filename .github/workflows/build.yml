@@ -221,11 +221,13 @@ jobs:
               fi
             done
 
-            # Store files list with proper escaping
-            # Convert newlines to spaces for GitHub Actions
-            RELEASE_FILES_LIST=$(echo "$RELEASE_FILES" | tr '\n' ' ' | sed 's/ *$//')
-            echo "release_files=$RELEASE_FILES_LIST" >> $GITHUB_ENV
-            echo "Release files to upload: $RELEASE_FILES_LIST"
+            # Store files list as a multiline variable for softprops action
+            # softprops/action-gh-release expects multiline format
+            printf "release_files<<EOF\n" >> $GITHUB_ENV
+            printf "%s\n" "$RELEASE_FILES" >> $GITHUB_ENV
+            printf "EOF\n" >> $GITHUB_ENV
+            echo "Release files to upload:"
+            echo "$RELEASE_FILES"
           else
             echo "No zip files found to release!"
             exit 1
