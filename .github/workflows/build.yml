@@ -172,7 +172,7 @@ jobs:
           # Define platforms and their executable names
           declare -A PLATFORM_EXECS
           PLATFORM_EXECS["linux-x64"]="fnva"
-          # PLATFORM_EXECS["linux-arm64"]="fnva"  # 暂时跳过
+          PLATFORM_EXECS["linux-arm64"]="fnva"
           PLATFORM_EXECS["darwin-x64"]="fnva"
           PLATFORM_EXECS["darwin-arm64"]="fnva"
           PLATFORM_EXECS["win32-x64"]="fnva.exe"
