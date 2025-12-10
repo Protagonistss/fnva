@@ -92,8 +92,8 @@ jobs:
       - name: Build binary
         shell: bash
         run: |
-          # Set up cross-compilation environment for ARM64
-          if [ "${{ matrix.arch }}" = "aarch64" ]; then
+          # Set up cross-compilation environment only for Linux ARM64
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ] && [ "${{ matrix.arch }}" = "aarch64" ]; then
             export CC=aarch64-linux-gnu-gcc
             export CXX=aarch64-linux-gnu-g++
             export AR=aarch64-linux-gnu-ar
