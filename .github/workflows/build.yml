@@ -222,9 +222,10 @@ jobs:
             done
 
             # Store files list with proper escaping
-            echo "release_files<<EOF" >> $GITHUB_ENV
-            echo "$RELEASE_FILES" >> $GITHUB_ENV
-            echo "EOF" >> $GITHUB_ENV
+            # Convert newlines to spaces for GitHub Actions
+            RELEASE_FILES_LIST=$(echo "$RELEASE_FILES" | tr '\n' ' ' | sed 's/ *$//')
+            echo "release_files=$RELEASE_FILES_LIST" >> $GITHUB_ENV
+            echo "Release files to upload: $RELEASE_FILES_LIST"
           else
             echo "No zip files found to release!"
             exit 1
@@ -235,6 +236,9 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: ${{ env.release_files }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         continue-on-error: true
@@ -252,6 +256,12 @@ jobs:
           # Get tag from ref
           TAG="${GITHUB_REF#refs/tags/}"
           echo "Uploading to release: $TAG"
+
+          # Create release first if it doesn't exist
+          if ! gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Creating release $TAG"
+            gh release create "$TAG" --title "Release $TAG" --generate-notes -R "$GITHUB_REPOSITORY"
+          fi
 
           echo "$RELEASE_FILES" | while read -r zipfile; do
             if [ -f "$zipfile" ]; then
