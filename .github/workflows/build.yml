@@ -172,7 +172,7 @@ jobs:
           # Define platforms and their executable names
           declare -A PLATFORM_EXECS
           PLATFORM_EXECS["linux-x64"]="fnva"
-          # PLATFORM_EXECS["linux-arm64"]="fnva"  # 暂时跳过
+          PLATFORM_EXECS["linux-arm64"]="fnva"
           PLATFORM_EXECS["darwin-x64"]="fnva"
           PLATFORM_EXECS["darwin-arm64"]="fnva"
           PLATFORM_EXECS["win32-x64"]="fnva.exe"
@@ -221,10 +221,13 @@ jobs:
               fi
             done
 
-            # Store files list with proper escaping
-            echo "release_files<<EOF" >> $GITHUB_ENV
-            echo "$RELEASE_FILES" >> $GITHUB_ENV
-            echo "EOF" >> $GITHUB_ENV
+            # Store files list as a multiline variable for softprops action
+            # softprops/action-gh-release expects multiline format
+            printf "release_files<<EOF\n" >> $GITHUB_ENV
+            printf "%s\n" "$RELEASE_FILES" >> $GITHUB_ENV
+            printf "EOF\n" >> $GITHUB_ENV
+            echo "Release files to upload:"
+            echo "$RELEASE_FILES"
           else
             echo "No zip files found to release!"
             exit 1
@@ -235,6 +238,9 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: ${{ env.release_files }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         continue-on-error: true
@@ -252,6 +258,12 @@ jobs:
           # Get tag from ref
           TAG="${GITHUB_REF#refs/tags/}"
           echo "Uploading to release: $TAG"
+
+          # Create release first if it doesn't exist
+          if ! gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Creating release $TAG"
+            gh release create "$TAG" --title "Release $TAG" --generate-notes -R "$GITHUB_REPOSITORY"
+          fi
 
           echo "$RELEASE_FILES" | while read -r zipfile; do
             if [ -f "$zipfile" ]; then

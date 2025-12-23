@@ -1,15 +1,32 @@
 use crate::core::environment_manager::EnvironmentType;
 use crate::infrastructure::shell::ShellType;
-use clap::{Parser, Subcommand};
+use clap::{Command, CommandFactory, Parser, Subcommand};
 
 /// fnva CLI 应用程序
 #[derive(Parser)]
 #[command(name = "fnva")]
 #[command(about = "跨平台环境切换工具，支持 Java 和 LLM 环境配置", long_about = None)]
-#[command(version)]
+#[command(version = env!("CARGO_PKG_VERSION"))]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
+}
+
+impl Cli {
+    /// 重写 command 方法，为 --version 添加 -v 别名
+    pub fn command() -> Command {
+        <Self as CommandFactory>::command()
+            .version(env!("CARGO_PKG_VERSION"))
+            .disable_version_flag(true)
+            .arg(
+                clap::Arg::new("version")
+                    .long("version")
+                    .short('V')
+                    .visible_short_alias('v')
+                    .action(clap::ArgAction::Version)
+                    .help("Print version information"),
+            )
+    }
 }
 
 /// 顶级命令
