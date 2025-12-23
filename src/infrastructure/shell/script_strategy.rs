@@ -597,8 +597,16 @@ $env:ANTHROPIC_AUTH_TOKEN = "{{config.anthropic_auth_token}}"
 $env:ANTHROPIC_BASE_URL = "{{config.anthropic_base_url}}"
 {{/if}}
 
-{{#if config.default_model}}
-$env:ANTHROPIC_DEFAULT_SONNET_MODEL = "{{config.default_model}}"
+{{#if config.opus_model}}
+$env:ANTHROPIC_DEFAULT_OPUS_MODEL = "{{config.opus_model}}"
+{{/if}}
+
+{{#if config.sonnet_model}}
+$env:ANTHROPIC_DEFAULT_SONNET_MODEL = "{{config.sonnet_model}}"
+{{/if}}
+
+{{#if config.haiku_model}}
+$env:ANTHROPIC_DEFAULT_HAIKU_MODEL = "{{config.haiku_model}}"
 {{/if}}
 
 # Set fnva environment tracking
@@ -637,8 +645,16 @@ export ANTHROPIC_AUTH_TOKEN="{{config.anthropic_auth_token}}"
 export ANTHROPIC_BASE_URL="{{config.anthropic_base_url}}"
 {{/if}}
 
-{{#if config.default_model}}
-export ANTHROPIC_DEFAULT_SONNET_MODEL="{{config.default_model}}"
+{{#if config.opus_model}}
+export ANTHROPIC_DEFAULT_OPUS_MODEL="{{config.opus_model}}"
+{{/if}}
+
+{{#if config.sonnet_model}}
+export ANTHROPIC_DEFAULT_SONNET_MODEL="{{config.sonnet_model}}"
+{{/if}}
+
+{{#if config.haiku_model}}
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="{{config.haiku_model}}"
 {{/if}}
 
 # Set fnva environment tracking
@@ -741,8 +757,16 @@ set -gx ANTHROPIC_AUTH_TOKEN "{{config.anthropic_auth_token}}"
 set -gx ANTHROPIC_BASE_URL "{{config.anthropic_base_url}}"
 {{/if}}
 
-{{#if config.default_model}}
-set -gx ANTHROPIC_DEFAULT_SONNET_MODEL "{{config.default_model}}"
+{{#if config.opus_model}}
+set -gx ANTHROPIC_DEFAULT_OPUS_MODEL "{{config.opus_model}}"
+{{/if}}
+
+{{#if config.sonnet_model}}
+set -gx ANTHROPIC_DEFAULT_SONNET_MODEL "{{config.sonnet_model}}"
+{{/if}}
+
+{{#if config.haiku_model}}
+set -gx ANTHROPIC_DEFAULT_HAIKU_MODEL "{{config.haiku_model}}"
 {{/if}}
 
 # Set fnva environment tracking
@@ -837,8 +861,16 @@ set "ANTHROPIC_AUTH_TOKEN={{config.anthropic_auth_token}}"
 set "ANTHROPIC_BASE_URL={{config.anthropic_base_url}}"
 {{/if}}
 
-{{#if config.default_model}}
-set "ANTHROPIC_DEFAULT_SONNET_MODEL={{config.default_model}}"
+{{#if config.opus_model}}
+set "ANTHROPIC_DEFAULT_OPUS_MODEL={{config.opus_model}}"
+{{/if}}
+
+{{#if config.sonnet_model}}
+set "ANTHROPIC_DEFAULT_SONNET_MODEL={{config.sonnet_model}}"
+{{/if}}
+
+{{#if config.haiku_model}}
+set "ANTHROPIC_DEFAULT_HAIKU_MODEL={{config.haiku_model}}"
 {{/if}}
 
 REM Set fnva environment tracking

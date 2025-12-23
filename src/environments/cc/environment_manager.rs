@@ -44,6 +44,8 @@ impl CcEnvironmentManager {
                 api_key: env.api_key.clone(),
                 base_url: env.base_url.clone(),
                 model: env.model.clone(),
+                opus_model: env.opus_model.clone(),
+                haiku_model: env.haiku_model.clone(),
                 description: env.description.clone(),
             };
 
@@ -109,6 +111,9 @@ impl EnvironmentManager for CcEnvironmentManager {
             .and_then(|v| v.as_str())
             .unwrap_or("claude-3-sonnet-20240229");
 
+        let opus_model = config.get("opus_model").and_then(|v| v.as_str());
+        let haiku_model = config.get("haiku_model").and_then(|v| v.as_str());
+
         let default_desc = format!("CC: {name} ({model})");
         let description = config
             .get("description")
@@ -123,6 +128,8 @@ impl EnvironmentManager for CcEnvironmentManager {
             api_key: api_key.to_string(),
             base_url: base_url.to_string(),
             model: model.to_string(),
+            opus_model: opus_model.map(String::from),
+            haiku_model: haiku_model.map(String::from),
         };
 
         // 持久化到配置文件
@@ -137,6 +144,8 @@ impl EnvironmentManager for CcEnvironmentManager {
             existing.base_url = base_url.to_string();
             existing.model = model.to_string();
             existing.description = description.to_string();
+            existing.opus_model = opus_model.map(String::from);
+            existing.haiku_model = haiku_model.map(String::from);
         } else {
             file_config.cc_environments.push(cc_environment.clone());
         }
@@ -205,24 +214,15 @@ impl EnvironmentManager for CcEnvironmentManager {
                 serde_json::Value::Number(serde_json::Number::from(1));
 
             // Add environment-specific model configuration
-            match name {
-                "glmcc" => {
-                    config["default_model"] = serde_json::Value::String("glm-4.6".to_string());
-                }
-                "anycc" => {
-                    config["default_model"] =
-                        serde_json::Value::String("claude-sonnet-4-5".to_string());
-                }
-                "kimicc" => {
-                    config["default_model"] =
-                        serde_json::Value::String("kimi-k2-turbo-preview".to_string());
-                }
-                _ => {
-                    // For other environments, use the model specified in config
-                    if !cc_env.model.is_empty() {
-                        config["default_model"] = serde_json::Value::String(cc_env.model.clone());
-                    }
-                }
+            // 统一使用配置文件中的值，移除特殊环境硬编码
+            if !cc_env.model.is_empty() {
+                let opus_model = cc_env.opus_model.as_ref().unwrap_or(&cc_env.model);
+                let sonnet_model = &cc_env.model;
+                let haiku_model = cc_env.haiku_model.as_ref().unwrap_or(&cc_env.model);
+
+                config["opus_model"] = serde_json::Value::String(opus_model.clone());
+                config["sonnet_model"] = serde_json::Value::String(sonnet_model.clone());
+                config["haiku_model"] = serde_json::Value::String(haiku_model.clone());
             }
         }
 
@@ -276,6 +276,8 @@ impl EnvironmentManager for CcEnvironmentManager {
                 base_url,
                 model: std::env::var("ANTHROPIC_MODEL")
                     .unwrap_or_else(|_| "claude-3-sonnet-20240229".to_string()),
+                opus_model: None,
+                haiku_model: None,
             };
             result.push(DynEnvironment {
                 name: cc_env.name.clone(),
