@@ -79,9 +79,9 @@ name = "anthropic-cc"
 provider = "anthropic"
 api_key = "${ANTHROPIC_API_KEY}"
 base_url = "https://api.anthropic.com"
-model = "claude-sonnet-4-5"           # 默认模型（sonnet）
-# opus_model = "claude-opus-4-5"     # 可选：opus 专用模型，未配置时使用 model 的值
-# haiku_model = "claude-haiku-4-5"   # 可选：haiku 专用模型，未配置时使用 model 的值
+sonnet_model = "claude-sonnet-4-5"    # 默认 sonnet 模型
+# opus_model = "claude-opus-4-5"     # 可选：opus 专用模型
+# haiku_model = "claude-haiku-4-5"   # 可选：haiku 专用模型
 description = "Anthropic Claude Code 环境"
 
 [[cc_environments]]
@@ -89,7 +89,7 @@ name = "moonshot-cc"
 provider = "anthropic"
 api_key = "${MOONSHOT_API_KEY}"
 base_url = "https://api.moonshot.cn/anthropic"
-model = "claude-sonnet-4-5"
+sonnet_model = "claude-sonnet-4-5"
 description = "Moonshot Claude Code 环境"
 
 # 仓库配置

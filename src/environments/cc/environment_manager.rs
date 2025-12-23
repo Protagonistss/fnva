@@ -43,7 +43,7 @@ impl CcEnvironmentManager {
                 provider: env.provider.clone(),
                 api_key: env.api_key.clone(),
                 base_url: env.base_url.clone(),
-                model: env.model.clone(),
+                sonnet_model: env.sonnet_model.clone(),
                 opus_model: env.opus_model.clone(),
                 haiku_model: env.haiku_model.clone(),
                 description: env.description.clone(),
@@ -67,7 +67,7 @@ impl EnvironmentManager for CcEnvironmentManager {
             result.push(DynEnvironment {
                 name: env.name.clone(),
                 path: env.base_url.clone(),
-                version: Some(env.model.clone()),
+                version: Some(env.sonnet_model.clone()),
                 description: Some(env.description.clone()),
                 is_active: env.is_active(),
             });
@@ -80,7 +80,7 @@ impl EnvironmentManager for CcEnvironmentManager {
             Ok(Some(DynEnvironment {
                 name: env.name.clone(),
                 path: env.base_url.clone(),
-                version: Some(env.model.clone()),
+                version: Some(env.sonnet_model.clone()),
                 description: Some(env.description.clone()),
                 is_active: env.is_active(),
             }))
@@ -106,15 +106,17 @@ impl EnvironmentManager for CcEnvironmentManager {
             .and_then(|v| v.as_str())
             .ok_or("Missing base_url in config")?;
 
-        let model = config
-            .get("model")
+        // Support both "model" (legacy) and "sonnet_model" (new)
+        let sonnet_model = config
+            .get("sonnet_model")
+            .or_else(|| config.get("model"))
             .and_then(|v| v.as_str())
             .unwrap_or("claude-3-sonnet-20240229");
 
         let opus_model = config.get("opus_model").and_then(|v| v.as_str());
         let haiku_model = config.get("haiku_model").and_then(|v| v.as_str());
 
-        let default_desc = format!("CC: {name} ({model})");
+        let default_desc = format!("CC: {name} ({sonnet_model})");
         let description = config
             .get("description")
             .and_then(|v| v.as_str())
@@ -127,7 +129,7 @@ impl EnvironmentManager for CcEnvironmentManager {
             description: description.to_string(),
             api_key: api_key.to_string(),
             base_url: base_url.to_string(),
-            model: model.to_string(),
+            sonnet_model: sonnet_model.to_string(),
             opus_model: opus_model.map(String::from),
             haiku_model: haiku_model.map(String::from),
         };
@@ -142,7 +144,7 @@ impl EnvironmentManager for CcEnvironmentManager {
             existing.provider = provider.to_string();
             existing.api_key = api_key.to_string();
             existing.base_url = base_url.to_string();
-            existing.model = model.to_string();
+            existing.sonnet_model = sonnet_model.to_string();
             existing.description = description.to_string();
             existing.opus_model = opus_model.map(String::from);
             existing.haiku_model = haiku_model.map(String::from);
@@ -189,7 +191,7 @@ impl EnvironmentManager for CcEnvironmentManager {
         let mut config = serde_json::json!({
             "api_key": cc_env.api_key,
             "base_url": cc_env.base_url,
-            "model": cc_env.model,
+            "sonnet_model": cc_env.sonnet_model,
         });
 
         // Add CC-specific environment variables
@@ -214,11 +216,10 @@ impl EnvironmentManager for CcEnvironmentManager {
                 serde_json::Value::Number(serde_json::Number::from(1));
 
             // Add environment-specific model configuration
-            // 统一使用配置文件中的值，移除特殊环境硬编码
-            if !cc_env.model.is_empty() {
-                let opus_model = cc_env.opus_model.as_ref().unwrap_or(&cc_env.model);
-                let sonnet_model = &cc_env.model;
-                let haiku_model = cc_env.haiku_model.as_ref().unwrap_or(&cc_env.model);
+            if !cc_env.sonnet_model.is_empty() {
+                let opus_model = cc_env.opus_model.as_ref().unwrap_or(&cc_env.sonnet_model);
+                let sonnet_model = &cc_env.sonnet_model;
+                let haiku_model = cc_env.haiku_model.as_ref().unwrap_or(&cc_env.sonnet_model);
 
                 config["opus_model"] = serde_json::Value::String(opus_model.clone());
                 config["sonnet_model"] = serde_json::Value::String(sonnet_model.clone());
@@ -274,7 +275,7 @@ impl EnvironmentManager for CcEnvironmentManager {
                 description: "Detected CC environment from system variables".to_string(),
                 api_key: auth_token,
                 base_url,
-                model: std::env::var("ANTHROPIC_MODEL")
+                sonnet_model: std::env::var("ANTHROPIC_MODEL")
                     .unwrap_or_else(|_| "claude-3-sonnet-20240229".to_string()),
                 opus_model: None,
                 haiku_model: None,
@@ -282,7 +283,7 @@ impl EnvironmentManager for CcEnvironmentManager {
             result.push(DynEnvironment {
                 name: cc_env.name.clone(),
                 path: cc_env.base_url.clone(),
-                version: Some(cc_env.model.clone()),
+                version: Some(cc_env.sonnet_model.clone()),
                 description: Some(cc_env.description.clone()),
                 is_active: cc_env.is_active(),
             });

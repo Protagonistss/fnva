@@ -211,7 +211,7 @@ fn default_cc_environments() -> Vec<CcEnvironment> {
             provider: "anthropic".to_string(),
             api_key: "${ANTHROPIC_API_KEY}".to_string(),
             base_url: "https://api.anthropic.com".to_string(),
-            model: "claude-3-sonnet-20240229".to_string(),
+            sonnet_model: "claude-3-sonnet-20240229".to_string(),
             opus_model: None,
             haiku_model: None,
             description: "Anthropic Claude Code 环境".to_string(),
@@ -221,7 +221,7 @@ fn default_cc_environments() -> Vec<CcEnvironment> {
             provider: "anthropic".to_string(),
             api_key: "${MOONSHOT_API_KEY}".to_string(),
             base_url: "https://api.moonshot.cn/anthropic".to_string(),
-            model: "claude-3-sonnet-20240229".to_string(),
+            sonnet_model: "claude-3-sonnet-20240229".to_string(),
             opus_model: None,
             haiku_model: None,
             description: "Moonshot Claude Code 环境".to_string(),
@@ -231,7 +231,7 @@ fn default_cc_environments() -> Vec<CcEnvironment> {
             provider: "anthropic".to_string(),
             api_key: "${GLM_API_KEY}".to_string(),
             base_url: "https://open.bigmodel.cn/api/paas/v4".to_string(),
-            model: "glm-4-6".to_string(),
+            sonnet_model: "glm-4-6".to_string(),
             opus_model: None,
             haiku_model: None,
             description: "智谱AI Claude Code 环境".to_string(),
@@ -241,7 +241,7 @@ fn default_cc_environments() -> Vec<CcEnvironment> {
             provider: "anthropic".to_string(),
             api_key: "${ANY_API_KEY}".to_string(),
             base_url: "https://api.any-api.com/anthropic".to_string(),
-            model: "claude-sonnet-4-5".to_string(),
+            sonnet_model: "claude-sonnet-4-5".to_string(),
             opus_model: None,
             haiku_model: None,
             description: "任意API Claude Code 环境".to_string(),
@@ -251,7 +251,7 @@ fn default_cc_environments() -> Vec<CcEnvironment> {
             provider: "anthropic".to_string(),
             api_key: "${KIMI_API_KEY}".to_string(),
             base_url: "https://api.moonshot.cn/anthropic".to_string(),
-            model: "kimi-k2-turbo-preview".to_string(),
+            sonnet_model: "kimi-k2-turbo-preview".to_string(),
             opus_model: None,
             haiku_model: None,
             description: "Kimi Claude Code 环境".to_string(),
@@ -310,7 +310,7 @@ pub struct CcEnvironment {
     #[serde(default)]
     pub base_url: String,
     #[serde(default)]
-    pub model: String,
+    pub sonnet_model: String,
     #[serde(default)]
     pub opus_model: Option<String>,
     #[serde(default)]

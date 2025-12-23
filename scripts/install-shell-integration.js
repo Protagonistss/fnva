@@ -44,23 +44,23 @@ function fnva {
     if ($args.Count -ge 2 -and ($args[0] -eq "java" -or $args[0] -eq "llm" -or $args[0] -eq "cc") -and ($args[1] -eq "use")) {
         $tempFile = Join-Path $env:TEMP ("fnva_script_" + (Get-Random) + ".ps1")
 
-        $env:FNVAAUTOMODE = "1"
         try {
-            $output = cmd.exe /c "set FNVA_AUTO_MODE=%FNVAAUTOMODE% && fnva $args" 2>&1
+            # Directly pipe output to temp file to avoid encoding issues
+            & fnva.cmd @args 2>&1 | Out-File -FilePath $tempFile -Encoding UTF8
 
-            if ($output -match '\\$env:' -or $output -match 'Write-Host') {
-                $output | Out-File -FilePath $tempFile -Encoding UTF8
-                try { & $tempFile } catch { Write-Host "Error executing script: $_" -ForegroundColor Red }
+            # Check if file contains environment variables
+            $content = Get-Content $tempFile -Raw -Encoding UTF8
+            if ($content -match '\\$env:' -or $content -match 'Write-Host') {
+                # Use dot sourcing to execute in current scope
+                . $tempFile
             } else {
-                $output
+                $content
             }
         } finally {
-            $env:FNVAAUTOMODE = ""
             if (Test-Path $tempFile) { Remove-Item $tempFile -ErrorAction SilentlyContinue }
         }
     } else {
-        $env:FNVAAUTOMODE = "1"
-        try { cmd.exe /c "set FNVA_AUTO_MODE=%FNVAAUTOMODE% && fnva $args" } finally { $env:FNVAAUTOMODE = "" }
+        & fnva.cmd @args
     }
 }
 `;
