@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
 // Shell integration installer for fnva (npm postinstall helper).
-// Generates a minimal shell function that invokes the real fnva binary.
+// Uses fnva's built-in template system for shell integration scripts.
 
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { spawnSync } = require('child_process');
 
 // Absolute path to the packaged fnva shim (bin/fnva.js)
 const FNVA_SHIM = path.resolve(__dirname, '..', 'bin', 'fnva.js');
@@ -37,8 +38,36 @@ function getShellConfigPath(shell) {
   }
 }
 
+// Get integration script from fnva command (uses Rust templates)
+function getIntegrationScript(shell) {
+  try {
+    const result = spawnSync('node', [FNVA_SHIM, 'env', 'shell-integration', '-s', shell], {
+      encoding: 'utf8',
+      cwd: path.resolve(__dirname, '..')
+    });
+
+    if (result.status === 0 && result.stdout) {
+      return result.stdout;
+    }
+
+    console.log(`Warning: Failed to get integration script from fnva (exit code: ${result.status})`);
+    if (result.stderr) {
+      console.log(`stderr: ${result.stderr}`);
+    }
+    return '';
+  } catch (error) {
+    console.log(`Warning: Failed to call fnva for integration script: ${error.message}`);
+    return '';
+  }
+}
+
 function getPowerShellFunction() {
+  // Get integration script from Rust template
+  const integrationScript = getIntegrationScript('powershell');
+
   return `
+${integrationScript}
+
 # fnva auto integration (added by npm install)
 function fnva {
     if ($args.Count -ge 2 -and ($args[0] -eq "java" -or $args[0] -eq "llm" -or $args[0] -eq "cc") -and ($args[1] -eq "use")) {
@@ -66,23 +95,13 @@ function fnva {
 `;
 }
 
-function resolveBinaryPath() {
-  // Prefer real binary, avoid this function name
-  if (process.platform === 'win32') {
-    return process.argv[0];
-  }
-  let bin = '';
-  try {
-    const which = require('child_process').spawnSync('which', ['fnva'], { encoding: 'utf8' });
-    if (which.status === 0) {
-      bin = (which.stdout || '').trim();
-    }
-  } catch {}
-  return bin;
-}
-
 function getBashFunction() {
+  // Get integration script from Rust template
+  const integrationScript = getIntegrationScript('bash');
+
   return `
+${integrationScript}
+
 # fnva auto integration (added by npm install)
 fnva() {
     local __fnva_bin="${FNVA_SHIM}"
@@ -107,7 +126,12 @@ fnva() {
 }
 
 function getFishFunction() {
+  // Get integration script from Rust template
+  const integrationScript = getIntegrationScript('fish');
+
   return `
+${integrationScript}
+
 # fnva auto integration (added by npm install)
 function fnva
     set __fnva_bin "${FNVA_SHIM}"
@@ -135,7 +159,7 @@ function getShellFunction(shell) {
       return getPowerShellFunction();
     case 'bash':
     case 'zsh':
-      return getBashFunction();
+      return getBashFunction(); // zsh 使用和 bash 相同的语法
     case 'fish':
       return getFishFunction();
     default:
@@ -173,6 +197,11 @@ function installShellIntegration() {
     }
 
     const functionCode = getShellFunction(shell);
+
+    if (!functionCode) {
+      console.log('Failed to generate shell integration script');
+      return false;
+    }
 
     if (fs.existsSync(configPath)) {
       const content = fs.readFileSync(configPath, 'utf8');

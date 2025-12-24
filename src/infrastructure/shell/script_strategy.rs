@@ -449,6 +449,33 @@ const POWERSHELL_INTEGRATION_TEMPLATE: &str = r#"
 # PowerShell Integration Script for fnva
 # Add this to your PowerShell Profile ($PROFILE)
 
+# Auto-load default CC environment on startup
+$fnvaAutoLoadDone = $false
+function fnva-AutoLoadDefault {
+    if ($fnvaAutoLoadDone) { return }
+    $fnvaAutoLoadDone = $true
+
+    try {
+        $defaultCcRaw = & fnva.exe cc default 2>$null
+        if ($LASTEXITCODE -eq 0 -and $defaultCcRaw -and $defaultCcRaw -notmatch "No default" -and $defaultCcRaw -notmatch "not set") {
+            # Extract environment name from output like "Default CC environment: glmcc"
+            $defaultCc = ($defaultCcRaw -split ':')[-1].Trim()
+            if ($defaultCc) {
+                Write-Host "Loading default CC environment: $defaultCc" -ForegroundColor Cyan
+                $ccSwitchScript = & fnva.exe cc use $defaultCc --shell powershell 2>$null
+                if ($LASTEXITCODE -eq 0 -and $ccSwitchScript) {
+                    if ($ccSwitchScript -is [array]) {
+                        $ccSwitchScript = $ccSwitchScript -join "`r`n"
+                    }
+                    Invoke-Expression $ccSwitchScript
+                }
+            }
+        }
+    } catch {
+        # Ignore errors during startup
+    }
+}
+
 function fnva-Integration {
     param()
 
@@ -472,6 +499,9 @@ function fnva-Integration {
         }
     }
 }
+
+# Run autoload on startup
+fnva-AutoLoadDefault
 
 # Hook into PowerShell prompt
 $OriginalPrompt = $function:prompt
@@ -528,6 +558,49 @@ const BASH_INTEGRATION_TEMPLATE: &str = r#"
 # Bash/Zsh Integration Script for fnva
 # Add this to your ~/.bashrc or ~/.zshrc
 
+# Auto-load default environments on startup
+_fnva_autoload_done=false
+fnva_autoload_default() {
+    if [[ $_fnva_autoload_done == "true" ]]; then
+        return
+    fi
+    _fnva_autoload_done=true
+
+    # Load default Java environment
+    if command -v fnva >/dev/null 2>&1; then
+        local default_java
+        default_java=$(fnva java default 2>/dev/null)
+        if [[ $default_java == *":"* ]]; then
+            local env_name
+            env_name=$(echo "$default_java" | cut -d':' -f2 | tr -d ' ')
+            if [[ -n "$env_name" ]]; then
+                echo "Loading default Java environment: $env_name"
+                local script
+                script=$(fnva java use "$env_name" --shell bash 2>/dev/null)
+                if [[ -n "$script" ]]; then
+                    eval "$script"
+                fi
+            fi
+        fi
+
+        # Load default CC environment
+        local default_cc
+        default_cc=$(fnva cc default 2>/dev/null)
+        if [[ $default_cc == *":"* ]]; then
+            local env_name
+            env_name=$(echo "$default_cc" | cut -d':' -f2 | tr -d ' ')
+            if [[ -n "$env_name" ]]; then
+                echo "Loading default CC environment: $env_name"
+                local script
+                script=$(fnva cc use "$env_name" --shell bash 2>/dev/null)
+                if [[ -n "$script" ]]; then
+                    eval "$script"
+                fi
+            fi
+        fi
+    fi
+}
+
 fnva_hook() {
     local env_file="$HOME/.fnva/current_env"
     if [[ -f "$env_file" ]]; then
@@ -547,6 +620,9 @@ fnva_hook() {
         fi
     fi
 }
+
+# Run autoload on startup
+fnva_autoload_default
 
 # Hook into prompt
 fnva_update_prompt() {
@@ -709,6 +785,43 @@ const FISH_INTEGRATION_TEMPLATE: &str = r#"
 # Fish Integration Script for fnva
 # Add this to your ~/.config/fish/config.fish
 
+# Auto-load default environments on startup
+set -g _fnva_autoload_done false
+function fnva_autoload_default
+    if test $_fnva_autoload_done = true
+        return
+    end
+    set -g _fnva_autoload_done true
+
+    # Load default Java environment
+    if command -v fnva >/dev/null 2>&1
+        set default_java (fnva java default 2>/dev/null)
+        if string match -q '*:*' $default_java
+            set env_name (echo "$default_java" | cut -d':' -f2 | string trim)
+            if test -n "$env_name"
+                echo "Loading default Java environment: $env_name"
+                set script (fnva java use "$env_name" --shell fish 2>/dev/null)
+                if test -n "$script"
+                    eval "$script"
+                end
+            end
+        end
+
+        # Load default CC environment
+        set default_cc (fnva cc default 2>/dev/null)
+        if string match -q '*:*' $default_cc
+            set env_name (echo "$default_cc" | cut -d':' -f2 | string trim)
+            if test -n "$env_name"
+                echo "Loading default CC environment: $env_name"
+                set script (fnva cc use "$env_name" --shell fish 2>/dev/null)
+                if test -n "$script"
+                    eval "$script"
+                end
+            end
+        end
+    end
+end
+
 function fnva_hook --on-variable PWD
     set env_file "$HOME/.fnva/current_env"
     if test -f "$env_file"
@@ -722,6 +835,9 @@ function fnva_hook --on-variable PWD
         end
     end
 end
+
+# Run autoload on startup
+fnva_autoload_default
 
 # Function to show current environment in prompt
 function fnva_prompt
