@@ -179,6 +179,11 @@ impl EnvironmentManager for CcEnvironmentManager {
     }
 
     fn use_env(&mut self, name: &str, shell_type: Option<ShellType>) -> Result<String, String> {
+        // 重新加载配置以获取最新的设置
+        if let Err(e) = self.load_from_config() {
+            eprintln!("Warning: Failed to reload CC config: {e}");
+        }
+
         let cc_env = self
             .environments
             .get(name)
