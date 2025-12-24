@@ -562,6 +562,31 @@ impl Config {
             updated = true;
         }
 
+        // 补全下载配置为默认值（清华源）
+        let default_config = Config::new();
+
+        // 补全 repositories.java（保持向后兼容）
+        if config.repositories.java.downloader != default_config.repositories.java.downloader
+            || config.repositories.java.fallback != default_config.repositories.java.fallback
+        {
+            config.repositories.java.downloader =
+                default_config.repositories.java.downloader.clone();
+            config.repositories.java.fallback = default_config.repositories.java.fallback.clone();
+            updated = true;
+        }
+
+        // 补全 java_download_sources
+        if config.java_download_sources.primary != default_config.java_download_sources.primary
+            || config.java_download_sources.fallback
+                != default_config.java_download_sources.fallback
+        {
+            config.java_download_sources.primary =
+                default_config.java_download_sources.primary.clone();
+            config.java_download_sources.fallback =
+                default_config.java_download_sources.fallback.clone();
+            updated = true;
+        }
+
         // 序列化配置
         let serialized =
             toml::to_string_pretty(&config).map_err(|e| format!("序列化配置失败: {e}"))?;
