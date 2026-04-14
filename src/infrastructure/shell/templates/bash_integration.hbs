@@ -1,33 +1,22 @@
 #!/bin/bash
 # Bash/Zsh Integration Script for fnva
-# Add this to your ~/.bashrc or ~/.zshrc
 
-fnva_hook() {
+_fnva_autoload_done=false
+fnva_autoload_default() {
+    if [[ $_fnva_autoload_done == "true" ]]; then return; fi
+    _fnva_autoload_done=true
+
     local envs_file="$HOME/.fnva/current_envs.toml"
-    if [[ ! -f "$envs_file" ]]; then return; fi
-
-    while IFS='=' read -r key value; do
-        key=$(echo "$key" | tr -d '[:space:]')
-        value=$(echo "$value" | tr -d '[:space:]' | tr -d '"')
-        [[ -z "$value" ]] && continue
-
-        local marker="FNVA_RESTORED_$(echo "$key" | tr '[:lower:]' '[:upper:]')"
-        local current_val
-        current_val=$(eval echo "\"\$$marker\"" 2>/dev/null)
-        [[ "$current_val" == "$value" ]] && continue
-
-        local env_script
-        env_script=$(fnva "$key" use "$value" 2>/dev/null)
-        if [[ -n "$env_script" ]]; then
-            eval "$env_script"
-            export "$marker"="$value"
-        fi
-    done < "$envs_file"
+    if [[ -f "$envs_file" ]] && command -v fnva >/dev/null 2>&1; then
+        while IFS='=' read -r key value; do
+            key=$(echo "$key" | tr -d '[:space:]')
+            value=$(echo "$value" | tr -d '[:space:]' | tr -d '"')
+            [[ -z "$value" ]] && continue
+            local env_script
+            env_script=$(fnva "$key" use "$value" 2>/dev/null)
+            if [[ -n "$env_script" ]]; then eval "$env_script"; fi
+        done < "$envs_file"
+    fi
 }
 
-# Hook into different shells
-if [[ -n "$BASH_VERSION" ]]; then
-    PROMPT_COMMAND="fnva_hook; $PROMPT_COMMAND"
-elif [[ -n "$ZSH_VERSION" ]]; then
-    precmd_functions=(fnva_hook "${precmd_functions[@]}")
-fi
+fnva_autoload_default

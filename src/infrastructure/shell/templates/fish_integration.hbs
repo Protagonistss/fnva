@@ -1,29 +1,22 @@
 # Fish Integration Script for fnva
-# Add this to your ~/.config/fish/config.fish
 
-function fnva_hook --on-event fish_prompt
+set -g _fnva_autoload_done false
+function fnva_autoload_default
+    if test $_fnva_autoload_done = true; return; end
+    set -g _fnva_autoload_done true
+
     set envs_file "$HOME/.fnva/current_envs.toml"
-    test -f "$envs_file"; or return
-
-    for line in (cat "$envs_file")
-        # Parse "key = "value"" lines
-        set -l match (string match -r '^\s*(\w+)\s*=\s*"([^"]*)"' -- $line)
-        test (count $match) -ge 3; or continue
-        set key $match[2]
-        set value $match[3]
-        test -n "$value"; or continue
-
-        set marker "FNVA_RESTORED_"(string upper $key)
-        # Check if marker env var already has this value
-        if set -q $marker
-            set -l current_val $$marker
-            test "$current_val" = "$value"; and continue
-        end
-
-        set env_script (fnva $key use $value 2>/dev/null)
-        if test -n "$env_script"
-            eval "$env_script"
-            set -gx $marker $value
+    if test -f "$envs_file"; and command -v fnva >/dev/null 2>&1
+        for line in (cat "$envs_file")
+            set -l match (string match -r '^\s*(\w+)\s*=\s*"([^"]*)"' -- $line)
+            test (count $match) -ge 3; or continue
+            set key $match[2]
+            set value $match[3]
+            test -n "$value"; or continue
+            set env_script (fnva $key use $value 2>/dev/null)
+            if test -n "$env_script"; eval "$env_script"; end
         end
     end
 end
+
+fnva_autoload_default

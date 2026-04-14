@@ -1,33 +1,23 @@
 # PowerShell Integration Script for fnva
 # Add this to your PowerShell Profile ($PROFILE)
 
-function fnva-Integration {
+$fnvaAutoLoadDone = $false
+function fnva-AutoLoadDefault {
+    if ($fnvaAutoLoadDone) { return }
+    $fnvaAutoLoadDone = $true
+
     $envsFile = "$env:USERPROFILE\.fnva\current_envs.toml"
-    if (-not (Test-Path $envsFile)) { return }
-
-    $lines = Get-Content $envsFile -ErrorAction SilentlyContinue
-    foreach ($line in $lines) {
-        if ($line -notmatch '^\s*(\w+)\s*=\s*"([^"]*)"') { continue }
-        $key = $Matches[1]
-        $value = $Matches[2]
-        if ([string]::IsNullOrWhiteSpace($value)) { continue }
-
-        $marker = "FNVA_RESTORED_$($key.ToUpper())"
-        if (Get-ChildItem env:$marker -ErrorAction SilentlyContinue) {
-            if ([Environment]::GetEnvironmentVariable($marker) -eq $value) { continue }
-        }
-
-        $envScript = & fnva $key use $value 2>$null
-        if ($envScript) {
-            Invoke-Expression $envScript
-            [Environment]::SetEnvironmentVariable($marker, $value)
+    if ((Test-Path $envsFile) -and (Get-Command fnva -ErrorAction SilentlyContinue)) {
+        $lines = Get-Content $envsFile -ErrorAction SilentlyContinue
+        foreach ($line in $lines) {
+            if ($line -notmatch '^\s*(\w+)\s*=\s*"([^"]*)"') { continue }
+            $key = $Matches[1]
+            $value = $Matches[2]
+            if ([string]::IsNullOrWhiteSpace($value)) { continue }
+            $envScript = & fnva $key use $value 2>$null
+            if ($envScript) { Invoke-Expression $envScript }
         }
     }
 }
 
-# Hook into PowerShell prompt
-$OriginalPrompt = $function:prompt
-function prompt {
-    fnva-Integration
-    & $OriginalPrompt
-}
+fnva-AutoLoadDefault
