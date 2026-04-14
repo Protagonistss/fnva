@@ -5,6 +5,7 @@ use crate::error::{
     option_with_context, safe_to_json, safe_to_json_pretty, AppError, ContextualResult, SafeMutex,
 };
 use crate::infrastructure::config::Config;
+use crate::infrastructure::shell::current_envs::CurrentEnvsFile;
 use crate::infrastructure::shell::{script_factory::ScriptGenerator, ShellType};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -108,6 +109,13 @@ impl EnvironmentSwitcher {
                 .map_err(|e| AppError::Config {
                     message: format!("更新会话状态失败: {e}"),
                 })?;
+        }
+
+        // Persist to current_envs.toml for shell hook auto-restore
+        {
+            if let Err(e) = CurrentEnvsFile::write(env_type, name) {
+                eprintln!("Warning: Failed to update current_envs.toml: {e}");
+            }
         }
 
         // 记录历史
@@ -248,6 +256,9 @@ impl EnvironmentSwitcher {
                         .map_err(|e| AppError::Config {
                             message: format!("清除当前环境失败: {e}"),
                         })?;
+                    if let Err(e) = CurrentEnvsFile::clear(env_type) {
+                        eprintln!("Warning: Failed to clear current_envs.toml: {e}");
+                    }
                 }
             }
         }
