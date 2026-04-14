@@ -14,9 +14,9 @@ Cross-platform environment switcher for Java, Claude Code (CC), and LLM setups. 
 
 ## Quick start
 
-- Init shell (Bash/Zsh): `eval "$(fnva env --shell bash)"`
-  PowerShell: `fnva env --shell powershell | Out-String | Invoke-Expression`
-  Fish: `fnva env --shell fish | source`
+- Init shell (Bash/Zsh): `eval "$(fnva env env --shell bash)"`
+  PowerShell: `fnva env env --shell powershell | Out-String | Invoke-Expression`
+  Fish: `fnva env env --shell fish | source`
 - Scan Java: `fnva java scan`
 - Switch Java for current session: `fnva java use jdk-17` (with shell integration)
 - Switch CC profile: `fnva cc use glmcc` (with shell integration)

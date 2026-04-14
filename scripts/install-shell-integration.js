@@ -41,12 +41,12 @@ function getShellConfigPath(shell) {
 function getIntegrationLine(shell) {
   switch (shell) {
     case 'powershell':
-      return 'fnva env --shell powershell | Out-String | Invoke-Expression';
+      return 'fnva env env --shell powershell | Out-String | Invoke-Expression';
     case 'bash':
     case 'zsh':
-      return 'eval "$(fnva env --shell bash)"';
+      return 'eval "$(fnva env env --shell bash)"';
     case 'fish':
-      return 'fnva env --shell fish | source';
+      return 'fnva env env --shell fish | source';
     default:
       return null;
   }
@@ -57,7 +57,7 @@ function isInstalled(configPath) {
     return false;
   }
   const content = fs.readFileSync(configPath, 'utf8');
-  return content.includes('fnva env --shell');
+  return content.includes('fnva env env --shell');
 }
 
 function installShellIntegration() {
