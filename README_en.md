@@ -33,19 +33,19 @@ Enable auto-loading on shell startup:
 
 - PowerShell:
   ```powershell
-  fnva env --shell powershell | Out-String | Invoke-Expression
+  fnva env env --shell powershell | Out-String | Invoke-Expression
   ```
 - Bash:
   ```bash
-  eval "$(fnva env --shell bash)"
+  eval "$(fnva env env --shell bash)"
   ```
 - Zsh:
   ```bash
-  eval "$(fnva env --shell bash)"
+  eval "$(fnva env env --shell bash)"
   ```
 - Fish:
   ```fish
-  fnva env --shell fish | source
+  fnva env env --shell fish | source
   ```
 
 ## Usage

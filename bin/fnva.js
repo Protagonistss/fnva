@@ -501,6 +501,27 @@ function run() {
   }
   const isSwitchCommand = isEnvironmentSwitchCommand(args);
 
+  // Unix: 直接透传给 Rust 二进制，不拦截参数
+  // shell wrapper 函数负责捕获输出并 source
+  if (process.platform !== 'win32') {
+    const result = spawnSync(binaryPath, args, {
+      stdio: 'inherit',
+    });
+
+    if (result.error) {
+      if (result.error.code === 'EACCES') {
+        console.error(`[ERROR] Permission denied. The fnva binary is not executable.`);
+        console.error(`[INFO] To fix this, run: sudo chmod +x "${binaryPath}"`);
+        console.error(`[INFO] Or reinstall: npm install -g fnva --force`);
+      } else {
+        console.error(`[ERROR] Failed to execute fnva: ${result.error.message}`);
+      }
+      process.exit(result.status ?? 1);
+    }
+
+    process.exit(result.status ?? 0);
+  }
+
   if (isSwitchCommand) {
     const shellArg = getShellArg(args);
     if (!shellArg || shellArg === 'auto') {
@@ -615,11 +636,8 @@ function run() {
           }
         }
       } else {
-        // Unix-like systems: 显示使用说明
-        console.log(`[OK] Switched to ${envType} environment: ${envName}`);
-        console.log('');
-        console.log('[INFO] To apply this environment, run:');
-        console.log(`  node bin/fnva.js ${args.join(' ')} | bash`);
+        // Unix-like systems: output raw script for eval or wrapper function
+        process.stdout.write(script);
       }
     } else {
       // 如果不是环境脚本，直接输出
