@@ -1,5 +1,6 @@
-# Fish Integration Script for fnva
+# fnva environment setup (fnva env --shell fish | source)
 
+# --- Auto-restore on startup ---
 set -g _fnva_autoload_done false
 function fnva_autoload_default
     if test $_fnva_autoload_done = true; return; end
@@ -20,3 +21,15 @@ function fnva_autoload_default
 end
 
 fnva_autoload_default
+
+# --- Shell wrapper (auto-source on use) ---
+function fnva
+    if test (count $argv) -ge 2; and string match -q -r "^(java|llm|cc)$" $argv[1]; and test $argv[2] = "use"
+        set temp_file (mktemp)
+        command fnva $argv > $temp_file
+        source $temp_file
+        rm -f $temp_file
+    else
+        command fnva $argv
+    end
+end

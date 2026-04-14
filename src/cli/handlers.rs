@@ -459,96 +459,11 @@ impl CommandHandler {
                     None => Some(detect_shell()),
                 };
 
-                // 生成类似 fnm env 的环境变量设置脚本
-                let script = match shell_type.unwrap() {
-                    crate::infrastructure::shell::ShellType::PowerShell => {
-                        r#"
-# fnva environment setup
-$env:FNVA_SHELL_INTEGRATION = $true
-
-# Auto-load default Java environment (like fnm)
-try {
-    $defaultEnvRaw = & fnva.exe java default 2>$null
-    if ($LASTEXITCODE -eq 0 -and $defaultEnvRaw -and $defaultEnvRaw -notmatch "No default") {
-        # Extract environment name from output like "Default Java environment: jdk21.0.6"
-        $defaultEnv = ($defaultEnvRaw -split ':')[-1].Trim()
-        Write-Host "Loading default Java environment: $defaultEnv" -ForegroundColor Cyan
-        $switchScript = & fnva.exe java use $defaultEnv --shell powershell 2>$null
-        if ($LASTEXITCODE -eq 0 -and $switchScript) {
-            if ($switchScript -is [array]) {
-                $switchScript = $switchScript -join "`r`n"
-            }
-            Invoke-Expression $switchScript
-        }
-    }
-} catch {
-    # Ignore errors during default loading
-}
-
-# Auto-load default CC environment
-try {
-    $defaultCcRaw = & fnva.exe cc default 2>$null
-    if ($LASTEXITCODE -eq 0 -and $defaultCcRaw -and $defaultCcRaw -notmatch "No default") {
-        # Extract environment name from output like "Default CC environment: glmcc"
-        $defaultCc = ($defaultCcRaw -split ':')[-1].Trim()
-        Write-Host "Loading default CC environment: $defaultCc" -ForegroundColor Cyan
-        $ccSwitchScript = & fnva.exe cc use $defaultCc --shell powershell 2>$null
-        if ($LASTEXITCODE -eq 0 -and $ccSwitchScript) {
-            if ($ccSwitchScript -is [array]) {
-                $ccSwitchScript = $ccSwitchScript -join "`r`n"
-            }
-            Invoke-Expression $ccSwitchScript
-        }
-    }
-} catch {
-    # Ignore errors during default CC loading
-}
-
-function fnva {
-    param(
-        [Parameter(ValueFromRemainingArguments=$true)]
-        [string[]]$Args
-    )
-
-    if ($Args.Count -ge 3 -and $Args[1] -eq "use") {
-        $envType = $Args[0]
-        $envName = $Args[2]
-        $output = & fnva.exe $Args[0] use $Args[2] --shell powershell 2>$null
-        if ($output -is [array]) {
-            $script = $output -join "`r`n"
-        } else {
-            $script = $output
-        }
-
-        # Check if script contains relevant environment variables
-        $isValidScript = $false
-        if ($envType -eq "java" -and $script -match "JAVA_HOME") {
-            $isValidScript = $true
-        } elseif ($envType -eq "cc" -and ($script -match "ANTHROPIC_AUTH_TOKEN" -or $script -match "ANTHROPIC_BASE_URL")) {
-            $isValidScript = $true
-        }
-
-        if ($LASTEXITCODE -eq 0 -and $isValidScript) {
-            try {
-                Invoke-Expression $script
-                Write-Host "Switched to $envType`: $envName" -ForegroundColor Green
-            } catch {
-                Write-Error "Failed to execute switch script: $($_.Exception.Message)"
-            }
-        } else {
-            Write-Output $output
-        }
-    } else {
-        & fnva.exe $Args
-    }
-}
-"#.to_string()
-                    }
-                    _ => {
-                        "# fnva environment setup for other shells\nexport FNVA_SHELL_INTEGRATION=true\n".to_string()
-                    }
-                };
-
+                // 生成完整的环境设置脚本（autoload + wrapper）
+                let script = self
+                    .switcher
+                    .generate_shell_integration(shell_type.unwrap())
+                    .await?;
                 print!("{script}");
             }
             EnvCommands::Switch {

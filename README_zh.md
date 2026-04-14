@@ -27,25 +27,25 @@ cargo install fnva
 
 ## Shell 集成
 
-安装 shell 集成后，打开新终端会自动恢复上次使用的 CC/Java 环境变量。
+安装 shell 集成后，打开新终端会自动恢复上次使用的 CC/Java 环境变量，且 `fnva <type> use <name>` 无需 `eval` 包裹即可生效。
 
 在 shell 启动时自动加载：
 
 - PowerShell:
   ```powershell
-  fnva env env --shell powershell | Out-String | Invoke-Expression
+  fnva env --shell powershell | Out-String | Invoke-Expression
   ```
 - Bash:
   ```bash
-  eval "$(fnva env env --shell bash)"
+  eval "$(fnva env --shell bash)"
   ```
 - Zsh:
   ```bash
-  eval "$(fnva env env --shell zsh)"
+  eval "$(fnva env --shell bash)"
   ```
 - Fish:
   ```fish
-  fnva env env --shell fish | source
+  fnva env --shell fish | source
   ```
 
 ## 使用
