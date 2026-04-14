@@ -3,51 +3,31 @@
 # Add this to your ~/.bashrc or ~/.zshrc
 
 fnva_hook() {
-    local env_file="$HOME/.fnva/current_env"
-    if [[ -f "$env_file" ]]; then
-        local current_env
-        current_env=$(cat "$env_file" 2>/dev/null | tr -d '[:space:]')
+    local envs_file="$HOME/.fnva/current_envs.toml"
+    if [[ ! -f "$envs_file" ]]; then return; fi
 
-        if [[ -n "$current_env" && "$FNVA_CURRENT_ENV" != "$current_env" ]]; then
-            # Apply environment using fnva command
-            local env_script
-            if command -v fnva >/dev/null 2>&1; then
-                env_script=$(fnva env current --shell bash 2>/dev/null)
-                if [[ -n "$env_script" ]]; then
-                    eval "$env_script"
-                    export FNVA_CURRENT_ENV="$current_env"
-                fi
-            fi
+    while IFS='=' read -r key value; do
+        key=$(echo "$key" | tr -d '[:space:]')
+        value=$(echo "$value" | tr -d '[:space:]' | tr -d '"')
+        [[ -z "$value" ]] && continue
+
+        local marker="FNVA_RESTORED_$(echo "$key" | tr '[:lower:]' '[:upper:]')"
+        local current_val
+        current_val=$(eval echo "\"\$$marker\"" 2>/dev/null)
+        [[ "$current_val" == "$value" ]] && continue
+
+        local env_script
+        env_script=$(fnva "$key" use "$value" 2>/dev/null)
+        if [[ -n "$env_script" ]]; then
+            eval "$env_script"
+            export "$marker"="$value"
         fi
-    fi
-}
-
-# Hook into prompt
-fnva_update_prompt() {
-    fnva_hook
-
-    # Show current environment in prompt (optional)
-    local fnva_prompt=""
-    if [[ -n "$FNVA_CURRENT_JAVA" ]]; then
-        fnva_prompt="[Java: $FNVA_CURRENT_JAVA]"
-    elif [[ -n "$FNVA_CURRENT_LLM" ]]; then
-        fnva_prompt="[LLM: $FNVA_CURRENT_LLM]"
-    elif [[ -n "$FNVA_CURRENT_CC" ]]; then
-        fnva_prompt="[CC: $FNVA_CURRENT_CC]"
-    fi
-
-    if [[ -n "$fnva_prompt" ]]; then
-        echo -e "\033[90m$fnva_prompt\033[0m"
-    fi
+    done < "$envs_file"
 }
 
 # Hook into different shells
 if [[ -n "$BASH_VERSION" ]]; then
-    # Bash
     PROMPT_COMMAND="fnva_hook; $PROMPT_COMMAND"
 elif [[ -n "$ZSH_VERSION" ]]; then
-    # Zsh
     precmd_functions=(fnva_hook "${precmd_functions[@]}")
 fi
-
-echo "🚀 fnva Bash/Zsh integration loaded"
