@@ -449,39 +449,64 @@ const POWERSHELL_INTEGRATION_TEMPLATE: &str = r#"
 # PowerShell Integration Script for fnva
 # Add this to your PowerShell Profile ($PROFILE)
 
-function fnva-Integration {
-    param()
+# Auto-load default environments on startup
+$fnvaAutoLoadDone = $false
+function fnva-AutoLoadDefault {
+    if ($fnvaAutoLoadDone) { return }
+    $fnvaAutoLoadDone = $true
 
-    $envFile = "$env:USERPROFILE\.fnva\current_env"
+    $envsFile = "$env:USERPROFILE\.fnva\current_envs.toml"
+    if ((Test-Path $envsFile) -and (Get-Command fnva -ErrorAction SilentlyContinue)) {
+        $lines = Get-Content $envsFile -ErrorAction SilentlyContinue
+        foreach ($line in $lines) {
+            if ($line -notmatch '^\s*(\w+)\s*=\s*"([^"]*)"') { continue }
+            $key = $Matches[1]
+            $value = $Matches[2]
+            if ([string]::IsNullOrWhiteSpace($value)) { continue }
 
-    if (Test-Path $envFile) {
-        try {
-            $currentEnv = Get-Content $envFile -Raw -ErrorAction SilentlyContinue
-            $currentEnv = $currentEnv.Trim()
-
-            if ($currentEnv -and $env:FNVA_CURRENT_ENV -ne $currentEnv) {
-                # Apply environment using fnva command
-                $envScript = & fnva env current --shell powershell 2>$null
-                if ($envScript) {
-                    Invoke-Expression $envScript
-                    $env:FNVA_CURRENT_ENV = $currentEnv
-                }
+            $envScript = & fnva $key use $value 2>$null
+            if ($envScript) {
+                Invoke-Expression $envScript
             }
-        } catch {
-            Write-Warning "Failed to apply fnva environment: $_"
         }
     }
 }
 
+function fnva-Integration {
+    $envsFile = "$env:USERPROFILE\.fnva\current_envs.toml"
+    if (-not (Test-Path $envsFile)) { return }
+
+    $lines = Get-Content $envsFile -ErrorAction SilentlyContinue
+    foreach ($line in $lines) {
+            if ($line -notmatch '^\s*(\w+)\s*=\s*"([^"]*)"') { continue }
+            $key = $Matches[1]
+            $value = $Matches[2]
+            if ([string]::IsNullOrWhiteSpace($value)) { continue }
+
+            $marker = "FNVA_RESTORED_$($key.ToUpper())"
+            if (Get-ChildItem env:$marker -ErrorAction SilentlyContinue) {
+                if ([Environment]::GetEnvironmentVariable($marker) -eq $value) { continue }
+            }
+
+            $envScript = & fnva $key use $value 2>$null
+            if ($envScript) {
+                Invoke-Expression $envScript
+                [Environment]::SetEnvironmentVariable($marker, $value)
+            }
+        }
+}
+
+# Run autoload on startup
+fnva-AutoLoadDefault
+
 # Hook into PowerShell prompt
 $OriginalPrompt = $function:prompt
 function prompt {
-    & fnva-Integration
+    fnva-Integration
     & $OriginalPrompt
 }
 
-Write-Host "🚀 fnva PowerShell integration loaded" -ForegroundColor Green
-"#;
+Write-Host "🚀 fnva PowerShell integration loaded" -ForegroundColor Green"#;
 
 const BASH_JAVA_SWITCH_TEMPLATE: &str = r#"
 #!/bin/bash
@@ -528,25 +553,55 @@ const BASH_INTEGRATION_TEMPLATE: &str = r#"
 # Bash/Zsh Integration Script for fnva
 # Add this to your ~/.bashrc or ~/.zshrc
 
-fnva_hook() {
-    local env_file="$HOME/.fnva/current_env"
-    if [[ -f "$env_file" ]]; then
-        local current_env
-        current_env=$(cat "$env_file" 2>/dev/null | tr -d '[:space:]')
+# Auto-load default environments on startup
+_fnva_autoload_done=false
+fnva_autoload_default() {
+    if [[ $_fnva_autoload_done == "true" ]]; then
+        return
+    fi
+    _fnva_autoload_done=true
 
-        if [[ -n "$current_env" && "$FNVA_CURRENT_ENV" != "$current_env" ]]; then
-            # Apply environment using fnva command
+    # Load default environments from current_envs.toml
+    local envs_file="$HOME/.fnva/current_envs.toml"
+    if [[ -f "$envs_file" ]] && command -v fnva >/dev/null 2>&1; then
+        while IFS='=' read -r key value; do
+            key=$(echo "$key" | tr -d '[:space:]')
+            value=$(echo "$value" | tr -d '[:space:]' | tr -d '"')
+            [[ -z "$value" ]] && continue
             local env_script
-            if command -v fnva >/dev/null 2>&1; then
-                env_script=$(fnva env current --shell bash 2>/dev/null)
-                if [[ -n "$env_script" ]]; then
-                    eval "$env_script"
-                    export FNVA_CURRENT_ENV="$current_env"
-                fi
+            env_script=$(fnva "$key" use "$value" 2>/dev/null)
+            if [[ -n "$env_script" ]]; then
+                eval "$env_script"
             fi
-        fi
+        done < "$envs_file"
     fi
 }
+
+fnva_hook() {
+    local envs_file="$HOME/.fnva/current_envs.toml"
+    if [[ ! -f "$envs_file" ]]; then return; fi
+
+    while IFS='=' read -r key value; do
+        key=$(echo "$key" | tr -d '[:space:]')
+        value=$(echo "$value" | tr -d '[:space:]' | tr -d '"')
+        [[ -z "$value" ]] && continue
+
+        local marker="FNVA_RESTORED_$(echo "$key" | tr '[:lower:]' '[:upper:]')"
+        local current_val
+        current_val=$(eval echo "\"\$$marker\"" 2>/dev/null)
+        [[ "$current_val" == "$value" ]] && continue
+
+        local env_script
+        env_script=$(fnva "$key" use "$value" 2>/dev/null)
+        if [[ -n "$env_script" ]]; then
+            eval "$env_script"
+            export "$marker"="$value"
+        fi
+    done < "$envs_file"
+}
+
+# Run autoload on startup
+fnva_autoload_default
 
 # Hook into prompt
 fnva_update_prompt() {
@@ -576,8 +631,7 @@ elif [[ -n "$ZSH_VERSION" ]]; then
     precmd_functions=(fnva_hook "${precmd_functions[@]}")
 fi
 
-echo "🚀 fnva Bash/Zsh integration loaded"
-"#;
+echo "🚀 fnva Bash/Zsh integration loaded""#;
 
 // 其他模板常量...
 const POWERSHELL_LLM_SWITCH_TEMPLATE: &str = r#"
@@ -709,19 +763,60 @@ const FISH_INTEGRATION_TEMPLATE: &str = r#"
 # Fish Integration Script for fnva
 # Add this to your ~/.config/fish/config.fish
 
-function fnva_hook --on-variable PWD
-    set env_file "$HOME/.fnva/current_env"
-    if test -f "$env_file"
-        set current_env (cat "$env_file" 2>/dev/null | string trim)
-        if test -n "$current_env"; and test "$FNVA_CURRENT_ENV" != "$current_env"
-            # Apply environment using fnva command
-            if command -v fnva >/dev/null 2>&1
-                fnva env current --shell fish | source
-                set -gx FNVA_CURRENT_ENV "$current_env"
+# Auto-load default environments on startup
+set -g _fnva_autoload_done false
+function fnva_autoload_default
+    if test $_fnva_autoload_done = true
+        return
+    end
+    set -g _fnva_autoload_done true
+
+    set envs_file "$HOME/.fnva/current_envs.toml"
+    if test -f "$envs_file"; and command -v fnva >/dev/null 2>&1
+        for line in (cat "$envs_file")
+            set -l match (string match -r '^\s*(\w+)\s*=\s*"([^"]*)"',$line)
+            test (count $match) -ge 3; or continue
+            set key $match[2]
+            set value $match[3]
+test -n "$value"; or continue
+
+            set env_script (fnva $key use $value 2>/dev/null)
+            if test -n "$env_script"
+                eval "$env_script"
             end
         end
     end
 end
+
+function fnva_hook --on-event fish_prompt
+    set envs_file "$HOME/.fnva/current_envs.toml"
+    test -f "$envs_file"; or return
+
+    for line in (cat "$envs_file")
+        # Parse "key = "value"" lines
+        set -l match (string match -r '^\s*(\w+)\s*=\s*"([^"]*)"',$line)
+        test (count $match) -ge 3; or continue
+        set key $match[2]
+        set value $match[3]
+test -n "$value"; or continue
+
+        set marker "FNVA_RESTORED_"(string upper $key)
+        # Check if marker env var already has this value
+        if set -q $marker
+            set -l current_val $$marker
+test "$current_val" = "$value"; and continue
+        end
+
+        set env_script (fnva $key use $value 2>/dev/null)
+        if test -n "$env_script"
+            eval "$env_script"
+            set -gx $marker $value
+        end
+    end
+end
+
+# Run autoload on startup
+fnva_autoload_default
 
 # Function to show current environment in prompt
 function fnva_prompt
@@ -741,8 +836,7 @@ function fnva_prompt
     end
 end
 
-echo "🚀 fnva Fish integration loaded"
-"#;
+echo "🚀 fnva Fish integration loaded""#;
 
 const FISH_LLM_SWITCH_TEMPLATE: &str = r#"
 # Fish LLM/CC Environment Switch - {{env_name}}
@@ -824,28 +918,28 @@ const CMD_INTEGRATION_TEMPLATE: &str = r#"
 @echo off
 REM CMD Integration Script for fnva
 REM Add this to your startup script
+setlocal enabledelayedexpansion
 
-REM Check and apply fnva environments
-set "env_file=%USERPROFILE%\.fnva\current_env"
-if exist "%env_file%" (
-    set /p current_env=<"%env_file%"
-    set "current_env=%current_env: =%"
-    if defined current_env (
-        if not "%FNVA_CURRENT_ENV%"=="%current_env%" (
-            REM Apply environment using fnva command
+REM Auto-restore environments from current_envs.toml
+set "envs_file=%USERPROFILE%\.fnva\current_envs.toml"
+if exist "%envs_file%" (
+    for /f "usebackq tokens=1,* delims==" %%a in ("%envs_file%") do (
+        set "env_key=%%a"
+        set "env_val=%%b"
+        set "env_val=!env_val: =!"
+        set "env_val=!env_val:"=!"
+        if not "!env_val!"=="" (
             where fnva >nul 2>&1
-            if %errorlevel% equ 0 (
-                for /f "tokens=*" %%i in ('fnva env current --shell cmd 2^>nul') do (
-                    %%i
+            if !errorlevel! equ 0 (
+                for /f "tokens=*" %%s in ('fnva !env_key! use !env_val! 2^>nul') do (
+                    %%s
                 )
-                set "FNVA_CURRENT_ENV=%current_env%"
             )
         )
     )
 )
 
-echo 🚀 fnva CMD integration loaded
-"#;
+echo fnva CMD integration loaded"#;
 
 const CMD_LLM_SWITCH_TEMPLATE: &str = r#"
 @echo off

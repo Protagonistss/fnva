@@ -8,6 +8,7 @@ fnva is a cross-platform environment switcher for Java, Claude Code (CC), and ge
 
 - Manage multiple Java/CC/LLM profiles with per-shell activation and global defaults.
 - Auto-generate shell init scripts for PowerShell, Bash, Zsh, Fish, CMD.
+- **Auto-restore on new terminal** — after shell integration, opening a new terminal automatically restores the last active CC/Java environment.
 - Scan and dedupe local JDKs, switch by name in one command.
 - Configure CC endpoints and LLM API keys in one place, export as env vars.
 - Single static binary; no runtime dependencies.
@@ -25,6 +26,8 @@ cargo install fnva
 Or grab a platform binary from [Releases](https://github.com/Protagonistss/fnva/releases) and put it on your `PATH`.
 
 ## Shell integration
+
+After installing shell integration, opening a new terminal automatically restores your last active CC/Java environment.
 
 Enable auto-loading on shell startup:
 
@@ -75,6 +78,7 @@ Enable auto-loading on shell startup:
 ## Configuration
 
 - Location: `~/.fnva/config.toml` (Windows: `%USERPROFILE%\.fnva\config.toml`)
+- State: `~/.fnva/current_envs.toml` — tracks the active environment per type, used for auto-restore
 - Example:
   ```toml
   custom_java_scan_paths = ["D:\\Environment\\Java", "/opt/java"]
@@ -96,7 +100,7 @@ Enable auto-loading on shell startup:
 
 | Command | Purpose |
 | --- | --- |
-| `fnva env env` | Generate shell init snippet |
+| `fnva env shell-integration` | Generate shell integration script (with auto-restore) |
 | `fnva <type> list` | List environments (type: java/cc/llm) |
 | `fnva <type> use <name>` | Emit snippet to activate an environment |
 | `fnva <type> current` | Show current environment |

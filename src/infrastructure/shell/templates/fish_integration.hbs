@@ -1,36 +1,29 @@
 # Fish Integration Script for fnva
 # Add this to your ~/.config/fish/config.fish
 
-function fnva_hook --on-variable PWD
-    set env_file "$HOME/.fnva/current_env"
-    if test -f "$env_file"
-        set current_env (cat "$env_file" 2>/dev/null | string trim)
-        if test -n "$current_env"; and test "$FNVA_CURRENT_ENV" != "$current_env"
-            # Apply environment using fnva command
-            if command -v fnva >/dev/null 2>&1
-                fnva env current --shell fish | source
-                set -gx FNVA_CURRENT_ENV "$current_env"
-            end
+function fnva_hook --on-event fish_prompt
+    set envs_file "$HOME/.fnva/current_envs.toml"
+    test -f "$envs_file"; or return
+
+    for line in (cat "$envs_file")
+        # Parse "key = "value"" lines
+        set -l match (string match -r '^\s*(\w+)\s*=\s*"([^"]*)"' -- $line)
+        test (count $match) -ge 3; or continue
+        set key $match[2]
+        set value $match[3]
+        test -n "$value"; or continue
+
+        set marker "FNVA_RESTORED_"(string upper $key)
+        # Check if marker env var already has this value
+        if set -q $marker
+            set -l current_val $$marker
+            test "$current_val" = "$value"; and continue
+        end
+
+        set env_script (fnva $key use $value 2>/dev/null)
+        if test -n "$env_script"
+            eval "$env_script"
+            set -gx $marker $value
         end
     end
 end
-
-# Function to show current environment in prompt
-function fnva_prompt
-    set -l fnva_prompt ""
-    if set -q FNVA_CURRENT_JAVA
-        set fnva_prompt "[Java: $FNVA_CURRENT_JAVA]"
-    else if set -q FNVA_CURRENT_LLM
-        set fnva_prompt "[LLM: $FNVA_CURRENT_LLM]"
-    else if set -q FNVA_CURRENT_CC
-        set fnva_prompt "[CC: $FNVA_CURRENT_CC]"
-    end
-
-    if test -n "$fnva_prompt"
-        set_color 666666
-        echo -n "$fnva_prompt"
-        set_color normal
-    end
-end
-
-echo "🚀 fnva Fish integration loaded"

@@ -1,24 +1,25 @@
 @echo off
 REM CMD Integration Script for fnva
 REM Add this to your startup script
+setlocal enabledelayedexpansion
 
-REM Check and apply fnva environments
-set "env_file=%USERPROFILE%\.fnva\current_env"
-if exist "%env_file%" (
-    set /p current_env=<"%env_file%"
-    set "current_env=%current_env: =%"
-    if defined current_env (
-        if not "%FNVA_CURRENT_ENV%"=="%current_env%" (
-            REM Apply environment using fnva command
+REM Auto-restore environments from current_envs.toml
+set "envs_file=%USERPROFILE%\.fnva\current_envs.toml"
+if exist "%envs_file%" (
+    for /f "usebackq tokens=1,* delims==" %%a in ("%envs_file%") do (
+        set "env_key=%%a"
+        set "env_val=%%b"
+        set "env_val=!env_val: =!"
+        set "env_val=!env_val:"=!"
+        if not "!env_val!"=="" (
             where fnva >nul 2>&1
-            if %errorlevel% equ 0 (
-                for /f "tokens=*" %%i in ('fnva env current --shell cmd 2^>nul') do (
-                    %%i
+            if !errorlevel! equ 0 (
+                for /f "tokens=*" %%s in ('fnva !env_key! use !env_val! 2^>nul') do (
+                    %%s
                 )
-                set "FNVA_CURRENT_ENV=%current_env%"
             )
         )
     )
 )
 
-echo 🚀 fnva CMD integration loaded
+echo fnva CMD integration loaded

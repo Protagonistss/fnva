@@ -14,16 +14,18 @@ Cross-platform environment switcher for Java, Claude Code (CC), and LLM setups. 
 
 ## Quick start
 
-- Init shell (Bash/Zsh): `eval "$(fnva env env --shell bash)"`  
+- Init shell (Bash/Zsh): `eval "$(fnva env env --shell bash)"`
   PowerShell: `fnva env env --shell powershell | Out-String | Invoke-Expression`
 - Scan Java: `fnva java scan`
 - Switch Java for current session: `eval "$(fnva java use jdk-17)"`
 - Switch CC profile: `eval "$(fnva cc use glmcc)"`
+- New terminals auto-restore your last active environment
 
 ## What it does
 
 - Manages multiple Java, CC, and generic LLM configurations.
 - Generates shell snippets to activate environments per session or by default.
+- **Auto-restore** — new terminals automatically restore the last active CC/Java environment.
 - Stores config at `~/.fnva/config.toml` (Windows: `%USERPROFILE%\.fnva\config.toml`).
 - Ships as a single binary; no background daemon.
 
