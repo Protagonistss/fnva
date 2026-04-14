@@ -1,3 +1,4 @@
+pub mod current_envs;
 pub mod hook;
 pub mod integration;
 pub mod platform;
@@ -5,6 +6,7 @@ pub mod script_builder;
 pub mod script_factory;
 pub mod script_strategy;
 
+pub use current_envs::*;
 pub use hook::*;
 pub use integration::*;
 pub use platform::*;
