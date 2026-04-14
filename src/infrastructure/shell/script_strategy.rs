@@ -446,9 +446,9 @@ try {
 "#;
 
 const POWERSHELL_INTEGRATION_TEMPLATE: &str = r#"
-# PowerShell Integration Script for fnva
-# Add this to your PowerShell Profile ($PROFILE)
+# fnva environment setup (fnva env --shell powershell | Out-String | Invoke-Expression)
 
+# --- Auto-restore on startup ---
 $fnvaAutoLoadDone = $false
 function fnva-AutoLoadDefault {
     if ($fnvaAutoLoadDone) { return }
@@ -469,6 +469,26 @@ function fnva-AutoLoadDefault {
 }
 
 fnva-AutoLoadDefault
+
+# --- Shell wrapper (auto-source on use) ---
+function fnva {
+    if ($args.Count -ge 2 -and ($args[0] -eq "java" -or $args[0] -eq "llm" -or $args[0] -eq "cc") -and ($args[1] -eq "use")) {
+        $tempFile = Join-Path $env:TEMP ("fnva_script_" + (Get-Random) + ".ps1")
+        try {
+            & fnva.cmd @args 2>&1 | Out-File -FilePath $tempFile -Encoding UTF8
+            $content = Get-Content $tempFile -Raw -Encoding UTF8
+            if ($content -match '\$env:' -or $content -match 'Write-Host') {
+                . $tempFile
+            } else {
+                $content
+            }
+        } finally {
+            if (Test-Path $tempFile) { Remove-Item $tempFile -ErrorAction SilentlyContinue }
+        }
+    } else {
+        & fnva.cmd @args
+    }
+}
 "#;
 
 const BASH_JAVA_SWITCH_TEMPLATE: &str = r#"
@@ -513,8 +533,9 @@ echo "fnva java use {{env_name}}" >> ~/.fnva/history 2>/dev/null || true
 
 const BASH_INTEGRATION_TEMPLATE: &str = r#"
 #!/bin/bash
-# Bash/Zsh Integration Script for fnva
+# fnva environment setup (eval "$(fnva env --shell bash)")
 
+# --- Auto-restore on startup ---
 _fnva_autoload_done=false
 fnva_autoload_default() {
     if [[ $_fnva_autoload_done == "true" ]]; then return; fi
@@ -534,6 +555,20 @@ fnva_autoload_default() {
 }
 
 fnva_autoload_default
+
+# --- Shell wrapper (auto-source on use) ---
+fnva() {
+    local __fnva_bin="fnva"
+    if [[ $# -ge 2 && ("$1" == "java" || "$1" == "llm" || "$1" == "cc") && "$2" == "use" ]]; then
+        local temp_file
+        temp_file="$(mktemp)"
+        "$__fnva_bin" "$@" > "$temp_file"
+        source "$temp_file"
+        rm -f "$temp_file"
+    else
+        "$__fnva_bin" "$@"
+    fi
+}
 "#;
 
 // 其他模板常量...
@@ -663,8 +698,9 @@ echo "fnva java use {{env_name}}" >> ~/.fnva/history 2>/dev/null || true
 "#;
 
 const FISH_INTEGRATION_TEMPLATE: &str = r#"
-# Fish Integration Script for fnva
+# fnva environment setup (fnva env --shell fish | source)
 
+# --- Auto-restore on startup ---
 set -g _fnva_autoload_done false
 function fnva_autoload_default
     if test $_fnva_autoload_done = true; return; end
@@ -685,6 +721,18 @@ function fnva_autoload_default
 end
 
 fnva_autoload_default
+
+# --- Shell wrapper (auto-source on use) ---
+function fnva
+    if test (count $argv) -ge 2; and string match -q -r "^(java|llm|cc)$" $argv[1]; and test $argv[2] = "use"
+        set temp_file (mktemp)
+        command fnva $argv > $temp_file
+        source $temp_file
+        rm -f $temp_file
+    else
+        command fnva $argv
+    end
+end
 "#;
 
 const FISH_LLM_SWITCH_TEMPLATE: &str = r#"

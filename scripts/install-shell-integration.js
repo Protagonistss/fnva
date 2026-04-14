@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 
 // Shell integration installer for fnva (npm postinstall helper).
-// Uses fnva's built-in template system for shell integration scripts.
+// Writes a single line into the shell profile: eval "$(fnva env --shell <shell>)"
+// The fnva binary generates the full init script (autoload + wrapper).
 
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { spawnSync } = require('child_process');
 
-// Absolute path to the packaged fnva shim (bin/fnva.js)
 const FNVA_SHIM = path.resolve(__dirname, '..', 'bin', 'fnva.js');
 
 function detectShell() {
@@ -38,141 +38,26 @@ function getShellConfigPath(shell) {
   }
 }
 
-// Get integration script from fnva command (uses Rust templates)
-function getIntegrationScript(shell) {
-  try {
-    const result = spawnSync('node', [FNVA_SHIM, 'env', 'shell-integration', '-s', shell], {
-      encoding: 'utf8',
-      cwd: path.resolve(__dirname, '..')
-    });
-
-    if (result.status === 0 && result.stdout) {
-      return result.stdout;
-    }
-
-    console.log(`Warning: Failed to get integration script from fnva (exit code: ${result.status})`);
-    if (result.stderr) {
-      console.log(`stderr: ${result.stderr}`);
-    }
-    return '';
-  } catch (error) {
-    console.log(`Warning: Failed to call fnva for integration script: ${error.message}`);
-    return '';
-  }
-}
-
-function getPowerShellFunction() {
-  // Get integration script from Rust template
-  const integrationScript = getIntegrationScript('powershell');
-
-  return `
-${integrationScript}
-
-# fnva auto integration (added by npm install)
-function fnva {
-    if ($args.Count -ge 2 -and ($args[0] -eq "java" -or $args[0] -eq "llm" -or $args[0] -eq "cc") -and ($args[1] -eq "use")) {
-        $tempFile = Join-Path $env:TEMP ("fnva_script_" + (Get-Random) + ".ps1")
-
-        try {
-            # Directly pipe output to temp file to avoid encoding issues
-            & fnva.cmd @args 2>&1 | Out-File -FilePath $tempFile -Encoding UTF8
-
-            # Check if file contains environment variables
-            $content = Get-Content $tempFile -Raw -Encoding UTF8
-            if ($content -match '\\$env:' -or $content -match 'Write-Host') {
-                # Use dot sourcing to execute in current scope
-                . $tempFile
-            } else {
-                $content
-            }
-        } finally {
-            if (Test-Path $tempFile) { Remove-Item $tempFile -ErrorAction SilentlyContinue }
-        }
-    } else {
-        & fnva.cmd @args
-    }
-}
-`;
-}
-
-function getBashFunction() {
-  // Get integration script from Rust template
-  const integrationScript = getIntegrationScript('bash');
-
-  return `
-${integrationScript}
-
-# fnva auto integration (added by npm install)
-fnva() {
-    local __fnva_bin="${FNVA_SHIM}"
-    if [[ ! -x "$__fnva_bin" ]]; then
-        echo "fnva: binary not found in PATH" >&2
-        return 127
-    fi
-
-    if [[ $# -ge 2 && ("$1" == "java" || "$1" == "llm" || "$1" == "cc") && "$2" == "use" ]]; then
-        local temp_file
-        temp_file="$(mktemp)"
-        chmod +x "$temp_file"
-
-         "$__fnva_bin" "$@" > "$temp_file"
-        source "$temp_file"
-        rm -f "$temp_file"
-    else
-         "$__fnva_bin" "$@"
-    fi
-}
-`;
-}
-
-function getFishFunction() {
-  // Get integration script from Rust template
-  const integrationScript = getIntegrationScript('fish');
-
-  return `
-${integrationScript}
-
-# fnva auto integration (added by npm install)
-function fnva
-    set __fnva_bin "${FNVA_SHIM}"
-    if test ! -x "$__fnva_bin"
-        echo "fnva: binary not found in PATH" >&2
-        return 127
-    end
-
-    if test (count $argv) -ge 2; and string match -q -r "^(java|llm|cc)$" $argv[1]; and test $argv[2] = "use"
-        set temp_file (mktemp)
-        chmod +x $temp_file
-        env  "$__fnva_bin" $argv > $temp_file
-        source $temp_file
-        rm -f $temp_file
-    else
-        env  "$__fnva_bin" $argv
-    end
-end
-`;
-}
-
-function getShellFunction(shell) {
+function getIntegrationLine(shell) {
   switch (shell) {
     case 'powershell':
-      return getPowerShellFunction();
+      return 'fnva env --shell powershell | Out-String | Invoke-Expression';
     case 'bash':
     case 'zsh':
-      return getBashFunction(); // zsh 使用和 bash 相同的语法
+      return 'eval "$(fnva env --shell bash)"';
     case 'fish':
-      return getFishFunction();
+      return 'fnva env --shell fish | source';
     default:
-      return '';
+      return null;
   }
 }
 
-function isFunctionInstalled(configPath) {
+function isInstalled(configPath) {
   if (!fs.existsSync(configPath)) {
     return false;
   }
   const content = fs.readFileSync(configPath, 'utf8');
-  return content.includes('fnva auto integration (added by npm install)');
+  return content.includes('fnva env --shell');
 }
 
 function installShellIntegration() {
@@ -185,9 +70,15 @@ function installShellIntegration() {
     return false;
   }
 
-  if (isFunctionInstalled(configPath)) {
+  if (isInstalled(configPath)) {
     console.log(`fnva shell integration already present: ${configPath}`);
     return true;
+  }
+
+  const line = getIntegrationLine(shell);
+  if (!line) {
+    console.log(`Unsupported shell: ${shell}`);
+    return false;
   }
 
   try {
@@ -196,18 +87,13 @@ function installShellIntegration() {
       fs.mkdirSync(dir, { recursive: true });
     }
 
-    const functionCode = getShellFunction(shell);
-
-    if (!functionCode) {
-      console.log('Failed to generate shell integration script');
-      return false;
-    }
+    const marker = `\n# fnva shell integration\n${line}\n`;
 
     if (fs.existsSync(configPath)) {
       const content = fs.readFileSync(configPath, 'utf8');
-      fs.writeFileSync(configPath, content + '\n' + functionCode);
+      fs.writeFileSync(configPath, content + marker);
     } else {
-      fs.writeFileSync(configPath, functionCode);
+      fs.writeFileSync(configPath, marker);
     }
 
     console.log(`fnva shell integration installed at: ${configPath}`);
@@ -267,7 +153,7 @@ if (require.main === module) {
 module.exports = {
   detectShell,
   getShellConfigPath,
-  getShellFunction,
-  isFunctionInstalled,
+  getIntegrationLine,
+  isInstalled,
   installShellIntegration,
 };

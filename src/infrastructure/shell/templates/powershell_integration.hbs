@@ -1,6 +1,6 @@
-# PowerShell Integration Script for fnva
-# Add this to your PowerShell Profile ($PROFILE)
+# fnva environment setup (fnva env --shell powershell | Out-String | Invoke-Expression)
 
+# --- Auto-restore on startup ---
 $fnvaAutoLoadDone = $false
 function fnva-AutoLoadDefault {
     if ($fnvaAutoLoadDone) { return }
@@ -21,3 +21,23 @@ function fnva-AutoLoadDefault {
 }
 
 fnva-AutoLoadDefault
+
+# --- Shell wrapper (auto-source on use) ---
+function fnva {
+    if ($args.Count -ge 2 -and ($args[0] -eq "java" -or $args[0] -eq "llm" -or $args[0] -eq "cc") -and ($args[1] -eq "use")) {
+        $tempFile = Join-Path $env:TEMP ("fnva_script_" + (Get-Random) + ".ps1")
+        try {
+            & fnva.cmd @args 2>&1 | Out-File -FilePath $tempFile -Encoding UTF8
+            $content = Get-Content $tempFile -Raw -Encoding UTF8
+            if ($content -match '\$env:' -or $content -match 'Write-Host') {
+                . $tempFile
+            } else {
+                $content
+            }
+        } finally {
+            if (Test-Path $tempFile) { Remove-Item $tempFile -ErrorAction SilentlyContinue }
+        }
+    } else {
+        & fnva.cmd @args
+    }
+}

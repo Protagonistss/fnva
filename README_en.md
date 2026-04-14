@@ -27,25 +27,25 @@ Or grab a platform binary from [Releases](https://github.com/Protagonistss/fnva/
 
 ## Shell integration
 
-After installing shell integration, opening a new terminal automatically restores your last active CC/Java environment.
+After installing shell integration, opening a new terminal automatically restores your last active CC/Java environment, and `fnva <type> use <name>` takes effect without wrapping in `eval`.
 
 Enable auto-loading on shell startup:
 
 - PowerShell:
   ```powershell
-  fnva env env --shell powershell | Out-String | Invoke-Expression
+  fnva env --shell powershell | Out-String | Invoke-Expression
   ```
 - Bash:
   ```bash
-  eval "$(fnva env env --shell bash)"
+  eval "$(fnva env --shell bash)"
   ```
 - Zsh:
   ```bash
-  eval "$(fnva env env --shell zsh)"
+  eval "$(fnva env --shell bash)"
   ```
 - Fish:
   ```fish
-  fnva env env --shell fish | source
+  fnva env --shell fish | source
   ```
 
 ## Usage

@@ -1,6 +1,7 @@
 #!/bin/bash
-# Bash/Zsh Integration Script for fnva
+# fnva environment setup (eval "$(fnva env --shell bash)")
 
+# --- Auto-restore on startup ---
 _fnva_autoload_done=false
 fnva_autoload_default() {
     if [[ $_fnva_autoload_done == "true" ]]; then return; fi
@@ -20,3 +21,17 @@ fnva_autoload_default() {
 }
 
 fnva_autoload_default
+
+# --- Shell wrapper (auto-source on use) ---
+fnva() {
+    local __fnva_bin="fnva"
+    if [[ $# -ge 2 && ("$1" == "java" || "$1" == "llm" || "$1" == "cc") && "$2" == "use" ]]; then
+        local temp_file
+        temp_file="$(mktemp)"
+        "$__fnva_bin" "$@" > "$temp_file"
+        source "$temp_file"
+        rm -f "$temp_file"
+    else
+        "$__fnva_bin" "$@"
+    fi
+}
