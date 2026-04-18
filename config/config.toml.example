@@ -113,14 +113,35 @@ enable_fallback = true
 # 传统仓库URL列表（向后兼容，已废弃但保留）
 repositories = []
 
-# Java 下载源配置（新架构，简化版）
+# Java 下载源配置（旧版，保留向后兼容）
 [java_download_sources]
-# 主要下载源：github 或 aliyun
-# 主要下载源：tsinghua，fallback 为 aliyun/github
 # 备用下载源名称列表
 fallback = ["aliyun", "github"]
 # 自定义下载源列表（可选）
 sources = []
+
+# 镜像配置（模板化 URL）
+# 每个镜像定义 URL 模板，按 priority 排序自动回退
+# 可用模板变量: {base_url}, {major}, {tag}, {filename}, {os}, {arch}
+[[mirrors.java]]
+name = "tsinghua"
+priority = 1
+enabled = true
+base_url = "https://mirrors.tuna.tsinghua.edu.cn/Adoptium"
+url_template = "{base_url}/{major}/jdk/{arch}/{os}/{filename}"
+
+[[mirrors.java]]
+name = "aliyun"
+priority = 2
+enabled = true
+base_url = "https://mirrors.aliyun.com/eclipse/temurin-compliance/temurin"
+url_template = "{base_url}/{major}/{tag}/{filename}"
+
+[[mirrors.java]]
+name = "github"
+priority = 3
+enabled = true
+url_template = "https://github.com/adoptium/temurin{major}-binaries/releases/download/{tag}/{filename}"
 
 # Java 版本缓存配置
 [java_version_cache]

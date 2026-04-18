@@ -3,6 +3,60 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 
+/// 镜像配置（模板化 URL）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MirrorConfig {
+    pub name: String,
+    #[serde(default = "default_mirror_priority")]
+    pub priority: u32,
+    pub base_url: String,
+    /// URL 模板变量: {base_url}, {major}, {tag}, {filename}, {os}, {arch}
+    pub url_template: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+fn default_mirror_priority() -> u32 {
+    10
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// 所有工具的镜像配置集合
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct MirrorsConfig {
+    #[serde(default = "default_java_mirrors")]
+    pub java: Vec<MirrorConfig>,
+}
+
+fn default_java_mirrors() -> Vec<MirrorConfig> {
+    vec![
+        MirrorConfig {
+            name: "tsinghua".to_string(),
+            priority: 1,
+            base_url: "https://mirrors.tuna.tsinghua.edu.cn/Adoptium".to_string(),
+            url_template: "{base_url}/{major}/jdk/{arch}/{os}/{filename}".to_string(),
+            enabled: true,
+        },
+        MirrorConfig {
+            name: "aliyun".to_string(),
+            priority: 2,
+            base_url: "https://mirrors.aliyun.com/eclipse/temurin-compliance/temurin".to_string(),
+            url_template: "{base_url}/{major}/{tag}/{filename}".to_string(),
+            enabled: true,
+        },
+        MirrorConfig {
+            name: "github".to_string(),
+            priority: 3,
+            base_url: String::new(),
+            url_template: "https://github.com/adoptium/temurin{major}-binaries/releases/download/{tag}/{filename}".to_string(),
+            enabled: true,
+        },
+    ]
+}
+
 /// 配置文件结构
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
@@ -14,7 +68,10 @@ pub struct Config {
     pub cc_environments: Vec<CcEnvironment>,
     #[serde(default)]
     pub repositories: Repositories,
-    /// Java 下载源配置
+    /// 镜像配置（模板化 URL）
+    #[serde(default)]
+    pub mirrors: MirrorsConfig,
+    /// Java 下载源配置（旧版，保留向后兼容）
     #[serde(default)]
     pub java_download_sources: JavaDownloadSources,
     /// Java 版本缓存配置
@@ -336,6 +393,7 @@ impl Config {
                 java: default_java_downloader(),
                 maven: default_maven_repositories(),
             },
+            mirrors: MirrorsConfig::default(),
             java_download_sources: JavaDownloadSources {
                 primary: "tsinghua".to_string(),
                 fallback: vec!["aliyun".to_string(), "github".to_string()],
@@ -584,6 +642,12 @@ impl Config {
                 default_config.java_download_sources.primary.clone();
             config.java_download_sources.fallback =
                 default_config.java_download_sources.fallback.clone();
+            updated = true;
+        }
+
+        // 补全 mirrors 配置（新增字段）
+        if config.mirrors.java.is_empty() {
+            config.mirrors = default_config.mirrors.clone();
             updated = true;
         }
 

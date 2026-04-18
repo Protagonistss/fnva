@@ -7,6 +7,7 @@ pub mod mirror_utils;
 pub mod platform;
 pub mod remote_manager;
 pub mod repositories;
+pub mod template_downloader;
 pub mod tsinghua_downloader;
 pub mod version_registry;
 
@@ -22,6 +23,7 @@ pub use aliyun_downloader::AliyunJavaDownloader;
 pub use github_downloader::{GitHubAsset, GitHubJavaDownloader, GitHubJavaRelease};
 pub use java_downloader::{DownloadError, DownloadTarget, JavaDownloader};
 pub use remote_manager::{JavaVersionInfo, MavenArtifactInfo, MavenVersionInfo, RemoteManager};
+pub use template_downloader::TemplateDownloader;
 pub use tsinghua_downloader::TsinghuaJavaDownloader;
 pub use version_registry::{RegistryEntry, VersionRegistry};
 

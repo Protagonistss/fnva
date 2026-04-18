@@ -111,7 +111,7 @@ impl GitHubJavaDownloader {
             for e in reg.list() {
                 let (minor, patch) = crate::remote::version_registry::split_version(&e.version);
                 let mut download_urls = HashMap::new();
-                let iter = e.assets_github.as_ref().unwrap_or(&e.assets);
+                let iter = &e.assets;
                 for (k, filename) in iter.iter() {
                     let url = format!(
                         "https://github.com/adoptium/temurin{}-binaries/releases/download/{}/{}",
