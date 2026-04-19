@@ -1,37 +1,31 @@
-# fnva - Windows PowerShell 启动脚本
+#!/usr/bin/env pwsh
+# fnva PowerShell wrapper - calls native binary directly
+# PowerShell prefers .ps1 over .cmd, avoiding Object[] output splitting
 
-param(
-    [Parameter(ValueFromRemainingArguments=$true)]
-    [string[]]$Arguments
-)
-
-# 检测平台和架构
-$os = "win32"
-$arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "x64" }
-
-# 构建二进制文件路径
-$platformDir = "$os-$arch"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$binaryPath = Join-Path $scriptDir ".." "platforms" $platformDir "fnva.exe"
+$arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "x64" }
+$platformDir = "win32-$arch"
 
-# 如果分层结构不存在，尝试扁平结构
-if (-not (Test-Path $binaryPath)) {
-    $binaryPath = Join-Path $scriptDir ".." "platforms" "fnva.exe"
-}
-
-# 检查二进制文件是否存在
-if (-not (Test-Path $binaryPath)) {
-    Write-Host "错误: 未找到二进制文件" -ForegroundColor Red
-    Write-Host "尝试的路径: " -ForegroundColor Yellow
-    Write-Host "  1. $(Join-Path $scriptDir ".." "platforms" $platformDir "fnva.exe")" -ForegroundColor Yellow
-    Write-Host "  2. $(Join-Path $scriptDir ".." "platforms" "fnva.exe")" -ForegroundColor Yellow
-    Write-Host "请运行 'npm run build' 构建二进制文件" -ForegroundColor Yellow
-    exit 1
-}
-
-# 执行二进制文件
-& $binaryPath $Arguments
-
-if ($LASTEXITCODE) {
+# Try native binary in npm package
+$binaryPath = Join-Path $scriptDir "..\platforms\$platformDir\fnva.exe"
+if (Test-Path $binaryPath) {
+    & $binaryPath @args
     exit $LASTEXITCODE
 }
+
+# Fallback: local dev build
+$devPath = Join-Path $scriptDir "..\target\release\fnva.exe"
+if (Test-Path $devPath) {
+    & $devPath @args
+    exit $LASTEXITCODE
+}
+
+# Last resort: node wrapper
+$nodeScript = Join-Path $scriptDir "fnva.js"
+if (Test-Path $nodeScript) {
+    & node $nodeScript @args
+    exit $LASTEXITCODE
+}
+
+Write-Error "fnva: native binary not found. Reinstall with: npm install -g fnva --force"
+exit 1
