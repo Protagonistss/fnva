@@ -33,7 +33,7 @@ Enable auto-loading on shell startup:
 
 - PowerShell:
   ```powershell
-  fnva env env --shell powershell | Out-String | Invoke-Expression
+  Invoke-Expression (& fnva env env --shell powershell | Out-String)
   ```
 - Bash:
   ```bash

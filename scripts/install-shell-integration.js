@@ -18,15 +18,24 @@ function detectShell() {
   return process.env.SHELL?.split('/').pop() || 'bash';
 }
 
+function getPowershellProfilePath() {
+  const home = process.env.USERPROFILE || os.homedir();
+  // Check PowerShell 7 first (pwsh), then fall back to Windows PowerShell 5.x
+  const ps7Profile = path.join(home, 'Documents', 'PowerShell', 'Microsoft.PowerShell_profile.ps1');
+  const ps5Profile = path.join(home, 'Documents', 'WindowsPowerShell', 'Microsoft.PowerShell_profile.ps1');
+  // If PS7 profile already exists, use it; otherwise prefer PS7 path
+  if (fs.existsSync(ps7Profile)) return ps7Profile;
+  if (fs.existsSync(ps5Profile)) return ps5Profile;
+  // Detect which PowerShell is installed via pwsh vs powershell
+  const pwshResult = spawnSync('pwsh', ['-NoProfile', '-Command', 'echo true'], { timeout: 5000 });
+  if (pwshResult.status === 0) return ps7Profile;
+  return ps5Profile;
+}
+
 function getShellConfigPath(shell) {
   switch (shell) {
     case 'powershell':
-      return path.join(
-        process.env.USERPROFILE || os.homedir(),
-        'Documents',
-        'WindowsPowerShell',
-        'Microsoft.PowerShell_profile.ps1'
-      );
+      return getPowershellProfilePath();
     case 'bash':
       return path.join(os.homedir(), '.bashrc');
     case 'zsh':
@@ -41,7 +50,7 @@ function getShellConfigPath(shell) {
 function getIntegrationLine(shell) {
   switch (shell) {
     case 'powershell':
-      return 'fnva env env --shell powershell | Out-String | Invoke-Expression';
+      return 'Invoke-Expression (& fnva env env --shell powershell | Out-String)';
     case 'bash':
     case 'zsh':
       return 'eval "$(fnva env env --shell bash)"';
