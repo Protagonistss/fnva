@@ -1,0 +1,31 @@
+name: Update Version Registry
+
+on:
+  schedule:
+    - cron: '0 2 * * 1'  # 每周一 UTC 02:00
+  workflow_dispatch:
+
+jobs:
+  update-java-versions:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Update Java version registry
+        run: node scripts/update-java-versions.js
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          title: 'chore: update Java version registry'
+          commit-message: 'chore: update Java version registry'
+          branch: chore/update-versions
+          delete-branch: true
+          labels: dependencies

@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::infrastructure::remote::{JavaDownloader, Platform, UnifiedJavaVersion};
+use crate::infrastructure::remote::template_downloader::TemplateDownloader;
 use std::fs;
 use std::path::Path;
 
@@ -7,7 +8,7 @@ use std::path::Path;
 pub struct JavaInstaller;
 
 impl JavaInstaller {
-    /// 安装指定版本的 Java（使用配置的下载器）
+    /// 安装指定版本的 Java（使用模板化下载器）
     pub async fn install_java(
         version_spec: &str,
         config: &mut Config,
@@ -15,73 +16,37 @@ impl JavaInstaller {
     ) -> Result<String, String> {
         println!("🚀 正在准备安装 Java {version_spec}...");
 
-        // 在开始安装前，检查本地是否已有对应的Java包（避免重复下载）
+        // 检查本地是否已有对应的 Java 包
         if let Ok(java_home) = Self::check_local_java_package(version_spec, config) {
             println!("🎉 检测到本地Java包: {version_spec}");
             println!("📁 使用本地安装: {java_home}");
-
-            // 直接完成安装流程（使用本地包）
             return Self::complete_installation_simple(
-                version_spec,
-                config,
-                auto_switch,
-                &java_home,
-                "local",
-                "local",
-            )
-            .await;
+                version_spec, config, auto_switch, &java_home, "local", "local",
+            ).await;
         }
 
-        let primary = config.repositories.java.downloader.clone();
-        let mut chain = Vec::new();
-        chain.push(primary);
-        chain.extend(config.repositories.java.fallback.clone());
+        let mirrors = config.mirrors.java.clone();
+        let mirror_names: Vec<&str> = mirrors.iter().filter(|m| m.enabled).map(|m| m.name.as_str()).collect();
+        println!("📋 下载源优先级: {}", mirror_names.join(" -> "));
 
-        println!("📋 下载源优先级链: {}", chain.join(" -> "));
+        let downloader = TemplateDownloader::new(mirrors);
+        let res = Self::install_with_downloader(
+            &downloader, version_spec, config, auto_switch,
+        ).await;
 
-        let mut last_err: Option<String> = None;
-        for source in chain {
-            let downloader: Box<dyn JavaDownloader> = match source.as_str() {
-                "github" => Box::new(crate::remote::GitHubJavaDownloader::new()),
-                "aliyun" => Box::new(crate::remote::AliyunJavaDownloader::new()),
-                "tsinghua" => Box::new(crate::remote::TsinghuaJavaDownloader::new()),
-                _ => {
-                    println!("⚠️  未知的下载器类型: '{source}' , 跳过");
-                    continue;
-                }
-            };
-
-            let res = Self::install_with_downloader(
-                downloader,
-                version_spec,
-                config,
-                auto_switch,
-                &source,
-            )
-            .await;
-
-            match res {
-                Ok(java_home) => return Ok(java_home),
-                Err(e) => {
-                    println!("↩️  源 '{source}' 失败: {e}");
-                    last_err = Some(e);
-                    continue;
-                }
-            }
+        match res {
+            Ok(java_home) => Ok(java_home),
+            Err(e) => Err(format!("所有镜像源均失败: {e}")),
         }
-
-        Err(last_err.unwrap_or_else(|| "所有下载源均失败".to_string()))
     }
 
-    /// 使用通用下载器安装 Java
+    /// 使用模板化下载器安装 Java
     async fn install_with_downloader(
-        downloader: Box<dyn JavaDownloader>,
+        downloader: &TemplateDownloader,
         version_spec: &str,
         config: &mut Config,
         auto_switch: bool,
-        source_name: &str,
     ) -> Result<String, String> {
-        // 尝试从自定义名称中解析版本，如果失败则使用最新版本
         let java_version = match downloader.find_version_by_spec(version_spec).await {
             Ok(version) => {
                 println!("解析到版本: {} ({})", version.version, version.release_name);
@@ -89,10 +54,7 @@ impl JavaInstaller {
             }
             Err(_) => {
                 println!("无法从 '{version_spec}' 解析版本，使用最新版本");
-                // 获取最新版本
-                downloader
-                    .list_available_versions()
-                    .await
+                downloader.list_available_versions().await
                     .map_err(|e| format!("{e:?}"))?
                     .into_iter()
                     .next()
@@ -100,22 +62,11 @@ impl JavaInstaller {
             }
         };
 
-        println!("使用 {} 下载器: {}", source_name, java_version.release_name);
-
         let platform = Platform::current();
-        // 恢复使用用户输入的原始格式
-        let java_home =
-            Self::download_and_install(downloader.as_ref(), &java_version, &platform, version_spec)
-                .await?;
+        let java_home = Self::download_and_install(downloader, &java_version, &platform, version_spec).await?;
         Self::complete_installation_simple(
-            version_spec,
-            config,
-            auto_switch,
-            &java_home,
-            &java_version.version,
-            &java_version.release_name,
-        )
-        .await
+            version_spec, config, auto_switch, &java_home, &java_version.version, &java_version.release_name,
+        ).await
     }
 
     /// 完成安装流程（简单下载器）
@@ -308,14 +259,8 @@ impl JavaInstaller {
         let config = crate::infrastructure::config::Config::load()
             .map_err(|e| format!("加载配置失败: {e}"))?;
 
-        let downloader_type = &config.repositories.java.downloader;
-
-        let downloader: Box<dyn JavaDownloader> = match downloader_type.as_str() {
-            "github" => Box::new(crate::remote::GitHubJavaDownloader::new()),
-            "tsinghua" => Box::new(crate::remote::TsinghuaJavaDownloader::new()),
-            "aliyun" => Box::new(crate::remote::AliyunJavaDownloader::new()),
-            _ => Box::new(crate::remote::AliyunJavaDownloader::new()), // Default fallback
-        };
+        let mirrors = config.mirrors.java.clone();
+        let downloader = TemplateDownloader::new(mirrors);
 
         let versions = downloader
             .list_available_versions()
@@ -324,7 +269,6 @@ impl JavaInstaller {
 
         let mut result = Vec::new();
 
-        // Format output similar to before but using UnifiedJavaVersion
         use std::collections::HashMap;
         let mut versions_by_major: HashMap<u32, Vec<String>> = HashMap::new();
 
@@ -344,7 +288,7 @@ impl JavaInstaller {
         major_versions.sort_by(|a, b| b.cmp(a));
 
         result.push(format!(
-            "🌟 所有可用版本 (源: {downloader_type}, 带*的为LTS版本):"
+            "🌟 所有可用版本 (带*的为LTS版本):"
         ));
         result.push("".to_string());
 

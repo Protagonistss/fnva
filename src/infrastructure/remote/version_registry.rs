@@ -12,12 +12,6 @@ pub struct RegistryEntry {
     pub tag_name: String,
     #[serde(default)]
     pub assets: HashMap<String, String>,
-    #[serde(default)]
-    pub assets_github: Option<HashMap<String, String>>,
-    #[serde(default)]
-    pub assets_aliyun: Option<HashMap<String, String>>,
-    #[serde(default)]
-    pub assets_tsinghua: Option<HashMap<String, String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

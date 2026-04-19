@@ -35,7 +35,7 @@ impl TsinghuaJavaDownloader {
             for e in reg.list() {
                 let (minor, patch) = crate::remote::version_registry::split_version(&e.version);
                 let mut download_urls = HashMap::new();
-                let iter = e.assets_tsinghua.as_ref().unwrap_or(&e.assets);
+                let iter = &e.assets;
                 for (k, filename) in iter.iter() {
                     let parts: Vec<&str> = k.split('-').collect();
                     let os = parts.first().cloned().unwrap_or("");
