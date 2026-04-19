@@ -651,6 +651,31 @@ function run() {
 
     process.exit(0);
   } else {
+    // For env commands, capture output and write as single string to avoid
+    // PowerShell splitting multi-line output into Object[] (which breaks
+    // the standard | Out-String | Invoke-Expression profile pattern).
+    const isEnvOutputCommand = args[0] === 'env' && args[1] === 'env';
+    if (isEnvOutputCommand) {
+      const result = spawnSync(binaryPath, args, {
+        encoding: 'utf8',
+        shell: false,
+      });
+
+      if (result.error) {
+        console.error(`[ERROR] Failed to execute fnva: ${result.error.message}`);
+        process.exit(result.status ?? 1);
+      }
+
+      if (result.stdout) {
+        process.stdout.write(result.stdout);
+      }
+      if (result.stderr) {
+        process.stderr.write(result.stderr);
+      }
+
+      process.exit(result.status ?? 0);
+    }
+
     // 对于其他命令，使用原有的 stdio: 'inherit' 方式
     const result = spawnSync(binaryPath, args, {
       stdio: 'inherit',

@@ -1,37 +1,64 @@
-# fnva - Windows PowerShell 启动脚本
+#!/usr/bin/env pwsh
+# fnva PowerShell wrapper - calls native binary directly
+# PowerShell prefers .ps1 over .cmd, avoiding Object[] output splitting
 
-param(
-    [Parameter(ValueFromRemainingArguments=$true)]
-    [string[]]$Arguments
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "x64" }
+$platformDir = "win32-$arch"
+
+# Search paths for native binary (in priority order)
+$searchPaths = @(
+    # npm global install: fnva.ps1 is in <prefix>/, binary is in <prefix>/node_modules/fnva/platforms/
+    (Join-Path $scriptDir "node_modules\fnva\platforms\$platformDir\fnva.exe"),
+    # npm global install (flat): binary next to fnva.ps1
+    (Join-Path $scriptDir "fnva.exe"),
+    # Source tree: fnva.ps1 is in bin/, binary is in platforms/
+    (Join-Path $scriptDir "..\platforms\$platformDir\fnva.exe"),
+    # Local dev build
+    (Join-Path $scriptDir "..\target\release\fnva.exe")
 )
 
-# 检测平台和架构
-$os = "win32"
-$arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "x64" }
+function Invoke-FnvaNative {
+    param([string]$BinPath, [string[]]$CliArgs)
 
-# 构建二进制文件路径
-$platformDir = "$os-$arch"
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$binaryPath = Join-Path $scriptDir ".." "platforms" $platformDir "fnva.exe"
+    # For env commands, capture output and re-emit as single string
+    # to avoid PS splitting native exe output into Object[]
+    if ($CliArgs.Length -ge 2 -and $CliArgs[0] -eq 'env' -and $CliArgs[1] -eq 'env') {
+        $output = & $BinPath @CliArgs 2>$null
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        $output -join "`n"
+        return
+    }
 
-# 如果分层结构不存在，尝试扁平结构
-if (-not (Test-Path $binaryPath)) {
-    $binaryPath = Join-Path $scriptDir ".." "platforms" "fnva.exe"
-}
+    # For switch commands, also capture to avoid Object[] issues
+    if ($CliArgs.Length -ge 3 -and $CliArgs[1] -eq 'use') {
+        $output = & $BinPath @CliArgs 2>$null
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        $output -join "`n"
+        return
+    }
 
-# 检查二进制文件是否存在
-if (-not (Test-Path $binaryPath)) {
-    Write-Host "错误: 未找到二进制文件" -ForegroundColor Red
-    Write-Host "尝试的路径: " -ForegroundColor Yellow
-    Write-Host "  1. $(Join-Path $scriptDir ".." "platforms" $platformDir "fnva.exe")" -ForegroundColor Yellow
-    Write-Host "  2. $(Join-Path $scriptDir ".." "platforms" "fnva.exe")" -ForegroundColor Yellow
-    Write-Host "请运行 'npm run build' 构建二进制文件" -ForegroundColor Yellow
-    exit 1
-}
-
-# 执行二进制文件
-& $binaryPath $Arguments
-
-if ($LASTEXITCODE) {
+    # Other commands: pass through directly
+    & $BinPath @CliArgs
     exit $LASTEXITCODE
 }
+
+foreach ($binaryPath in $searchPaths) {
+    if (Test-Path $binaryPath) {
+        Invoke-FnvaNative -BinPath $binaryPath -CliArgs $args
+        return
+    }
+}
+
+# Last resort: node wrapper
+$nodeScript = Join-Path $scriptDir "node_modules\fnva\bin\fnva.js"
+if (-not (Test-Path $nodeScript)) {
+    $nodeScript = Join-Path $scriptDir "fnva.js"
+}
+if (Test-Path $nodeScript) {
+    & node $nodeScript @args
+    exit $LASTEXITCODE
+}
+
+Write-Error "fnva: native binary not found. Reinstall with: npm install -g fnva --force"
+exit 1
