@@ -49,7 +49,7 @@ impl TemplateDownloader {
 
     async fn list_versions_internal(&self) -> Result<Vec<UnifiedJavaVersion>, DownloadError> {
         let reg = VersionRegistry::load()
-            .map_err(|e| DownloadError::from(format!("版本注册表加载失败: {e}")))?;
+            .map_err(|e| DownloadError::from(format!("Failed to load version registry: {e}")))?;
         Ok(reg.list().iter().map(TemplateDownloader::entry_to_version).collect())
     }
 }
@@ -68,9 +68,9 @@ impl JavaDownloader for TemplateDownloader {
         let spec_string = spec.to_string();
         Box::pin(async move {
             let reg = VersionRegistry::load()
-                .map_err(|e| DownloadError::from(format!("版本注册表加载失败: {e}")))?;
+                .map_err(|e| DownloadError::from(format!("Failed to load version registry: {e}")))?;
             let entry = reg.find(&spec_string)
-                .ok_or_else(|| DownloadError::from(format!("未找到匹配 '{spec_string}' 的版本")))?;
+                .ok_or_else(|| DownloadError::from(format!("No version matching '{spec_string}'")))?;
             Ok(Self::entry_to_version(&entry))
         })
     }
@@ -86,14 +86,14 @@ impl JavaDownloader for TemplateDownloader {
 
         Box::pin(async move {
             let reg = VersionRegistry::load()
-                .map_err(|e| DownloadError::from(format!("版本注册表加载失败: {e}")))?;
+                .map_err(|e| DownloadError::from(format!("Failed to load version registry: {e}")))?;
             let entry = reg.find(&version_clone.version)
-                .ok_or_else(|| DownloadError::from(format!("版本 {} 不在注册表中", version_clone.version)))?;
+                .ok_or_else(|| DownloadError::from(format!("Version {} not in registry", version_clone.version)))?;
 
             let platform_key = platform_clone.key();
             let filename = entry.assets.get(&platform_key)
                 .or_else(|| entry.assets.keys().find(|k| k.starts_with(&platform_clone.os)).and_then(|k| entry.assets.get(k)))
-                .ok_or_else(|| DownloadError::from(format!("未找到 {platform_key} 的资源文件")))?;
+                .ok_or_else(|| DownloadError::from(format!("No asset found for {platform_key}")))?;
 
             let parts: Vec<&str> = platform_key.split('-').collect();
             let os = parts.first().cloned().unwrap_or("");
@@ -109,7 +109,7 @@ impl JavaDownloader for TemplateDownloader {
                 }
             }
 
-            Err(DownloadError::from("所有镜像源均不可用".to_string()))
+            Err(DownloadError::from("All mirrors unavailable".to_string()))
         })
     }
 
@@ -125,18 +125,18 @@ impl JavaDownloader for TemplateDownloader {
 
         Box::pin(async move {
             let url = self.get_download_url(&version_clone, &platform_clone).await?;
-            println!("-> 下载 Java {} ...", version_clone.version);
+            println!("-> Downloading Java {} ...", version_clone.version);
             println!("-> URL: {url}");
 
             let cache_dir = dirs::home_dir()
-                .ok_or_else(|| DownloadError::Io("无法获取用户主目录".to_string()))?
+                .ok_or_else(|| DownloadError::Io("Cannot get home directory".to_string()))?
                 .join(".fnva")
                 .join("cache")
                 .join("downloads");
 
             tokio::fs::create_dir_all(&cache_dir)
                 .await
-                .map_err(|e| DownloadError::Io(format!("创建缓存目录失败: {e}")))?;
+                .map_err(|e| DownloadError::Io(format!("Failed to create cache directory: {e}")))?;
 
             let mirror_name = mirrors.first().map(|m| m.name.as_str()).unwrap_or("unknown");
             let extension = platform_clone.archive_ext();
@@ -148,27 +148,27 @@ impl JavaDownloader for TemplateDownloader {
 
             if let Ok(metadata) = tokio::fs::metadata(&file_path).await {
                 if metadata.len() > 0 {
-                    println!("-> 使用已缓存文件: {} MB", metadata.len() / (1024 * 1024));
+                    println!("-> Using cached file: {} MB", metadata.len() / (1024 * 1024));
                     let canonical = file_path.canonicalize()
-                        .map_err(|e| DownloadError::Io(format!("路径规范化失败: {e}")))?;
+                        .map_err(|e| DownloadError::Io(format!("Path canonicalization failed: {e}")))?;
                     return Ok(DownloadTarget::File(
-                        canonical.to_str().ok_or_else(|| DownloadError::Io("路径编码错误".to_string()))?.to_string()
+                        canonical.to_str().ok_or_else(|| DownloadError::Io("Invalid path encoding".to_string()))?.to_string()
                     ));
                 }
             }
 
             download_to_file(&self.client, &url, &file_path, |c, t| progress_callback(c, t))
                 .await
-                .map_err(|e| DownloadError::from(format!("下载失败: {e}")))?;
+                .map_err(|e| DownloadError::from(format!("Download failed: {e}")))?;
 
             let file_size = tokio::fs::metadata(&file_path)
-                .await.map_err(|e| DownloadError::Io(format!("获取文件大小失败: {e}")))?.len();
-            println!("<- 下载完成: {} MB", file_size / (1024 * 1024));
+                .await.map_err(|e| DownloadError::Io(format!("Failed to get file size: {e}")))?.len();
+            println!("<- Download complete: {} MB", file_size / (1024 * 1024));
 
             let canonical = file_path.canonicalize()
-                .map_err(|e| DownloadError::Io(format!("路径规范化失败: {e}")))?;
+                .map_err(|e| DownloadError::Io(format!("Path canonicalization failed: {e}")))?;
             Ok(DownloadTarget::File(
-                canonical.to_str().ok_or_else(|| DownloadError::Io("路径编码错误".to_string()))?.to_string()
+                canonical.to_str().ok_or_else(|| DownloadError::Io("Invalid path encoding".to_string()))?.to_string()
             ))
         })
     }

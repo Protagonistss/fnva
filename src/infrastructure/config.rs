@@ -25,10 +25,18 @@ fn default_true() -> bool {
 }
 
 /// 所有工具的镜像配置集合
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MirrorsConfig {
     #[serde(default = "default_java_mirrors")]
     pub java: Vec<MirrorConfig>,
+}
+
+impl Default for MirrorsConfig {
+    fn default() -> Self {
+        Self {
+            java: default_java_mirrors(),
+        }
+    }
 }
 
 fn default_java_mirrors() -> Vec<MirrorConfig> {

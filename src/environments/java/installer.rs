@@ -14,12 +14,11 @@ impl JavaInstaller {
         config: &mut Config,
         auto_switch: bool,
     ) -> Result<String, String> {
-        println!("🚀 正在准备安装 Java {version_spec}...");
+        println!("[..] Preparing to install Java {version_spec}...");
 
-        // 检查本地是否已有对应的 Java 包
         if let Ok(java_home) = Self::check_local_java_package(version_spec, config) {
-            println!("🎉 检测到本地Java包: {version_spec}");
-            println!("📁 使用本地安装: {java_home}");
+            println!("[OK] Found local Java package: {version_spec}");
+            println!("     Using local install: {java_home}");
             return Self::complete_installation_simple(
                 version_spec, config, auto_switch, &java_home, "local", "local",
             ).await;
@@ -27,7 +26,7 @@ impl JavaInstaller {
 
         let mirrors = config.mirrors.java.clone();
         let mirror_names: Vec<&str> = mirrors.iter().filter(|m| m.enabled).map(|m| m.name.as_str()).collect();
-        println!("📋 下载源优先级: {}", mirror_names.join(" -> "));
+        println!("[..] Mirror priority: {}", mirror_names.join(" -> "));
 
         let downloader = TemplateDownloader::new(mirrors);
         let res = Self::install_with_downloader(
@@ -36,11 +35,10 @@ impl JavaInstaller {
 
         match res {
             Ok(java_home) => Ok(java_home),
-            Err(e) => Err(format!("所有镜像源均失败: {e}")),
+            Err(e) => Err(format!("All mirrors failed: {e}")),
         }
     }
 
-    /// 使用模板化下载器安装 Java
     async fn install_with_downloader(
         downloader: &TemplateDownloader,
         version_spec: &str,
@@ -49,16 +47,16 @@ impl JavaInstaller {
     ) -> Result<String, String> {
         let java_version = match downloader.find_version_by_spec(version_spec).await {
             Ok(version) => {
-                println!("解析到版本: {} ({})", version.version, version.release_name);
+                println!("[OK] Resolved version: {} ({})", version.version, version.release_name);
                 version
             }
             Err(_) => {
-                println!("无法从 '{version_spec}' 解析版本，使用最新版本");
+                println!("[..] Cannot resolve '{version_spec}', using latest");
                 downloader.list_available_versions().await
                     .map_err(|e| format!("{e:?}"))?
                     .into_iter()
                     .next()
-                    .ok_or_else(|| "无法获取最新版本".to_string())?
+                    .ok_or_else(|| "No versions available".to_string())?
             }
         };
 
@@ -78,15 +76,15 @@ impl JavaInstaller {
         version: &str,
         _release_name: &str,
     ) -> Result<String, String> {
-        // 使用用户输入的原始名称，确保名称唯一性
         let install_name = version_spec.to_string();
 
-        // 检查是否已安装
-        if config.get_java_env(&install_name).is_some() {
-            return Err(format!("Java {version} 已经安装"));
+        // Already installed - return success with info message
+        if let Some(existing) = config.get_java_env(&install_name) {
+            println!("[OK] Java {version} is already installed");
+            println!("     Path: {}", existing.java_home);
+            return Ok(existing.java_home.clone());
         }
 
-        // 添加到配置
         let description = format!("Java {version} ({java_home})");
         config.add_java_env(crate::config::JavaEnvironment {
             name: install_name.clone(),
@@ -96,16 +94,15 @@ impl JavaInstaller {
         })?;
         config.save()?;
 
-        println!("✅ Java {version} 安装成功！");
-        println!("📁 安装路径: {java_home}");
+        println!("[OK] Java {version} installed successfully");
+        println!("     Path: {java_home}");
 
-        // 自动切换
         if auto_switch {
-            println!("🔄 自动切换到 Java {version}");
+            println!("[..] Auto-switching to Java {version}");
             if let Err(e) = Self::switch_to_java(&install_name, config) {
-                println!("⚠️  自动切换失败: {e}");
+                println!("[WARN] Auto-switch failed: {e}");
             } else {
-                println!("✅ 已切换到 Java {version}");
+                println!("[OK] Switched to Java {version}");
             }
         }
 
@@ -147,14 +144,14 @@ impl JavaInstaller {
                         pb_clone.set_position(downloaded);
                     } else {
                         // 如果未知总大小，显示下载的字节数
-                        pb_clone.set_message(format!("已下载: {} MB", downloaded / (1024 * 1024)));
+                        pb_clone.set_message(format!("Downloaded: {} MB", downloaded / (1024 * 1024)));
                         pb_clone.tick();
                     }
                 }),
             )
             .await
-            .map_err(|e| format!("下载失败: {e:?}"))?;
-        pb.finish_with_message("下载完成");
+            .map_err(|e| format!("Download failed: {e:?}"))?;
+        pb.finish_with_message("Download complete");
 
         // 下载器现在直接下载到文件，避免内存占用
         let file_path = match target {
@@ -164,14 +161,14 @@ impl JavaInstaller {
             }
             crate::remote::DownloadTarget::Bytes(_) => {
                 // 保留对旧实现的兼容性（虽然现在不会用到）
-                return Err("不支持内存下载模式，请使用文件下载".to_string());
+                return Err("In-memory download not supported".to_string());
             }
         };
 
         let java_home = Self::install_archive(&file_path, &version_info.version, env_name).await?;
 
         if !crate::utils::validate_java_home(&java_home) {
-            return Err("安装验证失败".to_string());
+            return Err("Installation verification failed".to_string());
         }
 
         Ok(java_home)
@@ -185,11 +182,11 @@ impl JavaInstaller {
     ) -> Result<String, String> {
         // 获取 fnva 安装目录
         let fnva_dir = dirs::home_dir()
-            .ok_or("无法获取用户主目录")?
+            .ok_or("Cannot get home directory")?
             .join(".fnva")
             .join("java-packages");
 
-        fs::create_dir_all(&fnva_dir).map_err(|e| format!("创建安装目录失败: {e}"))?;
+        fs::create_dir_all(&fnva_dir).map_err(|e| format!("Failed to create install dir: {e}"))?;
 
         let java_home = fnva_dir.join(env_name);
 
@@ -213,9 +210,9 @@ impl JavaInstaller {
         }
 
         // 搜索子目录
-        for entry in fs::read_dir(install_dir).map_err(|e| format!("读取安装目录失败: {e}"))?
+        for entry in fs::read_dir(install_dir).map_err(|e| format!("Failed to read install dir: {e}"))?
         {
-            let entry = entry.map_err(|e| format!("读取目录项失败: {e}"))?;
+            let entry = entry.map_err(|e| format!("Failed to read dir entry: {e}"))?;
             let path = entry.path();
 
             if path.is_dir() && crate::utils::validate_java_home(&path.to_string_lossy()) {
@@ -233,23 +230,22 @@ impl JavaInstaller {
             }
         }
 
-        Err("未找到有效的 Java 安装目录".to_string())
+        Err("No valid Java installation found".to_string())
     }
 
     /// 切换到指定的 Java 版本
     fn switch_to_java(version_name: &str, config: &Config) -> Result<(), String> {
         let java_env = config
             .get_java_env(version_name)
-            .ok_or_else(|| format!("Java 环境 '{version_name}' 不存在"))?;
+            .ok_or_else(|| format!("Java environment '{version_name}' not found"))?;
 
         // 验证 Java Home 路径
         if !crate::utils::validate_java_home(&java_env.java_home) {
-            return Err(format!("无效的 JAVA_HOME 路径: {}", java_env.java_home));
+            return Err(format!("Invalid JAVA_HOME: {}", java_env.java_home));
         }
 
-        println!("🔄 切换到 Java: {} ({})", version_name, java_env.java_home);
-        println!("💡 请在新的终端中运行以下命令来激活环境:");
-        println!("   fnva java use {version_name}");
+        println!("[..] Switching to Java: {} ({})", version_name, java_env.java_home);
+        println!("     Run 'fnva java use {version_name}' in a new terminal to activate");
 
         Ok(())
     }
@@ -257,7 +253,7 @@ impl JavaInstaller {
     /// 列出可安装的 Java 版本
     pub async fn list_installable_versions() -> Result<Vec<String>, String> {
         let config = crate::infrastructure::config::Config::load()
-            .map_err(|e| format!("加载配置失败: {e}"))?;
+            .map_err(|e| format!("Failed to load config: {e}"))?;
 
         let mirrors = config.mirrors.java.clone();
         let downloader = TemplateDownloader::new(mirrors);
@@ -288,7 +284,7 @@ impl JavaInstaller {
         major_versions.sort_by(|a, b| b.cmp(a));
 
         result.push(format!(
-            "🌟 所有可用版本 (带*的为LTS版本):"
+            "Available versions (* = LTS):"
         ));
         result.push("".to_string());
 
@@ -307,7 +303,7 @@ impl JavaInstaller {
 
             if versions_for_major.len() > 8 {
                 result.push(format!(
-                    "        ... 还有 {} 个版本",
+                    "        ... and {} more",
                     versions_for_major.len() - 8
                 ));
             }
@@ -317,7 +313,7 @@ impl JavaInstaller {
         let lts_count: usize = versions.iter().filter(|v| v.is_lts).count();
         result.push("".to_string());
         result.push(format!(
-            "📊 总计: {total_versions} 个版本，其中 {lts_count} 个LTS版本"
+            "Total: {total_versions} versions, {lts_count} LTS"
         ));
 
         Ok(result)
@@ -327,20 +323,20 @@ impl JavaInstaller {
     pub fn uninstall_java(version_name: &str, config: &mut Config) -> Result<(), String> {
         let java_env = config
             .get_java_env(version_name)
-            .ok_or_else(|| format!("Java 环境 '{version_name}' 不存在"))?;
+            .ok_or_else(|| format!("Java environment '{version_name}' not found"))?;
 
         let java_home = &java_env.java_home;
 
         // 检查是否是 fnva 管理的安装
         if !java_home.contains(".fnva/java-packages") {
-            return Err("只能卸载通过 fnva 安装的 Java 版本".to_string());
+            return Err("Only fnva-managed Java installations can be uninstalled".to_string());
         }
 
-        println!("🗑️  正在卸载 Java {version_name}...");
-        println!("📁 删除路径: {java_home}");
+        println!("[..] Uninstalling Java {version_name}...");
+        println!("     Removing: {java_home}");
 
         // 删除安装目录
-        fs::remove_dir_all(java_home).map_err(|e| format!("删除安装目录失败: {e}"))?;
+        fs::remove_dir_all(java_home).map_err(|e| format!("Failed to remove install dir: {e}"))?;
 
         // 从配置中移除
         config.remove_java_env(version_name)?;
@@ -356,24 +352,24 @@ impl JavaInstaller {
 
         config.save()?;
 
-        println!("✅ Java {version_name} 卸载成功");
+        println!("[OK] Java {version_name} uninstalled");
         Ok(())
     }
 
     /// 检查本地是否已有对应的Java包
     fn check_local_java_package(version_spec: &str, config: &Config) -> Result<String, String> {
         let fnva_dir = dirs::home_dir()
-            .ok_or("无法获取用户主目录")?
+            .ok_or("Cannot get home directory")?
             .join(".fnva")
             .join("java-packages");
 
         if !fnva_dir.exists() {
-            return Err("本地Java包目录不存在，请先安装Java".to_string());
+            return Err("Local Java packages directory not found. Install Java first".to_string());
         }
 
         // 如果在配置中已经存在该环境，则不认为是可用的本地包
         if config.get_java_env(version_spec).is_some() {
-            return Err(format!("Java {version_spec} 已经在配置中存在"));
+            return Err(format!("Java {version_spec} already exists in config"));
         }
 
         let java_home = fnva_dir.join(version_spec);
@@ -385,7 +381,7 @@ impl JavaInstaller {
             return Ok(actual_java_home);
         }
 
-        Err(format!("本地未找到Java包: {version_spec}"))
+        Err(format!("Local Java package not found: {version_spec}"))
     }
 }
 
