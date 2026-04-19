@@ -151,14 +151,14 @@ impl CommandHandler {
                 use crate::environments::java::installer::JavaInstaller;
                 use crate::infrastructure::config::Config;
 
-                let mut config = Config::load().map_err(|e| format!("加载配置失败: {e}"))?;
+                let mut config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
                 match JavaInstaller::install_java(&version, &mut config, auto_switch).await {
                     Ok(java_home) => {
-                        println!("✅ Java {version} 安装成功！");
-                        println!("📁 安装路径: {java_home}");
+                        println!("[OK] Java {version} installed successfully");
+                        println!("     Path: {java_home}");
                     }
                     Err(e) => {
-                        return Err(format!("安装失败: {e}"));
+                        return Err(format!("Install failed: {e}"));
                     }
                 }
             }
@@ -581,13 +581,13 @@ impl CommandHandler {
     ) -> Result<String, String> {
         use crate::environments::java::installer::JavaInstaller;
 
-        println!("🔍 正在查询可用的 Java 版本...");
+        println!("Querying available Java versions...");
 
         // 暂时使用旧的实现，确保基本功能可用
         match JavaInstaller::list_installable_versions().await {
             Ok(versions) => {
                 let mut output = String::new();
-                output.push_str("📋 可用的 Java 版本:\n\n");
+                output.push_str("Available Java versions:\n\n");
 
                 if let Some(major) = java_version {
                     let filtered_versions: Vec<String> = versions
@@ -604,16 +604,16 @@ impl CommandHandler {
                         }
                     }
                 } else {
-                    output.push_str("🌟 所有可用版本:\n");
+                    output.push_str("All available versions:\n");
                     for version in versions {
                         output.push_str(&format!("  {version}\n"));
                     }
                 }
 
-                output.push_str("\n💡 使用示例:\n");
-                output.push_str("  fnva java install 21        # 安装 Java 21\n");
-                output.push_str("  fnva java install lts        # 安装最新 LTS 版本\n");
-                output.push_str("  fnva java install latest     # 安装最新版本\n");
+                output.push_str("\nUsage:\n");
+                output.push_str("  fnva java install 21        # Install Java 21\n");
+                output.push_str("  fnva java install lts        # Install latest LTS\n");
+                output.push_str("  fnva java install latest     # Install latest version\n");
 
                 Ok(output)
             }
