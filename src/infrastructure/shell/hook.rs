@@ -233,7 +233,7 @@ impl ShellHook {
     /// 生成 PowerShell Hook 脚本
     pub fn generate_powershell_hook() -> Result<String, String> {
         let script = r#"# fnva PowerShell Hook - Auto environment switching
-# Add this to your PowerShell Profile with: Invoke-Expression (& fnva env --use-on-cd | Out-String)
+# Add this to your PowerShell Profile with: fnva env --use-on-cd | Out-String | Invoke-Expression
 
 # Store original prompt function if it exists
 if (Get-Command prompt -ErrorAction SilentlyContinue) {

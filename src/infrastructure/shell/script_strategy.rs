@@ -446,7 +446,7 @@ try {
 "#;
 
 const POWERSHELL_INTEGRATION_TEMPLATE: &str = r#"
-# fnva environment setup (Invoke-Expression (& fnva env --shell powershell | Out-String))
+# fnva environment setup (fnva env --shell powershell | Out-String | Invoke-Expression)
 
 # --- Auto-restore on startup ---
 $fnvaAutoLoadDone = $false

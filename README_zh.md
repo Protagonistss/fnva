@@ -33,7 +33,7 @@ cargo install fnva
 
 - PowerShell:
   ```powershell
-  Invoke-Expression (& fnva env env --shell powershell | Out-String)
+  fnva env env --shell powershell | Out-String | Invoke-Expression
   ```
 - Bash:
   ```bash

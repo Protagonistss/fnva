@@ -50,7 +50,7 @@ function getShellConfigPath(shell) {
 function getIntegrationLine(shell) {
   switch (shell) {
     case 'powershell':
-      return 'Invoke-Expression (& fnva env env --shell powershell | Out-String)';
+      return 'fnva env env --shell powershell | Out-String | Invoke-Expression';
     case 'bash':
     case 'zsh':
       return 'eval "$(fnva env env --shell bash)"';
