@@ -18,10 +18,35 @@ $searchPaths = @(
     (Join-Path $scriptDir "..\target\release\fnva.exe")
 )
 
+function Invoke-FnvaNative {
+    param([string]$BinPath, [string[]]$CliArgs)
+
+    # For env commands, capture output and re-emit as single string
+    # to avoid PS splitting native exe output into Object[]
+    if ($CliArgs.Length -ge 2 -and $CliArgs[0] -eq 'env' -and $CliArgs[1] -eq 'env') {
+        $output = & $BinPath @CliArgs 2>$null
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        $output -join "`n"
+        return
+    }
+
+    # For switch commands, also capture to avoid Object[] issues
+    if ($CliArgs.Length -ge 3 -and $CliArgs[1] -eq 'use') {
+        $output = & $BinPath @CliArgs 2>$null
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        $output -join "`n"
+        return
+    }
+
+    # Other commands: pass through directly
+    & $BinPath @CliArgs
+    exit $LASTEXITCODE
+}
+
 foreach ($binaryPath in $searchPaths) {
     if (Test-Path $binaryPath) {
-        & $binaryPath @args
-        exit $LASTEXITCODE
+        Invoke-FnvaNative -BinPath $binaryPath -CliArgs $args
+        return
     }
 }
 
