@@ -6,6 +6,7 @@
  */
 
 const https = require('https');
+const http = require('http');
 
 const REPOS = [
   { repo: 'temurin8-binaries', major: 8, lts: true },
@@ -89,6 +90,68 @@ function toToml(entry) {
   return lines.join('\n');
 }
 
+// --- Mirror URL verification ---
+
+const MIRRORS = [
+  { name: 'tsinghua', template: '{base_url}/{major}/jdk/{arch}/{os}/{filename}',
+    base_url: 'https://mirrors.tuna.tsinghua.edu.cn/Adoptium' },
+  { name: 'aliyun', template: '{base_url}/{major}/{tag}/{filename}',
+    base_url: 'https://mirrors.aliyun.com/eclipse/temurin-compliance/temurin' },
+  { name: 'github', template: 'https://github.com/adoptium/temurin{major}-binaries/releases/download/{tag}/{filename}',
+    base_url: '' },
+];
+
+function renderMirrorUrl(template, base_url, major, tag, filename, os, arch) {
+  return template
+    .replace('{base_url}', base_url)
+    .replace('{major}', String(major))
+    .replace('{tag}', tag)
+    .replace('{filename}', filename)
+    .replace('{os}', os)
+    .replace('{arch}', arch);
+}
+
+function headCheck(url) {
+  return new Promise((resolve) => {
+    const mod = url.startsWith('https') ? https : http;
+    const req = mod.request(url, { method: 'HEAD', timeout: 10000 }, (res) => {
+      resolve(res.statusCode >= 200 && res.statusCode < 400);
+    });
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => { req.destroy(); resolve(false); });
+    req.end();
+  });
+}
+
+async function verifyMirrorUrls(entries) {
+  console.log('\n--- Mirror URL verification ---');
+  let hasFailure = false;
+
+  for (const entry of entries) {
+    const filename = entry.assets['linux-x64'];
+    if (!filename) {
+      console.log(`  [SKIP] Java ${entry.major}: no linux-x64 asset`);
+      continue;
+    }
+
+    let anyOk = false;
+    for (const mirror of MIRRORS) {
+      const url = renderMirrorUrl(mirror.template, mirror.base_url, entry.major, entry.tag, filename, 'linux', 'x64');
+      const ok = await headCheck(url);
+      const mark = ok ? 'OK' : 'FAIL';
+      console.log(`  [${mark}] Java ${entry.major} ${mirror.name}: ${url.substring(0, 80)}...`);
+      if (ok) anyOk = true;
+    }
+
+    if (!anyOk) {
+      console.log(`  [ERROR] Java ${entry.major}: ALL mirrors unreachable!`);
+      hasFailure = true;
+    }
+  }
+
+  return !hasFailure;
+}
+
 async function main() {
   console.log('🔍 查询 Adoptium 最新版本...');
 
@@ -124,6 +187,14 @@ async function main() {
 
   fs.writeFileSync(targetPath, toml, 'utf-8');
   console.log(`\n✅ 已更新 ${targetPath}`);
+
+  // Verify all mirror URLs are reachable
+  const ok = await verifyMirrorUrls(entries);
+  if (!ok) {
+    console.error('\n❌ Mirror URL verification failed! Check templates in config.rs');
+    process.exit(1);
+  }
+  console.log('\n✅ All mirror URLs verified');
 }
 
 main().catch((e) => {

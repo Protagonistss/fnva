@@ -7,10 +7,6 @@ pub enum EnvironmentType {
     Java,
     Llm,
     Cc,
-    Maven,
-    Gradle,
-    Python,
-    Node,
 }
 
 impl std::fmt::Display for EnvironmentType {
@@ -19,10 +15,6 @@ impl std::fmt::Display for EnvironmentType {
             EnvironmentType::Java => write!(f, "java"),
             EnvironmentType::Llm => write!(f, "llm"),
             EnvironmentType::Cc => write!(f, "cc"),
-            EnvironmentType::Maven => write!(f, "maven"),
-            EnvironmentType::Gradle => write!(f, "gradle"),
-            EnvironmentType::Python => write!(f, "python"),
-            EnvironmentType::Node => write!(f, "node"),
         }
     }
 }
@@ -73,30 +65,11 @@ pub trait EnvironmentManager: Send + Sync {
     fn get_details(&self, name: &str) -> Result<Option<DynEnvironment>, String>;
 }
 
-/// 环境配置的通用接口
-pub trait EnvironmentConfig {
-    /// 获取环境名称
-    fn name(&self) -> &str;
-
-    /// 获取环境描述
-    fn description(&self) -> &str;
-
-    /// 验证配置是否有效
-    fn validate(&self) -> Result<(), String>;
-}
-
 /// 环境信息的通用接口
 pub trait EnvironmentInfo {
-    /// 获取环境名称
     fn name(&self) -> &str;
-
-    /// 获取环境描述
     fn description(&self) -> &str;
-
-    /// 获取环境是否激活
     fn is_active(&self) -> bool;
-
-    /// 获取环境路径或主要标识
     fn get_identifier(&self) -> &str;
 }
 
@@ -113,38 +86,4 @@ pub struct SwitchResult {
     pub success: bool,
     /// 错误信息（如果有）
     pub error: Option<String>,
-}
-
-/// 环境管理器的统一工厂
-pub struct EnvironmentManagerFactory;
-
-impl EnvironmentManagerFactory {
-    /// 根据类型创建对应的环境管理器
-    pub fn create_manager(
-        env_type: EnvironmentType,
-    ) -> Result<Box<dyn EnvironmentManager>, String> {
-        match env_type {
-            EnvironmentType::Java => Ok(Box::new(
-                crate::environments::java::JavaEnvironmentManager::new(),
-            )),
-            EnvironmentType::Llm => Ok(Box::new(
-                crate::environments::llm::LlmEnvironmentManager::new(),
-            )),
-            EnvironmentType::Cc => Ok(Box::new(
-                crate::environments::cc::CcEnvironmentManager::new(),
-            )),
-            EnvironmentType::Maven => {
-                Err("Maven environment manager not implemented yet".to_string())
-            }
-            EnvironmentType::Gradle => {
-                Err("Gradle environment manager not implemented yet".to_string())
-            }
-            EnvironmentType::Python => {
-                Err("Python environment manager not implemented yet".to_string())
-            }
-            EnvironmentType::Node => {
-                Err("Node environment manager not implemented yet".to_string())
-            }
-        }
-    }
 }

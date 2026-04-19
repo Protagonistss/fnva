@@ -1,6 +1,6 @@
 [package]
 name = "fnva"
-version = "0.0.53"
+version = "0.0.55"
 edition = "2021"
 authors = ["protagonistss"]
 description = "跨平台环境切换工具，支持 Java 和 LLM 环境配置"
@@ -32,25 +32,18 @@ exclude = [
 clap = { version = "4.4", features = ["derive"] }
 toml = "0.8"
 serde = { version = "1.0", features = ["derive"] }
-async-trait = "0.1"
 dirs = "5.0"
-walkdir = "2"
 which = "6.0"
 reqwest = { version = "0.11", features = ["json", "stream"] }
 tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "net"] }
 serde_json = "1.0"
 handlebars = "4.0"
 url = "2.5"
-urlencoding = "2.1"
 futures-util = "0.3"
 indicatif = "0.17"
-tempfile = "3.8"
 zip = "0.6"
-regex = "1.10"
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1.0"
-pathdiff = "0.2"
-uuid = { version = "1.0", features = ["v4"] }
 sha2 = "0.10.9"
 hex = "0.4.3"
 

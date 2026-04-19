@@ -44,7 +44,6 @@ impl CommandHandler {
             Commands::Cc { action } => self.handle_cc_command(action).await,
             Commands::Env { action } => self.handle_env_command(action).await,
             Commands::Config { action } => self.handle_config_command(action).await,
-            Commands::NetworkTest => self.handle_network_test().await,
             Commands::History {
                 env_type,
                 limit,
@@ -183,6 +182,13 @@ impl CommandHandler {
                     .await?;
                 print!("{output}");
             }
+            JavaCommands::Uninstall { name } => {
+                use crate::environments::java::installer::JavaInstaller;
+                use crate::infrastructure::config::Config;
+
+                let mut config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
+                JavaInstaller::uninstall_java(&name, &mut config)?;
+            }
             JavaCommands::Default {
                 name,
                 unset,
@@ -242,10 +248,6 @@ impl CommandHandler {
                         None => println!("No default Java environment set"),
                     }
                 }
-            }
-            // 其他 Java 命令...
-            _ => {
-                return Err("Java command not yet implemented in new architecture".to_string());
             }
         }
         Ok(())
@@ -307,9 +309,39 @@ impl CommandHandler {
                     .await?;
                 print!("{output}");
             }
-            // 其他 LLM 命令...
-            _ => {
-                return Err("LLM command not yet implemented in new architecture".to_string());
+            LlmCommands::Add {
+                name,
+                provider,
+                api_key,
+                base_url,
+                model,
+                temperature,
+                max_tokens,
+                description,
+            } => {
+                use crate::infrastructure::config::{Config, LlmEnvironment};
+
+                let mut config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
+                let env = LlmEnvironment {
+                    name: name.clone(),
+                    provider: provider.clone(),
+                    api_key: api_key.unwrap_or_default(),
+                    base_url: base_url.unwrap_or_default(),
+                    model: model.unwrap_or_default(),
+                    temperature,
+                    max_tokens,
+                    description: description.unwrap_or_default(),
+                };
+                config.add_llm_env(env)?;
+                config.save()?;
+                println!("LLM environment '{name}' added ({provider})");
+            }
+            LlmCommands::Remove { name } => {
+                let output = self
+                    .switcher
+                    .remove_environment(EnvironmentType::Llm, &name)
+                    .await?;
+                print!("{output}");
             }
         }
         Ok(())
@@ -439,9 +471,41 @@ impl CommandHandler {
                     .await?;
                 print!("{output}");
             }
-            // 其他 CC 命令...
-            _ => {
-                return Err("CC command not yet implemented in new architecture".to_string());
+            CcCommands::Add {
+                name,
+                provider,
+                api_key,
+                base_url,
+                model,
+                description,
+            } => {
+                use crate::infrastructure::config::{CcEnvironment, Config};
+
+                let mut config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
+                let env = CcEnvironment {
+                    name: name.clone(),
+                    provider: provider.clone(),
+                    api_key: api_key.unwrap_or_default(),
+                    base_url: base_url.unwrap_or_default(),
+                    sonnet_model: model.unwrap_or_else(|| "claude-sonnet-4-5".to_string()),
+                    opus_model: None,
+                    haiku_model: None,
+                    description: description.unwrap_or_default(),
+                };
+                // Check duplicate
+                if config.cc_environments.iter().any(|e| e.name == env.name) {
+                    return Err(format!("CC environment '{}' already exists", env.name));
+                }
+                config.cc_environments.push(env);
+                config.save()?;
+                println!("CC environment '{name}' added ({provider})");
+            }
+            CcCommands::Remove { name } => {
+                let output = self
+                    .switcher
+                    .remove_environment(EnvironmentType::Cc, &name)
+                    .await?;
+                print!("{output}");
             }
         }
         Ok(())
@@ -540,12 +604,6 @@ impl CommandHandler {
                     .await?;
                 print!("{output}");
             }
-            // 其他环境命令...
-            _ => {
-                return Err(
-                    "Environment command not yet implemented in new architecture".to_string(),
-                );
-            }
         }
         Ok(())
     }
@@ -563,13 +621,6 @@ impl CommandHandler {
                 }
             }
         }
-        Ok(())
-    }
-
-    /// 处理网络测试命令
-    async fn handle_network_test(&self) -> Result<(), String> {
-        // TODO: 实现网络测试
-        println!("Network test not yet implemented in new architecture");
         Ok(())
     }
 

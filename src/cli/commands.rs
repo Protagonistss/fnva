@@ -57,8 +57,6 @@ pub enum Commands {
         #[command(subcommand)]
         action: ConfigCommands,
     },
-    /// 网络连接诊断
-    NetworkTest,
     /// 环境历史
     History {
         /// 环境类型
@@ -92,14 +90,6 @@ pub enum JavaCommands {
         /// 输出格式
         #[arg(long)]
         json: bool,
-    },
-    /// 使用指定 Java 版本执行命令
-    Run {
-        /// 环境名称
-        name: String,
-        /// Java 命令参数
-        #[arg(trailing_var_arg = true)]
-        args: Vec<String>,
     },
     /// 扫描系统中的 Java 安装
     Scan,
@@ -174,14 +164,6 @@ pub enum JavaCommands {
         #[arg(long)]
         json: bool,
     },
-    /// 安装 Shell 集成
-    ShellInstall,
-    /// 安装 Shell Hook
-    InstallHook,
-    /// 卸载 Shell Hook
-    UninstallHook,
-    /// 列出可安装的 Java 版本
-    ListInstallable,
 }
 
 /// LLM 环境管理命令
@@ -236,8 +218,6 @@ pub enum LlmCommands {
         /// 环境名称
         name: String,
     },
-    /// 列出支持的提供商
-    Providers,
     /// 显示当前激活的 LLM 环境
     Current {
         /// JSON 格式输出
@@ -354,30 +334,6 @@ pub enum EnvCommands {
         #[arg(long)]
         json: bool,
     },
-    /// 添加环境
-    Add {
-        /// 环境类型
-        #[arg(short = 't', long)]
-        env_type: String,
-        /// 环境名称
-        #[arg(short, long)]
-        name: String,
-        /// 配置文件路径
-        #[arg(long)]
-        config: Option<String>,
-        /// 交互式配置
-        #[arg(long)]
-        interactive: bool,
-    },
-    /// 删除环境
-    Remove {
-        /// 环境类型
-        #[arg(short = 't', long)]
-        env_type: String,
-        /// 环境名称
-        #[arg(short, long)]
-        name: String,
-    },
     /// 获取当前环境
     Current {
         /// 环境类型
@@ -386,12 +342,6 @@ pub enum EnvCommands {
         /// JSON 格式输出
         #[arg(long)]
         json: bool,
-    },
-    /// 扫描环境
-    Scan {
-        /// 环境类型
-        #[arg(short = 't', long)]
-        env_type: String,
     },
     /// 生成 shell 集成脚本
     ShellIntegration {
@@ -414,11 +364,9 @@ pub fn parse_environment_type(env_type_str: &str) -> Result<EnvironmentType, Str
         "java" => Ok(EnvironmentType::Java),
         "llm" => Ok(EnvironmentType::Llm),
         "cc" => Ok(EnvironmentType::Cc),
-        "maven" => Ok(EnvironmentType::Maven),
-        "gradle" => Ok(EnvironmentType::Gradle),
-        "python" => Ok(EnvironmentType::Python),
-        "node" | "nodejs" => Ok(EnvironmentType::Node),
-        _ => Err(format!("Unsupported environment type: {env_type_str}")),
+        other => Err(format!(
+            "Unsupported environment type: '{other}'. Supported: java, llm, cc"
+        )),
     }
 }
 

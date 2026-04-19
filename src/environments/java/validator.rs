@@ -1,3 +1,4 @@
+use crate::utils::validate_java_home;
 use crate::utils::validation::ValidationUtils;
 use std::path::Path;
 
@@ -11,7 +12,7 @@ impl JavaValidator {
         ValidationUtils::validate_environment_name(name)?;
 
         // 验证 Java Home 路径
-        if !ValidationUtils::validate_java_home(java_home) {
+        if !validate_java_home(java_home) {
             return Err(format!("Invalid JAVA_HOME path: {java_home}"));
         }
 

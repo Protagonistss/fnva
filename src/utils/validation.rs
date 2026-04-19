@@ -29,31 +29,6 @@ pub fn validate_java_home(java_home: &str) -> bool {
 pub struct ValidationUtils;
 
 impl ValidationUtils {
-    /// 验证 Java HOME 路径是否有效
-    pub fn validate_java_home(java_home: &str) -> bool {
-        let java_path = std::path::Path::new(java_home);
-
-        // 检查路径是否存在
-        if !java_path.exists() {
-            return false;
-        }
-
-        // 检查 bin 目录是否存在
-        let bin_path = java_path.join("bin");
-        if !bin_path.exists() {
-            return false;
-        }
-
-        // 检查 java.exe 或 java 是否存在
-        let java_exe = if cfg!(target_os = "windows") {
-            bin_path.join("java.exe")
-        } else {
-            bin_path.join("java")
-        };
-
-        java_exe.exists()
-    }
-
     /// 验证环境名称是否有效
     pub fn validate_environment_name(name: &str) -> Result<(), String> {
         if name.is_empty() {
@@ -220,8 +195,7 @@ mod tests {
 
     #[test]
     fn test_validate_java_home() {
-        assert!(!ValidationUtils::validate_java_home("/nonexistent/path"));
-        // 注意：这个测试需要根据实际环境调整
+        assert!(!validate_java_home("/nonexistent/path"));
     }
 
     #[test]
