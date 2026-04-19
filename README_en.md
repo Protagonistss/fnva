@@ -1,122 +1,58 @@
+<div align="center">
+
 # fnva - Fast Environment Version Alter
 
-[中文](README_zh.md) · [Docs](docs/) · [Releases](https://github.com/Protagonistss/fnva/releases)
+**Fast, cross-platform environment version switcher**
 
-fnva is a cross-platform environment switcher for Java, Claude Code (CC), and general LLM setups. It is written in Rust, starts instantly, and works via shell snippets without background daemons.
+[中文文档](README_zh.md) · [Architecture](docs/architecture/core-design.md) · [Releases](https://github.com/Protagonistss/fnva/releases)
 
-## Features
+[![npm version](https://img.shields.io/npm/v/fnva)](https://www.npmjs.com/package/fnva)
+[![crates.io](https://img.shields.io/crates/v/fnva)](https://crates.io/crates/fnva)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-- Manage multiple Java/CC/LLM profiles with per-shell activation and global defaults.
-- Auto-generate shell init scripts for PowerShell, Bash, Zsh, Fish, CMD.
-- **Auto-restore on new terminal** — after shell integration, opening a new terminal automatically restores the last active CC/Java environment.
-- Scan and dedupe local JDKs, switch by name in one command.
-- Configure CC endpoints and LLM API keys in one place, export as env vars.
-- Single static binary; no runtime dependencies.
+<!-- TODO: Add demo.gif here -->
+
+</div>
+
+fnva is a cross-platform environment switcher for Java, Claude Code (CC), and general LLM setups. Written in Rust, it starts instantly, has zero runtime dependencies, and works via shell snippets without background daemons.
+
+## Core Features
+
+- ⚡ **Fast & Zero Dependencies**: Single static binary.
+- 🔄 **Session & Global Switching**: Per-shell activation and global defaults.
+- 🐚 **Broad Shell Support**: PowerShell, Bash, Zsh, Fish, CMD.
+- 🧠 **Auto-restore**: Opening a new terminal automatically restores your last active environment.
+- ☕ **Smart Java Management**: Scan and dedupe local JDKs.
+- 🤖 **Unified LLM Setup**: Configure LLM API keys in one place.
+
+## Documentation Navigation
+
+- [Core Architecture](docs/architecture/core-design.md) (Chinese)
+- [Roadmap](docs/development/roadmap.md) (Chinese)
+- [Contributing](docs/development/contributing.md) (Chinese)
+- [Shell Integration Guide](docs/user-guide/shell-integration.md)
 
 ## Installation
 
 ```bash
-# npm (recommended for quick start)
+# npm (recommended)
 npm install -g fnva
 
 # Cargo
 cargo install fnva
 ```
 
-Or grab a platform binary from [Releases](https://github.com/Protagonistss/fnva/releases) and put it on your `PATH`.
+Or download from [Releases](https://github.com/Protagonistss/fnva/releases) and add to `PATH`.
 
-## Shell integration
+## Quick Start
 
-After installing shell integration, opening a new terminal automatically restores your last active CC/Java environment, and `fnva <type> use <name>` takes effect without wrapping in `eval`.
-
-Enable auto-loading on shell startup:
-
-- PowerShell:
-  ```powershell
-  fnva env env --shell powershell | Out-String | Invoke-Expression
-  ```
-- Bash:
-  ```bash
-  eval "$(fnva env env --shell bash)"
-  ```
-- Zsh:
-  ```bash
-  eval "$(fnva env env --shell bash)"
-  ```
-- Fish:
-  ```fish
-  fnva env env --shell fish | source
-  ```
-
-## Usage
-
-### Java
-- Scan: `fnva java scan`
-- List: `fnva java list`
-- Use (session): `eval "$(fnva java use jdk-17)"`
-- Set default: `fnva java default jdk-17`
-- Add manual entry: `fnva java add --name jdk-8 --home "C:\\Java\\jdk1.8.0" --description "Legacy JDK"`
-
-### Claude Code (CC)
-- List: `fnva cc list`
-- Add (GLM-4 example):
-  ```bash
-  fnva cc add glmcc '{
-    "provider": "anthropic",
-    "api_key": "your-api-key",
-    "base_url": "https://open.bigmodel.cn/api/anthropic",
-    "model": "glm-4.6",
-    "description": "GLM-4"
-  }'
-  ```
-- Use: `eval "$(fnva cc use glmcc)"`
-
-### LLM
-- Add: `fnva llm add --name openai-dev --provider openai --api-key "sk-..." --model gpt-4`
-- Use: `eval "$(fnva llm use openai-dev)"`
+- Shell Integration: `eval "$(fnva env env --shell bash)"`
+- Scan Java: `fnva java scan`
+- Switch Java: `fnva java use jdk-17` (with shell integration)
+- Switch CC profile: `fnva cc use glmcc`
 
 ## Configuration
-
-- Location: `~/.fnva/config.toml` (Windows: `%USERPROFILE%\.fnva\config.toml`)
-- State: `~/.fnva/current_envs.toml` — tracks the active environment per type, used for auto-restore
-- Example:
-  ```toml
-  custom_java_scan_paths = ["D:\\Environment\\Java", "/opt/java"]
-
-  [[java_environments]]
-  name = "jdk-21"
-  java_home = "C:\\Program Files\\Java\\jdk-21"
-  description = "Oracle JDK 21"
-
-  [[cc_environments]]
-  name = "glmcc"
-  provider = "anthropic"
-  api_key = "sk-..."
-  base_url = "https://open.bigmodel.cn/api/anthropic"
-  model = "glm-4.6"
-  ```
-
-## Commands quick reference
-
-| Command | Purpose |
-| --- | --- |
-| `fnva env shell-integration` | Generate shell integration script (with auto-restore) |
-| `fnva <type> list` | List environments (type: java/cc/llm) |
-| `fnva <type> use <name>` | Emit snippet to activate an environment |
-| `fnva <type> current` | Show current environment |
-| `fnva <type> default <name>` | Get/set default (java/cc) |
-| `fnva <type> remove <name>` | Remove an environment |
-| `fnva java scan` | Scan local JDKs |
-| `fnva config sync` | Sync/upgrade config schema |
-
-## Build and release
-
-- Format/lint: `cargo fmt && cargo clippy --all-targets -- -D warnings`
-- Test: `cargo test`
-- Build: `cargo build --release`
-- Platform bundles: `npm run build:platforms`
-- CI: tag `v*` to build binaries, publish to GitHub Releases, npm (`NPM_TOKEN`), and crates.io (`CARGO_TOKEN`).
+Config is stored at `~/.fnva/config.toml` (Windows: `%USERPROFILE%\.fnva\config.toml`).
 
 ## License
-
 MIT License.

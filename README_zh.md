@@ -1,17 +1,37 @@
-# fnva - 快速环境版本切换工具
+<div align="center">
 
-[English](README_en.md) · [文档](docs/) · [Releases](https://github.com/Protagonistss/fnva/releases)
+# fnva - Fast Environment Version Alter
 
-fnva 是一个跨平台的环境切换工具，面向 Java、Claude Code (CC) 和通用 LLM 场景。Rust 编写，启动快、零依赖，通过生成 shell 片段完成环境激活，无常驻进程。
+**极速、跨平台的命令行环境版本切换工具**
 
-## 特性
+[English](README_en.md) · [架构文档](docs/architecture/core-design.md) · [Releases](https://github.com/Protagonistss/fnva/releases)
 
-- 管理多套 Java/CC/LLM 配置，支持会话激活与全局默认。
-- 自动生成 PowerShell/Bash/Zsh/Fish/CMD 初始化脚本。
-- **新终端自动恢复** — 安装 shell 集成后，打开新终端自动恢复上次使用的 CC/Java 环境，无需手动 `fnva use`。
-- 扫描本地 JDK、去重并按名称一键切换。
-- 统一配置 CC 端点和 LLM API 密钥，导出环境变量。
-- 单一静态二进制，无额外运行时依赖。
+[![npm version](https://img.shields.io/npm/v/fnva)](https://www.npmjs.com/package/fnva)
+[![crates.io](https://img.shields.io/crates/v/fnva)](https://crates.io/crates/fnva)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+<!-- TODO: Add demo.gif here -->
+
+</div>
+
+fnva 是一个面向 Java、Claude Code (CC) 和通用 LLM 场景的跨平台环境切换工具。基于 Rust 编写，具备**极速启动**、**零依赖**的特点，通过生成 shell 片段完成环境激活，完全**无常驻后台进程**。
+
+## 核心特性
+
+- ⚡ **极速与零依赖**: 单一静态二进制文件。
+- 🔄 **会话与全局切换**: 支持当前终端会话级别的切换，也可设置全局默认环境。
+- 🐚 **全平台 Shell 支持**: 原生支持 PowerShell、Bash、Zsh、Fish、CMD。
+- 🧠 **自动恢复**: 打开新终端自动恢复上次使用的环境。
+- ☕ **智能 Java 管理**: 扫描本地 JDK，一键切换。
+- 🤖 **统一的大模型管理**: 集中配置 LLM API 密钥。
+
+## 文档导航
+
+- [架构设计与原理](docs/architecture/core-design.md)
+- [开发路线图](docs/development/roadmap.md)
+- [贡献指南](docs/development/contributing.md)
+- [Shell 集成与自动恢复](docs/user-guide/shell-integration.md)
+- [终端乱码修复指南](docs/user-guide/encoding-fixes.md)
 
 ## 安装
 
@@ -27,95 +47,24 @@ cargo install fnva
 
 ## Shell 集成
 
-安装 shell 集成后，打开新终端会自动恢复上次使用的 CC/Java 环境变量，且 `fnva <type> use <name>` 无需 `eval` 包裹即可生效。
+安装 shell 集成后，打开新终端会自动恢复上次使用的 CC/Java 环境变量，且 `fnva <type> use <name>` 无需 `eval` 包裹即可生效。详细请参考 [Shell 集成指南](docs/user-guide/shell-integration.md)。
 
-在 shell 启动时自动加载：
-
-- PowerShell:
-  ```powershell
-  fnva env env --shell powershell | Out-String | Invoke-Expression
-  ```
-- Bash:
-  ```bash
-  eval "$(fnva env env --shell bash)"
-  ```
-- Zsh:
-  ```bash
-  eval "$(fnva env env --shell bash)"
-  ```
-- Fish:
-  ```fish
-  fnva env env --shell fish | source
-  ```
-
-## 使用
+## 使用快速入门
 
 ### Java
 - 扫描: `fnva java scan`
 - 列表: `fnva java list`
-- 切换(会话): `eval "$(fnva java use jdk-17)"`
+- 切换: `eval "$(fnva java use jdk-17)"`
 - 设置默认: `fnva java default jdk-17`
-- 手动添加: `fnva java add --name jdk-8 --home "C:\\Java\\jdk1.8.0" --description "Legacy JDK"`
 
-### Claude Code (CC)
+### Claude Code (CC) & LLM
 - 列表: `fnva cc list`
-- 添加 (GLM-4 示例):
-  ```bash
-  fnva cc add glmcc '{
-    "provider": "anthropic",
-    "api_key": "your-api-key",
-    "base_url": "https://open.bigmodel.cn/api/anthropic",
-    "model": "glm-4.6",
-    "description": "GLM-4"
-  }'
-  ```
 - 切换: `eval "$(fnva cc use glmcc)"`
-
-### LLM
-- 添加: `fnva llm add --name openai-dev --provider openai --api-key "sk-..." --model gpt-4`
-- 切换: `eval "$(fnva llm use openai-dev)"`
+- 添加 LLM: `fnva llm add --name openai-dev --provider openai --api-key "sk-..." --model gpt-4`
 
 ## 配置
 
-- 路径: `~/.fnva/config.toml` (Windows: `%USERPROFILE%\.fnva\config.toml`)
-- 环境状态: `~/.fnva/current_envs.toml` — 记录每种类型的当前活跃环境，用于新终端自动恢复
-- 示例:
-  ```toml
-  custom_java_scan_paths = ["D:\\Environment\\Java", "/opt/java"]
-
-  [[java_environments]]
-  name = "jdk-21"
-  java_home = "C:\\Program Files\\Java\\jdk-21"
-  description = "Oracle JDK 21"
-
-  [[cc_environments]]
-  name = "glmcc"
-  provider = "anthropic"
-  api_key = "sk-..."
-  base_url = "https://open.bigmodel.cn/api/anthropic"
-  model = "glm-4.6"
-  ```
-
-## 命令速查
-
-| 命令 | 作用 |
-| --- | --- |
-| `fnva env shell-integration` | 生成 shell 集成脚本（含自动恢复） |
-| `fnva <type> list` | 列出环境 (type: java/cc/llm) |
-| `fnva <type> use <name>` | 输出激活环境的脚本 |
-| `fnva <type> current` | 查看当前环境 |
-| `fnva <type> default <name>` | 查看/设置默认 (java/cc) |
-| `fnva <type> remove <name>` | 删除环境 |
-| `fnva java scan` | 扫描本机 JDK |
-| `fnva config sync` | 同步/升级配置结构 |
-
-## 构建与发布
-
-- 格式/静态检查: `cargo fmt && cargo clippy --all-targets -- -D warnings`
-- 测试: `cargo test`
-- 构建: `cargo build --release`
-- 跨平台打包: `npm run build:platforms`
-- CI: 推送 `v*` tag 触发构建，发布到 GitHub Releases、npm (`NPM_TOKEN`) 与 crates.io (`CARGO_TOKEN`)。
+配置文件位于 `~/.fnva/config.toml` (Windows: `%USERPROFILE%\.fnva\config.toml`)。
 
 ## 许可证
 
