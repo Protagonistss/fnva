@@ -101,10 +101,6 @@ function isEnvironmentSwitchCommand(args) {
          args[1] === 'use';
 }
 
-function hasDirectExecuteFlag(args) {
-  return args.includes('--exec') || args.includes('-e');
-}
-
 function getShellArg(args) {
   const idx = args.indexOf('--shell');
   if (idx !== -1 && idx + 1 < args.length) {
@@ -126,36 +122,6 @@ function hasSessionFlag(args) {
 
 function hasApplyFlag(args) {
   return args.includes('--apply');
-}
-
-function hasAutoExecuteFlag(args) {
-  return args.includes('--auto');
-}
-
-function removeAutoFlag(args) {
-  const index = args.indexOf('--auto');
-  if (index > -1) {
-    return args.slice(0, index).concat(args.slice(index + 1));
-  }
-  return args;
-}
-
-function createTempScriptFile(script, envType, envName) {
-  try {
-    const os = require('os');
-    const path = require('path');
-
-    const prefix = `fnva_${envType}_${envName}`;
-    const scriptFile = EncodingUtils.createTempPowerShellScript(script, prefix);
-
-    console.log('');
-    console.log('[INFO] 环境已切换到当前进程。要在新的 PowerShell 窗口中使用此环境，运行：');
-    console.log(`   ${scriptFile}`);
-    console.log('   或者: fnva', envType, 'use', envName, '--auto');
-
-  } catch (error) {
-    console.warn('[WARN] 无法创建临时脚本文件:', error.message);
-  }
 }
 
 function parseEnvironmentScript(scriptContent) {

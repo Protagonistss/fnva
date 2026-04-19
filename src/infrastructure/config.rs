@@ -75,16 +75,10 @@ pub struct Config {
     #[serde(default)]
     pub cc_environments: Vec<CcEnvironment>,
     #[serde(default)]
-    pub repositories: Repositories,
-    /// 镜像配置（模板化 URL）
-    #[serde(default)]
     pub mirrors: MirrorsConfig,
-    /// Java 下载源配置（旧版，保留向后兼容）
+    /// Java 版本注册表路径（可选，默认使用编译嵌入的版本）
     #[serde(default)]
-    pub java_download_sources: JavaDownloadSources,
-    /// Java 版本缓存配置
-    #[serde(default)]
-    pub java_version_cache: JavaVersionCache,
+    pub java_versions_path: Option<String>,
     /// 下载配置
     #[serde(default)]
     pub download: DownloadConfig,
@@ -102,64 +96,6 @@ pub struct Config {
     /// 明确移除的 Java 环境名称（防止重新扫描添加）
     #[serde(default)]
     pub removed_java_names: Vec<String>,
-}
-
-/// Java 下载源配置（简化版）
-#[derive(Debug, Default, Serialize, Deserialize)]
-pub struct JavaDownloadSources {
-    /// 主要下载源名称：github 或 aliyun
-    #[serde(default = "default_primary_source")]
-    pub primary: String,
-    /// 备用下载源名称列表
-    #[serde(default)]
-    pub fallback: Vec<String>,
-    /// 自定义下载源列表
-    #[serde(default)]
-    pub sources: Vec<JavaDownloadSourceConfig>,
-    /// 是否仅使用公共版本列表（禁用动态查询）
-    #[serde(default = "default_registry_only")]
-    pub registry_only: bool,
-    /// 自定义公共版本列表路径（可选）
-    #[serde(default)]
-    pub java_versions_path: Option<String>,
-}
-
-fn default_primary_source() -> String {
-    "tsinghua".to_string() // 默认使用清华镜像，避免被限流
-}
-
-/// Java 下载源配置项
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct JavaDownloadSourceConfig {
-    pub name: String,
-    pub url: String,
-    #[serde(default = "default_priority")]
-    pub priority: u32,
-    #[serde(default)]
-    pub enabled: bool,
-    #[serde(default)]
-    pub region: Option<String>,
-    #[serde(default)]
-    pub source_type: String,
-}
-
-fn default_priority() -> u32 {
-    10
-}
-
-fn default_registry_only() -> bool {
-    false
-}
-
-/// Java 版本缓存配置
-#[derive(Debug, Default, Serialize, Deserialize)]
-pub struct JavaVersionCache {
-    /// 缓存生存时间（秒）
-    #[serde(default = "default_cache_ttl")]
-    pub ttl: u64,
-    /// 是否启用缓存
-    #[serde(default = "default_cache_enabled")]
-    pub enabled: bool,
 }
 
 /// 下载配置
@@ -200,72 +136,6 @@ fn default_connect_timeout_sec() -> u64 {
 
 fn default_read_timeout_sec() -> u64 {
     300
-}
-
-fn default_cache_ttl() -> u64 {
-    3600 // 1 小时
-}
-
-fn default_cache_enabled() -> bool {
-    true
-}
-
-/// 仓库配置（向后兼容）
-#[derive(Debug, Default, Serialize, Deserialize)]
-pub struct Repositories {
-    #[serde(default = "default_java_downloader")]
-    pub java: JavaDownloaderConfig,
-    #[serde(default = "default_maven_repositories")]
-    pub maven: Vec<String>,
-}
-
-/// Java 下载器配置
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct JavaDownloaderConfig {
-    /// 下载器类型：github 或 aliyun
-    #[serde(default = "default_java_downloader_type")]
-    pub downloader: String,
-    /// 备用下载器列表
-    #[serde(default)]
-    pub fallback: Vec<String>,
-    /// 是否启用自动回退
-    #[serde(default = "default_java_fallback_enabled")]
-    pub enable_fallback: bool,
-    /// 传统仓库URL列表（向后兼容）
-    #[serde(default)]
-    pub repositories: Vec<String>,
-}
-
-fn default_java_downloader() -> JavaDownloaderConfig {
-    JavaDownloaderConfig {
-        downloader: "tsinghua".to_string(),
-        fallback: vec!["aliyun".to_string(), "github".to_string()],
-        enable_fallback: true,
-        repositories: default_java_repositories(),
-    }
-}
-
-fn default_java_downloader_type() -> String {
-    "tsinghua".to_string()
-}
-
-fn default_java_fallback_enabled() -> bool {
-    true
-}
-
-fn default_java_repositories() -> Vec<String> {
-    vec![
-        "https://api.adoptium.net/v3".to_string(),
-        "https://api.adoptopenjdk.net/v3".to_string(),
-    ]
-}
-
-fn default_maven_repositories() -> Vec<String> {
-    vec![
-        "https://maven.aliyun.com/repository/public".to_string(),
-        "https://search.maven.org/solrsearch/select".to_string(),
-        "https://repo1.maven.org/maven2".to_string(),
-    ]
 }
 
 /// 默认 CC 环境配置
@@ -397,20 +267,9 @@ impl Config {
             java_environments: Vec::new(),
             llm_environments: Vec::new(),
             cc_environments: default_cc_environments(),
-            repositories: Repositories {
-                java: default_java_downloader(),
-                maven: default_maven_repositories(),
-            },
             mirrors: MirrorsConfig::default(),
-            java_download_sources: JavaDownloadSources {
-                primary: "tsinghua".to_string(),
-                fallback: vec!["aliyun".to_string(), "github".to_string()],
-                sources: Vec::new(),
-                registry_only: false,
-                java_versions_path: None,
-            },
-            java_version_cache: JavaVersionCache::default(),
             download: DownloadConfig::default(),
+            java_versions_path: None,
             current_java_env: None,
             default_java_env: None,
             default_cc_env: Some("anthropic-cc".to_string()),
@@ -631,29 +490,7 @@ impl Config {
         // 补全下载配置为默认值（清华源）
         let default_config = Config::new();
 
-        // 补全 repositories.java（保持向后兼容）
-        if config.repositories.java.downloader != default_config.repositories.java.downloader
-            || config.repositories.java.fallback != default_config.repositories.java.fallback
-        {
-            config.repositories.java.downloader =
-                default_config.repositories.java.downloader.clone();
-            config.repositories.java.fallback = default_config.repositories.java.fallback.clone();
-            updated = true;
-        }
-
-        // 补全 java_download_sources
-        if config.java_download_sources.primary != default_config.java_download_sources.primary
-            || config.java_download_sources.fallback
-                != default_config.java_download_sources.fallback
-        {
-            config.java_download_sources.primary =
-                default_config.java_download_sources.primary.clone();
-            config.java_download_sources.fallback =
-                default_config.java_download_sources.fallback.clone();
-            updated = true;
-        }
-
-        // 补全 mirrors 配置（新增字段）
+        // 补全 mirrors 配置
         if config.mirrors.java.is_empty() {
             config.mirrors = default_config.mirrors.clone();
             updated = true;

@@ -1,6 +1,14 @@
-use crate::infrastructure::remote::remote_manager::AdoptiumAvailableResponse;
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+/// Adoptium API 可用版本响应
+#[derive(Debug, Clone, Deserialize)]
+pub struct AdoptiumAvailableResponse {
+    pub available_releases: Vec<u32>,
+    pub available_lts_releases: Vec<u32>,
+    pub most_recent_lts: u32,
+    pub most_recent_feature_version: u32,
+}
 
 /// Java 版本信息
 #[derive(Debug, Clone, Serialize, Deserialize)]

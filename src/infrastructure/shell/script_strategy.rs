@@ -113,12 +113,6 @@ impl ScriptGenerationStrategy for PowerShellStrategy {
         let template_name = match env_type {
             EnvironmentType::Java => "powershell_java_switch",
             EnvironmentType::Llm | EnvironmentType::Cc => "powershell_llm_switch",
-            _ => {
-                return Err(AppError::ScriptGeneration {
-                    shell_type: "PowerShell".to_string(),
-                    reason: format!("不支持的环境类型: {env_type:?}"),
-                })
-            }
         };
 
         let mut data = json!({
@@ -178,12 +172,6 @@ impl ScriptGenerationStrategy for BashStrategy {
         let template_name = match env_type {
             EnvironmentType::Java => "bash_java_switch",
             EnvironmentType::Llm | EnvironmentType::Cc => "bash_llm_switch",
-            _ => {
-                return Err(AppError::ScriptGeneration {
-                    shell_type: "Bash".to_string(),
-                    reason: format!("不支持的环境类型: {env_type:?}"),
-                })
-            }
         };
 
         let mut data = json!({
@@ -242,12 +230,6 @@ impl ScriptGenerationStrategy for FishStrategy {
         let template_name = match env_type {
             EnvironmentType::Java => "fish_java_switch",
             EnvironmentType::Llm | EnvironmentType::Cc => "fish_llm_switch",
-            _ => {
-                return Err(AppError::ScriptGeneration {
-                    shell_type: "Fish".to_string(),
-                    reason: format!("不支持的环境类型: {env_type:?}"),
-                })
-            }
         };
 
         let mut data = json!({
@@ -306,12 +288,6 @@ impl ScriptGenerationStrategy for CmdStrategy {
         let template_name = match env_type {
             EnvironmentType::Java => "cmd_java_switch",
             EnvironmentType::Llm | EnvironmentType::Cc => "cmd_llm_switch",
-            _ => {
-                return Err(AppError::ScriptGeneration {
-                    shell_type: "CMD".to_string(),
-                    reason: format!("不支持的环境类型: {env_type:?}"),
-                })
-            }
         };
 
         let mut data = json!({
@@ -891,6 +867,7 @@ echo fnva {{#if (eq env_type "Cc")}}cc{{else}}llm{{/if}} use {{env_name}} >> "%U
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::infrastructure::shell::ScriptGenerator;
     use serde_json::json;
 
     #[test]
@@ -930,10 +907,14 @@ mod tests {
 
     #[test]
     fn test_template_engine() {
-        // 测试 helper 函数
-        let template = "{{escape_backslash path}}";
-        handlebars::Handlebars::new()
-            .render_template(template, &json!({"path": "C:\\Test"}))
+        // 通过 ScriptGenerator 测试自定义 helper 是否正常注册
+        let generator = ScriptGenerator::new().unwrap();
+        let config = json!({"java_home": "C:\\Program Files\\Java\\jdk17", "java_bin": "C:\\Program Files\\Java\\jdk17\\bin", "env_name": "jdk17"});
+        let script = generator
+            .generate_switch_script(EnvironmentType::Java, "jdk17", &config, Some(ShellType::PowerShell))
             .unwrap();
+
+        // escape_backslash 应将单反斜杠替换为双反斜杠
+        assert!(script.contains("C:\\\\Program Files\\\\Java\\\\jdk17"), "escape_backslash helper should escape backslashes: {script}");
     }
 }

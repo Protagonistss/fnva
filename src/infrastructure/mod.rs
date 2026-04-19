@@ -1,14 +1,10 @@
 pub mod config;
-pub mod config_repository;
 pub mod installer;
-pub mod network;
 pub mod remote;
 pub mod shell;
 
 pub use config::*;
-pub use config_repository::*;
 pub use installer::*;
-pub use network::*;
 // Platform 从 shell 模块导出（操作系统平台）
 pub use shell::platform::*;
 // Shell 模块其他导出

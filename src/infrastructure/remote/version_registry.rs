@@ -23,7 +23,7 @@ impl VersionRegistry {
     pub fn load() -> Result<Self, String> {
         // 1. Config explicit path
         if let Ok(cfg) = crate::infrastructure::config::Config::load() {
-            if let Some(path) = cfg.java_download_sources.java_versions_path.as_ref() {
+            if let Some(path) = cfg.java_versions_path.as_ref() {
                 if let Ok(Some(reg)) = try_read_toml(Ok(PathBuf::from(path))) {
                     return Ok(reg);
                 }

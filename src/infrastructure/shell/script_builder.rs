@@ -170,9 +170,6 @@ impl ScriptBuilder {
                     }
                 }
             }
-            _ => {
-                return Err(format!("Environment type {env_type:?} not yet supported"));
-            }
         }
 
         Ok(script)
@@ -265,9 +262,6 @@ impl ScriptBuilder {
                     }
                 }
             }
-            _ => {
-                return Err(format!("Environment type {env_type:?} not yet supported"));
-            }
         }
 
         Ok(script)
@@ -312,9 +306,6 @@ impl ScriptBuilder {
             EnvironmentType::Cc => {
                 // CC environments use Anthropic variables, not OpenAI
                 // No OpenAI variables should be set for Claude Code environments
-            }
-            _ => {
-                return Err(format!("Environment type {env_type:?} not yet supported"));
             }
         }
 
@@ -379,9 +370,6 @@ impl ScriptBuilder {
             EnvironmentType::Cc => {
                 // CC environments use Anthropic variables, not OpenAI
                 // No OpenAI variables should be set for Claude Code environments
-            }
-            _ => {
-                return Err(format!("Environment type {env_type:?} not yet supported"));
             }
         }
 

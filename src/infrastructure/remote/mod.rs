@@ -1,30 +1,18 @@
-pub mod aliyun_downloader;
 pub mod cache;
 pub mod download;
-pub mod github_downloader;
 pub mod java_downloader;
 pub mod mirror_utils;
 pub mod platform;
-pub mod remote_manager;
-pub mod repositories;
 pub mod template_downloader;
-pub mod tsinghua_downloader;
 pub mod version_registry;
 
 pub use platform::Platform;
-pub use remote_manager::*;
-pub use repositories::*;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-// 具体类型导出以保持API可用性
-pub use aliyun_downloader::AliyunJavaDownloader;
-pub use github_downloader::{GitHubAsset, GitHubJavaDownloader, GitHubJavaRelease};
 pub use java_downloader::{DownloadError, DownloadTarget, JavaDownloader};
-pub use remote_manager::{JavaVersionInfo, MavenArtifactInfo, MavenVersionInfo, RemoteManager};
 pub use template_downloader::TemplateDownloader;
-pub use tsinghua_downloader::TsinghuaJavaDownloader;
 pub use version_registry::{RegistryEntry, VersionRegistry};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,8 +29,8 @@ pub struct UnifiedJavaVersion {
     pub patch: Option<u32>,
     pub release_name: String,
     pub tag_name: String,
-    pub download_urls: HashMap<String, DownloadSource>, // os-arch -> source
+    pub download_urls: HashMap<String, DownloadSource>,
     pub is_lts: bool,
     pub published_at: String,
-    pub checksums: Option<HashMap<String, String>>, // os-arch -> checksum
+    pub checksums: Option<HashMap<String, String>>,
 }

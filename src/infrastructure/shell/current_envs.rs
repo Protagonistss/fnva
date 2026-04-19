@@ -60,7 +60,6 @@ impl CurrentEnvsFile {
             EnvironmentType::Cc => self.cc = value,
             EnvironmentType::Java => self.java = value,
             EnvironmentType::Llm => self.llm = value,
-            _ => {} // Maven, Gradle, Python, Node — not tracked yet
         }
     }
 
