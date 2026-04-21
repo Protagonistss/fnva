@@ -8,14 +8,21 @@ function fnva_autoload_default
 
     set envs_file "$HOME/.fnva/current_envs.toml"
     if test -f "$envs_file"; and command -v fnva >/dev/null 2>&1
+        set _restored ""
         for line in (cat "$envs_file")
             set -l match (string match -r '^\s*(\w+)\s*=\s*"([^"]*)"' -- $line)
             test (count $match) -ge 3; or continue
             set key $match[2]
             set value $match[3]
             test -n "$value"; or continue
-            set env_script (fnva $key use $value 2>/dev/null)
-            if test -n "$env_script"; eval "$env_script"; end
+            set env_script (_FNVA_QUIET=1 command fnva $key use $value 2>/dev/null)
+            if test -n "$env_script"
+                eval "$env_script"
+                set _restored "$_restored $value"
+            end
+        end
+        if test -n "$_restored"
+            echo "[fnva] restored:$_restored"
         end
     end
 end

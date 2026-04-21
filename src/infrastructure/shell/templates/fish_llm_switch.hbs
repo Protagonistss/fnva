@@ -10,6 +10,18 @@ set -gx ANTHROPIC_AUTH_TOKEN "{{config.anthropic_auth_token}}"
 set -gx ANTHROPIC_BASE_URL "{{config.anthropic_base_url}}"
 {{/if}}
 
+{{#if config.opus_model}}
+set -gx ANTHROPIC_DEFAULT_OPUS_MODEL "{{config.opus_model}}"
+{{/if}}
+
+{{#if config.sonnet_model}}
+set -gx ANTHROPIC_DEFAULT_SONNET_MODEL "{{config.sonnet_model}}"
+{{/if}}
+
+{{#if config.haiku_model}}
+set -gx ANTHROPIC_DEFAULT_HAIKU_MODEL "{{config.haiku_model}}"
+{{/if}}
+
 {{#if config.default_model}}
 set -gx ANTHROPIC_DEFAULT_SONNET_MODEL "{{config.default_model}}"
 {{/if}}
@@ -49,19 +61,14 @@ set -gx API_TIMEOUT_MS "30000"
 {{/if}}
 
 # Verify the switch
-echo "✅ Switched to {{#if (eq env_type "Cc")}}Claude Code (CC){{else}}LLM{{/if}} environment: {{env_name}}"
+if not set -q _FNVA_QUIET
+    echo "[OK] Switched to {{#if (eq env_type "Cc")}}Claude Code (CC){{else}}LLM{{/if}} environment: {{env_name}}"
 
-{{#if config.anthropic_auth_token}}
-echo "🔑 Anthropic Auth Token: ✓"
-{{/if}}
+    {{#if config.anthropic_auth_token}}
+    echo "[KEY] Anthropic Auth Token: [SET]"
+    {{/if}}
 
-{{#if config.anthropic_base_url}}
-echo "🌐 Base URL: {{config.anthropic_base_url}}"
-{{/if}}
-
-{{#if config.default_model}}
-echo "🤖 Default Model: {{config.default_model}}"
-{{/if}}
-
-# Add to command history
-echo "fnva {{#if (eq env_type "Cc")}}cc{{else}}llm{{/if}} use {{env_name}}" >> ~/.fnva/history 2>/dev/null || true
+    {{#if config.anthropic_base_url}}
+    echo "[URL] Base URL: {{config.anthropic_base_url}}"
+    {{/if}}
+fi
