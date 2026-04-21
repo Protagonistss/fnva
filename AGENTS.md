@@ -36,3 +36,27 @@
 
 ## 对话
 - 优先使用中文
+
+## Shell 模板修改检查清单
+
+修改 `src/infrastructure/shell/script_strategy.rs` 中的内联模板或 `src/infrastructure/shell/templates/*.hbs` 文件时，**必须**遵守以下规则：
+
+### 同步规则
+1. **Rust 内联模板和 .hbs 文件必须同步修改** — 运行时使用 Rust 内联 `const` 字符串，不读取 `.hbs` 文件。两边不一致会导致参考文档与实际行为偏差。
+2. **所有 Shell 类型必须同步** — Bash/Zsh、Fish、PowerShell、CMD 四套模板的同一类修改必须同步完成，不能只改一种。
+
+### `_FNVA_QUIET` 生命周期
+3. **Autoload 必须使用 `eval "$(command fnva ...)"` 内联写法** — 不创建中间变量（`env_script`、`_t` 等），zsh 会打印所有变量赋值。正确模式：`_FNVA_QUIET=1 eval "$(command fnva ...)" >/dev/null 2>&1` → `unset _FNVA_QUIET`。
+4. **Autoload 中的 `fnva` 调用必须用 `command fnva`** — 防止 wrapper 函数递归。
+
+### 验证步骤
+5. `cargo test` 通过
+6. `cargo build --release` 通过
+7. 手动验证：交互式 `fnva cc use <name>` 输出确认信息
+8. 手动验证：新终端 autoload 仅输出 `[fnva] restored:...` 一行
+
+### 模板架构参考
+- 12 个模板常量定义在 `script_strategy.rs:388-873`
+- Switch 模板：Java 用 `*_java_switch`，LLM/CC 共用 `*_llm_switch`
+- Integration 模板：autoload 函数 → autoload 调用 → wrapper 函数（顺序不可调换）
+- 详细规格见 `docs/spec/shell-template-system.md` 和 `docs/spec/shell-integration.md`

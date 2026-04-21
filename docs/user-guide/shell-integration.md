@@ -1,6 +1,6 @@
 # Shell 集成
 
-fnva 支持自动配置 shell 集成，让你可以直接使用 `fnva java use v8` 这样的命令，无需手动配置。
+fnva 支持自动配置 shell 集成，让你可以直接使用 `fnva java use 17` 这样的命令，无需手动配置。
 
 ## 安装时的自动配置
 
@@ -13,74 +13,29 @@ npm install -g fnva
 fnva 会自动：
 1. 检测你使用的 shell
 2. 询问是否安装 shell 集成
-3. 自动添加 fnva 函数到你的 shell 配置文件
+3. 自动添加集成脚本到你的 shell 配置文件
 
 ## 支持的 Shell
 
-| Shell | 配置文件 | 状态 |
-|-------|----------|------|
-| PowerShell | `$PROFILE` | ✅ 支持 |
-| Bash | `~/.bashrc` | ✅ 支持 |
-| Zsh | `~/.zshrc` | ✅ 支持 |
-| Fish | `~/.config/fish/config.fish` | ✅ 支持 |
+| Shell | 配置文件 | 集成命令 |
+|-------|----------|---------|
+| Bash | `~/.bashrc` | `eval "$(fnva env env --shell bash)"` |
+| Zsh | `~/.zshrc` | `eval "$(fnva env env --shell bash)"` |
+| Fish | `~/.config/fish/config.fish` | `fnva env env --shell fish \| source` |
+| PowerShell | `$PROFILE` | `fnva env env --shell powershell \| Out-String \| Invoke-Expression` |
+
+注意：命令是 `fnva env env`（两个 `env`），第一个是顶级子命令，第二个是生成集成脚本的子命令。
 
 ## 手动安装
 
-如果你跳过了自动安装，或者想重新安装：
+如果自动安装失败，在 shell 配置文件中添加对应的一行集成命令即可：
 
-```bash
-npm run install-shell
-```
-
-## 手动配置
-
-如果自动安装失败，你也可以手动配置：
-
-### PowerShell
-
-将以下内容添加到 `$PROFILE`：
-
-```powershell
-function fnva {
-    if ($args.Count -ge 2 -and ($args[0] -eq "java" -or $args[0] -eq "llm" -or $args[0] -eq "cc") -and ($args[1] -eq "use")) {
-        $tempFile = "$env:TEMP\fnva_script_$(Get-Random).ps1"
-
-        $env:FNVAAUTOMODE = "1"
-        try {
-            cmd.exe /c "set FNVA_AUTO_MODE=%FNVAAUTOMODE% && fnva $args" | Out-File -FilePath $tempFile -Encoding UTF8
-            & $tempFile
-        } finally {
-            $env:FNVAAUTOMODE = ""
-            Remove-Item $tempFile -ErrorAction SilentlyContinue
-        }
-    } else {
-        $env:FNVAAUTOMODE = "1"
-        try {
-            cmd.exe /c "set FNVA_AUTO_MODE=%FNVAAUTOMODE% && fnva $args"
-        } finally {
-            $env:FNVAAUTOMODE = ""
-        }
-    }
-}
-```
-
-### Bash/Zsh
+### Bash / Zsh
 
 将以下内容添加到 `~/.bashrc` 或 `~/.zshrc`：
 
 ```bash
-fnva() {
-    if [[ $# -ge 2 && ("$1" == "java" || "$1" == "llm" || "$1" == "cc") && "$2" == "use" ]]; then
-        local temp_file=$(mktemp)
-        chmod +x "$temp_file"
-
-        FNVA_AUTO_MODE=1 fnva "$@" > "$temp_file"
-        source "$temp_file"
-        rm -f "$temp_file"
-    else
-        FNVA_AUTO_MODE=1 fnva "$@"
-    fi
-}
+eval "$(fnva env env --shell bash)"
 ```
 
 ### Fish
@@ -88,17 +43,15 @@ fnva() {
 将以下内容添加到 `~/.config/fish/config.fish`：
 
 ```fish
-function fnva
-    if test (count $argv) -ge 2; and string match -q -r "^(java|llm|cc)$" $argv[1]; and test $argv[2] = "use"
-        set temp_file (mktemp)
-        chmod +x $temp_file
-        env FNVA_AUTO_MODE=1 fnva $argv > $temp_file
-        source $temp_file
-        rm -f $temp_file
-    else
-        env FNVA_AUTO_MODE=1 fnva $argv
-    end
-end
+fnva env env --shell fish | source
+```
+
+### PowerShell
+
+将以下内容添加到 `$PROFILE`：
+
+```powershell
+fnva env env --shell powershell | Out-String | Invoke-Expression
 ```
 
 ## 使用方法
@@ -110,7 +63,13 @@ end
 fnva java list
 
 # 切换 Java 环境
-fnva java use v8
+fnva java use 17
+
+# 列出 CC 环境
+fnva cc list
+
+# 切换 CC 环境
+fnva cc use glmcc
 
 # 验证切换
 java --version
@@ -118,51 +77,50 @@ java --version
 
 ## 工作原理
 
-1. **环境检测**: fnva 检测到 `FNVA_AUTO_MODE=1` 环境变量时，会自动进入 Node.js 模式
-2. **脚本生成**: 生成适合当前 shell 的环境切换脚本
-3. **自动执行**: 对于环境切换命令，自动执行生成的脚本
+集成脚本会在 shell 启动时加载，提供两个功能：
 
-## 禁用 Shell 集成
-
-如果你想禁用自动安装：
-
-```bash
-# 安装时跳过 shell 集成
-FNVA_SKIP_SHELL_SETUP=1 npm install -g fnva
-```
+1. **Autoload（自动恢复）**: 读取 `~/.fnva/current_envs.toml`，恢复上次使用的环境。新终端打开时只显示一行汇总，如 `[fnva] restored: glmcc 17`。
+2. **Wrapper 函数**: 拦截 `fnva java/llm/cc use` 命令，将 fnva 输出的脚本在当前 shell 中执行，使环境变量在当前终端会话生效。
 
 ## 卸载
 
 要移除 shell 集成：
 
-1. 编辑你的 shell 配置文件
-2. 删除 `fnva 自动化函数 - 由 npm 安装自动添加` 相关的所有内容
-3. 重新加载 shell 配置
+1. 编辑你的 shell 配置文件（`~/.zshrc`、`~/.bashrc`、`$PROFILE` 等）
+2. 删除包含 `fnva env env` 或 `fnva auto integration` 的相关行
+3. 重新加载 shell 配置：`source ~/.zshrc`
 
 ## 故障排除
 
-### PowerShell 中不生效
-
-```powershell
-# 重新加载配置
-. $PROFILE
-
-# 检查函数是否定义
-Get-Command fnva
-```
-
-### Bash/Zsh 中不生效
+### 检查集成是否生效
 
 ```bash
-# 重新加载配置
-source ~/.bashrc  # 或 source ~/.zshrc
-
-# 检查函数是否定义
+# Bash/Zsh — 应显示 "fnva is a function"
 type fnva
+
+# Fish — 应显示函数定义
+functions fnva
+
+# PowerShell — 应显示函数内容
+Get-Content Function:\fnva
+```
+
+### 重新安装集成
+
+```bash
+# 删除旧的集成脚本，重新加载
+# Bash/Zsh: 从 ~/.zshrc 或 ~/.bashrc 中删除旧行，然后添加：
+eval "$(fnva env env --shell bash)"
 ```
 
 ### 环境切换失败
 
-1. 确保你使用的是 npm 版本的 fnva，而不是系统中的其他版本
-2. 检查 Node.js 是否正确安装：`node --version`
-3. 查看详细错误信息：`FNVA_AUTO_MODE=1 fnva java use v8`
+1. 确认 fnva 已安装：`fnva --version`
+2. 确认 wrapper 函数已加载：`type fnva`
+3. 查看当前集成脚本内容：`fnva env env --shell bash`
+4. 检查 current_envs.toml：`cat ~/.fnva/current_envs.toml`
+
+### Autoload 输出噪音
+
+如果新终端启动时显示多余的变量赋值或切换信息，说明集成脚本版本过旧。
+删除 shell 配置文件中的旧集成代码，重新添加 `eval "$(fnva env env --shell bash)"` 即可。
