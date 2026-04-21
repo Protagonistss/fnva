@@ -433,7 +433,7 @@ function fnva-AutoLoadDefault {
             $value = $Matches[2]
             if ([string]::IsNullOrWhiteSpace($value)) { continue }
             $env:_FNVA_QUIET = "1"
-            $envScript = & fnva $key use $value 2>$null
+            $envScript = & fnva.cmd $key use $value 2>$null
             Remove-Item Env:\_FNVA_QUIET
             if ($envScript) { Invoke-Expression $envScript; $restored += $value }
         }
@@ -513,7 +513,7 @@ fnva_autoload_default() {
             value=$(echo "$value" | tr -d '[:space:]' | tr -d '"')
             [[ -z "$value" ]] && continue
             local env_script
-            env_script=$(_FNVA_QUIET=1 fnva "$key" use "$value" 2>/dev/null)
+            env_script=$(_FNVA_QUIET=1 command fnva "$key" use "$value" 2>/dev/null)
             if [[ -n "$env_script" ]]; then
                 eval "$env_script"
                 _restored="$_restored $value"
@@ -692,7 +692,7 @@ function fnva_autoload_default
             set value $match[3]
             test -n "$value"; or continue
             set -x _FNVA_QUIET 1
-            set env_script (fnva $key use $value 2>/dev/null)
+            set env_script (command fnva $key use $value 2>/dev/null)
             set -e _FNVA_QUIET
             if test -n "$env_script"; eval "$env_script"; set -a _restored $value; end
         end
