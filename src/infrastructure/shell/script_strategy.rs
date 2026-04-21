@@ -433,7 +433,7 @@ function fnva-AutoLoadDefault {
             $value = $Matches[2]
             if ([string]::IsNullOrWhiteSpace($value)) { continue }
             $env:_FNVA_QUIET = "1"
-            $envScript = & fnva.cmd $key use $value 2>$null
+            $envScript = (& fnva.cmd $key use $value 2>$null) -join "`n"
             Remove-Item Env:\_FNVA_QUIET
             if ($envScript) { Invoke-Expression $envScript; $restored += $value }
         }
