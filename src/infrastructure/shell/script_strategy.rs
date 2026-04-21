@@ -434,8 +434,8 @@ function fnva-AutoLoadDefault {
             if ([string]::IsNullOrWhiteSpace($value)) { continue }
             $env:_FNVA_QUIET = "1"
             $envScript = (& fnva.cmd $key use $value 2>$null) -join "`n"
-            Remove-Item Env:\_FNVA_QUIET
             if ($envScript) { Invoke-Expression $envScript; $restored += $value }
+            Remove-Item Env:\_FNVA_QUIET
         }
         if ($restored.Count -gt 0) {
             Write-Host "[fnva] restored: $($restored -join ' ')" -ForegroundColor DarkGray
@@ -515,7 +515,8 @@ fnva_autoload_default() {
             local env_script
             env_script=$(_FNVA_QUIET=1 command fnva "$key" use "$value" 2>/dev/null)
             if [[ -n "$env_script" ]]; then
-                eval "$env_script"
+                _FNVA_QUIET=1 eval "$env_script"
+                unset _FNVA_QUIET
                 _restored="$_restored $value"
             fi
         done < "$envs_file"
@@ -691,10 +692,8 @@ function fnva_autoload_default
             set key $match[2]
             set value $match[3]
             test -n "$value"; or continue
-            set -x _FNVA_QUIET 1
-            set env_script (command fnva $key use $value 2>/dev/null)
-            set -e _FNVA_QUIET
-            if test -n "$env_script"; eval "$env_script"; set -a _restored $value; end
+            set env_script (_FNVA_QUIET=1 command fnva $key use $value 2>/dev/null)
+            if test -n "$env_script"; _FNVA_QUIET=1 eval "$env_script"; set -e _FNVA_QUIET; set -a _restored $value; end
         end
         if test (count $_restored) -gt 0
             echo "[fnva] restored: "(string join ' ' $_restored)
