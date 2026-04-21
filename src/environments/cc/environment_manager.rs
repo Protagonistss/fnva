@@ -229,6 +229,9 @@ impl EnvironmentManager for CcEnvironmentManager {
                 config["opus_model"] = serde_json::Value::String(opus_model.clone());
                 config["sonnet_model"] = serde_json::Value::String(sonnet_model.clone());
                 config["haiku_model"] = serde_json::Value::String(haiku_model.clone());
+
+                // Add default_model for template compatibility
+                config["default_model"] = serde_json::Value::String(sonnet_model.clone());
             }
         }
 
