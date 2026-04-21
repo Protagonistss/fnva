@@ -415,7 +415,7 @@ if (-not $env:_FNVA_QUIET) {
 "#;
 
 const POWERSHELL_INTEGRATION_TEMPLATE: &str = r#"
-# fnva environment setup (fnva env --shell powershell | Out-String | Invoke-Expression)
+# fnva environment setup (fnva env env --shell powershell | Out-String | Invoke-Expression)
 
 # --- Auto-restore on startup ---
 $fnvaAutoLoadDone = $false
@@ -497,7 +497,7 @@ echo "fnva java use {{env_name}}" >> ~/.fnva/history 2>/dev/null || true
 
 const BASH_INTEGRATION_TEMPLATE: &str = r#"
 #!/bin/bash
-# fnva environment setup (eval "$(fnva env --shell bash)")
+# fnva environment setup (eval "$(fnva env env --shell bash)")
 
 # --- Auto-restore on startup ---
 _fnva_autoload_done=false
@@ -671,7 +671,7 @@ echo "fnva java use {{env_name}}" >> ~/.fnva/history 2>/dev/null || true
 "#;
 
 const FISH_INTEGRATION_TEMPLATE: &str = r#"
-# fnva environment setup (fnva env --shell fish | source)
+# fnva environment setup (fnva env env --shell fish | source)
 
 # --- Auto-restore on startup ---
 set -g _fnva_autoload_done false
