@@ -189,6 +189,7 @@ impl JavaInstaller {
         fs::create_dir_all(&fnva_dir).map_err(|e| format!("Failed to create install dir: {e}"))?;
 
         let java_home = fnva_dir.join(env_name);
+        fs::create_dir_all(&java_home).map_err(|e| format!("Failed to create version dir: {e}"))?;
 
         // 解压文件
         if archive_path.to_str().unwrap().ends_with(".zip") {
@@ -209,24 +210,36 @@ impl JavaInstaller {
             return Ok(install_dir.to_string_lossy().to_string());
         }
 
-        // 搜索子目录
+        // macOS tar.gz --strip-components=1 后结构为 Contents/Home/bin/java
+        // 直接检查这个路径
+        let contents_home = install_dir.join("Contents").join("Home");
+        if contents_home.exists()
+            && crate::utils::validate_java_home(&contents_home.to_string_lossy())
+        {
+            return Ok(contents_home.to_string_lossy().to_string());
+        }
+
+        // 搜索子目录（Windows .zip 和 Linux tar.gz 均可能有子目录）
         for entry in fs::read_dir(install_dir).map_err(|e| format!("Failed to read install dir: {e}"))?
         {
             let entry = entry.map_err(|e| format!("Failed to read dir entry: {e}"))?;
             let path = entry.path();
 
-            if path.is_dir() && crate::utils::validate_java_home(&path.to_string_lossy()) {
+            if !path.is_dir() {
+                continue;
+            }
+
+            // 直接子目录就是 JAVA_HOME（Windows .zip: jdk-17.0.9+9/bin/java.exe）
+            if crate::utils::validate_java_home(&path.to_string_lossy()) {
                 return Ok(path.to_string_lossy().to_string());
             }
 
-            // 对于 macOS，检查 Contents/Home
-            if cfg!(target_os = "macos") {
-                let contents_home = path.join("Contents").join("Home");
-                if contents_home.exists()
-                    && crate::utils::validate_java_home(&contents_home.to_string_lossy())
-                {
-                    return Ok(contents_home.to_string_lossy().to_string());
-                }
+            // macOS .zip/.tar.gz 子目录下可能有 Contents/Home
+            let sub_contents_home = path.join("Contents").join("Home");
+            if sub_contents_home.exists()
+                && crate::utils::validate_java_home(&sub_contents_home.to_string_lossy())
+            {
+                return Ok(sub_contents_home.to_string_lossy().to_string());
             }
         }
 

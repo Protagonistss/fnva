@@ -383,7 +383,35 @@ impl EnvironmentManager for JavaEnvironmentManager {
         let java_installation = self
             .installations
             .get(name)
-            .ok_or_else(|| format!("Java environment '{name}' not found"))?;
+            .ok_or_else(|| {
+                let mut msg = format!("Java environment '{name}' not found.");
+                if std::path::Path::new(&dirs::home_dir().map_or(String::new(), |h| format!("{}/.fnva/java-packages/{name}", h.to_string_lossy()))).exists() {
+                    msg.push_str(&format!("\n  Hint: Java files exist at ~/.fnva/java-packages/{name}, but no config entry found."));
+                    msg.push_str("\n  Try: fnva java scan  or  fnva java install <version>");
+                } else {
+                    msg.push_str("\n  Available environments: fnva java list");
+                    msg.push_str("\n  Install a new one: fnva java install <version>");
+                }
+                msg
+            })?;
+
+        // 验证 java_home 路径是否真实存在且包含有效的 Java 安装
+        if !crate::utils::validate_java_home(&java_installation.java_home) {
+            let java_home = &java_installation.java_home;
+            let path_exists = std::path::Path::new(java_home).exists();
+
+            let mut msg = if path_exists {
+                format!("Java installation at '{java_home}' is incomplete or corrupted.")
+            } else {
+                format!("Java installation path does not exist: {java_home}")
+            };
+            msg.push_str("\n  The configured path is invalid. Possible causes:");
+            msg.push_str("\n    - Installation was moved or deleted");
+            msg.push_str("\n    - Download was incomplete");
+            msg.push_str("\n  Fix: fnva java install <version> to reinstall");
+
+            return Err(msg);
+        }
 
         let shell_type =
             shell_type.unwrap_or_else(crate::infrastructure::shell::platform::detect_shell);
