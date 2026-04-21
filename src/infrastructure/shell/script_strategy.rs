@@ -512,13 +512,13 @@ fnva_autoload_default() {
             key=$(echo "$key" | tr -d '[:space:]')
             value=$(echo "$value" | tr -d '[:space:]' | tr -d '"')
             [[ -z "$value" ]] && continue
-            local env_script
-            env_script=$(_FNVA_QUIET=1 command fnva "$key" use "$value" 2>/dev/null)
-            if [[ -n "$env_script" ]]; then
-                _FNVA_QUIET=1 eval "$env_script" >/dev/null
-                unset _FNVA_QUIET
-                _restored="$_restored $value"
-            fi
+            local _t
+            _t="$(mktemp)"
+            _FNVA_QUIET=1 command fnva "$key" use "$value" > "$_t" 2>/dev/null
+            source "$_t" >/dev/null 2>&1
+            rm -f "$_t"
+            unset _FNVA_QUIET
+            _restored="$_restored $value"
         done < "$envs_file"
         if [[ -n "$_restored" ]]; then
             echo "[fnva] restored:$_restored"
@@ -692,8 +692,12 @@ function fnva_autoload_default
             set key $match[2]
             set value $match[3]
             test -n "$value"; or continue
-            set env_script (_FNVA_QUIET=1 command fnva $key use $value 2>/dev/null)
-            if test -n "$env_script"; _FNVA_QUIET=1 eval "$env_script" >/dev/null; set -e _FNVA_QUIET; set -a _restored $value; end
+            set _t (mktemp)
+            _FNVA_QUIET=1 command fnva $key use $value > $_t 2>/dev/null
+            source $_t >/dev/null 2>&1
+            rm -f $_t
+            set -e _FNVA_QUIET
+            set -a _restored $value
         end
         if test (count $_restored) -gt 0
             echo "[fnva] restored: "(string join ' ' $_restored)

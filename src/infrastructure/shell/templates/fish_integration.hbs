@@ -15,12 +15,12 @@ function fnva_autoload_default
             set key $match[2]
             set value $match[3]
             test -n "$value"; or continue
-            set env_script (_FNVA_QUIET=1 command fnva $key use $value 2>/dev/null)
-            if test -n "$env_script"
-                _FNVA_QUIET=1 eval "$env_script" >/dev/null
-                set -e _FNVA_QUIET
-                set _restored "$_restored $value"
-            end
+            set _t (mktemp)
+            _FNVA_QUIET=1 command fnva $key use $value > $_t 2>/dev/null
+            source $_t >/dev/null 2>&1
+            rm -f $_t
+            set -e _FNVA_QUIET
+            set _restored "$_restored $value"
         end
         if test -n "$_restored"
             echo "[fnva] restored:$_restored"
