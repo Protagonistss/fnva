@@ -512,11 +512,7 @@ fnva_autoload_default() {
             key=$(echo "$key" | tr -d '[:space:]')
             value=$(echo "$value" | tr -d '[:space:]' | tr -d '"')
             [[ -z "$value" ]] && continue
-            local _t
-            _t="$(mktemp)"
-            _FNVA_QUIET=1 command fnva "$key" use "$value" > "$_t" 2>/dev/null
-            source "$_t" >/dev/null 2>&1
-            rm -f "$_t"
+            _FNVA_QUIET=1 eval "$(command fnva "$key" use "$value" 2>/dev/null)" >/dev/null 2>&1
             unset _FNVA_QUIET
             _restored="$_restored $value"
         done < "$envs_file"
