@@ -225,6 +225,16 @@ function generateSimpleScript(envVars, envType, envName) {
       lines.push(`Write-Host "ANTHROPIC_AUTH_TOKEN: [已设置]" -ForegroundColor Yellow`);
     }
 
+    if (envVars.ANTHROPIC_BASE_URL) {
+      lines.push(`$env:ANTHROPIC_BASE_URL = "${envVars.ANTHROPIC_BASE_URL}"`);
+      lines.push(`Write-Host "ANTHROPIC_BASE_URL: ${envVars.ANTHROPIC_BASE_URL}" -ForegroundColor Yellow`);
+    }
+
+    if (envVars.ANTHROPIC_DEFAULT_SONNET_MODEL) {
+      lines.push(`$env:ANTHROPIC_DEFAULT_SONNET_MODEL = "${envVars.ANTHROPIC_DEFAULT_SONNET_MODEL}"`);
+      lines.push(`Write-Host "ANTHROPIC_DEFAULT_SONNET_MODEL: ${envVars.ANTHROPIC_DEFAULT_SONNET_MODEL}" -ForegroundColor Yellow`);
+    }
+
     if (envVars.OPENAI_API_KEY) {
       lines.push(`$env:OPENAI_API_KEY = "${envVars.OPENAI_API_KEY}"`);
       lines.push(`Write-Host "OPENAI_API_KEY: [已设置]" -ForegroundColor Yellow`);
@@ -246,6 +256,16 @@ function generateSimpleScript(envVars, envType, envName) {
     if (envVars.ANTHROPIC_AUTH_TOKEN) {
       lines.push(`export ANTHROPIC_AUTH_TOKEN="${envVars.ANTHROPIC_AUTH_TOKEN}"`);
       lines.push(`echo "ANTHROPIC_AUTH_TOKEN: [已设置]"`);
+    }
+
+    if (envVars.ANTHROPIC_BASE_URL) {
+      lines.push(`export ANTHROPIC_BASE_URL="${envVars.ANTHROPIC_BASE_URL}"`);
+      lines.push(`echo "ANTHROPIC_BASE_URL: ${envVars.ANTHROPIC_BASE_URL}"`);
+    }
+
+    if (envVars.ANTHROPIC_DEFAULT_SONNET_MODEL) {
+      lines.push(`export ANTHROPIC_DEFAULT_SONNET_MODEL="${envVars.ANTHROPIC_DEFAULT_SONNET_MODEL}"`);
+      lines.push(`echo "ANTHROPIC_DEFAULT_SONNET_MODEL: ${envVars.ANTHROPIC_DEFAULT_SONNET_MODEL}"`);
     }
 
     if (envVars.OPENAI_API_KEY) {

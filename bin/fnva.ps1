@@ -30,12 +30,10 @@ function Invoke-FnvaNative {
         return
     }
 
-    # For switch commands, also capture to avoid Object[] issues
+    # For switch commands, directly invoke without capturing to preserve output
     if ($CliArgs.Length -ge 3 -and $CliArgs[1] -eq 'use') {
-        $output = & $BinPath @CliArgs 2>$null
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        $output -join "`n"
-        return
+        & $BinPath @CliArgs
+        exit $LASTEXITCODE
     }
 
     # Other commands: pass through directly
