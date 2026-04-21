@@ -515,7 +515,7 @@ fnva_autoload_default() {
             local env_script
             env_script=$(_FNVA_QUIET=1 command fnva "$key" use "$value" 2>/dev/null)
             if [[ -n "$env_script" ]]; then
-                _FNVA_QUIET=1 eval "$env_script"
+                _FNVA_QUIET=1 eval "$env_script" >/dev/null
                 unset _FNVA_QUIET
                 _restored="$_restored $value"
             fi
@@ -693,7 +693,7 @@ function fnva_autoload_default
             set value $match[3]
             test -n "$value"; or continue
             set env_script (_FNVA_QUIET=1 command fnva $key use $value 2>/dev/null)
-            if test -n "$env_script"; _FNVA_QUIET=1 eval "$env_script"; set -e _FNVA_QUIET; set -a _restored $value; end
+            if test -n "$env_script"; _FNVA_QUIET=1 eval "$env_script" >/dev/null; set -e _FNVA_QUIET; set -a _restored $value; end
         end
         if test (count $_restored) -gt 0
             echo "[fnva] restored: "(string join ' ' $_restored)

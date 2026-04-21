@@ -17,7 +17,7 @@ function fnva_autoload_default
             test -n "$value"; or continue
             set env_script (_FNVA_QUIET=1 command fnva $key use $value 2>/dev/null)
             if test -n "$env_script"
-                _FNVA_QUIET=1 eval "$env_script"
+                _FNVA_QUIET=1 eval "$env_script" >/dev/null
                 set -e _FNVA_QUIET
                 set _restored "$_restored $value"
             end
