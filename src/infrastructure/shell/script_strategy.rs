@@ -402,13 +402,15 @@ $env:FNVA_CURRENT_JAVA = "{{env_name}}"
 $env:FNVA_ENV_TYPE = "Java"
 
 # Verify the switch
-Write-Host "[OK] Switched to Java environment: {{env_name}}" -ForegroundColor Green
-Write-Host "[DIR] JAVA_HOME: $env:JAVA_HOME" -ForegroundColor Yellow
-Write-Host "[INFO] Java Version:" -ForegroundColor Cyan
-try {
-    & "{{escape_backslash java_bin}}\\java.exe" -version 2>&1 | ForEach-Object { Write-Host "   $_" -ForegroundColor Gray }
-} catch {
-    Write-Host "   Failed to get Java version" -ForegroundColor Red
+if (-not $env:_FNVA_QUIET) {
+    Write-Host "[OK] Switched to Java environment: {{env_name}}" -ForegroundColor Green
+    Write-Host "[DIR] JAVA_HOME: $env:JAVA_HOME" -ForegroundColor Yellow
+    Write-Host "[INFO] Java Version:" -ForegroundColor Cyan
+    try {
+        & "{{escape_backslash java_bin}}\\java.exe" -version 2>&1 | ForEach-Object { Write-Host "   $_" -ForegroundColor Gray }
+    } catch {
+        Write-Host "   Failed to get Java version" -ForegroundColor Red
+    }
 }
 "#;
 
@@ -423,14 +425,20 @@ function fnva-AutoLoadDefault {
 
     $envsFile = "$env:USERPROFILE\.fnva\current_envs.toml"
     if ((Test-Path $envsFile) -and (Get-Command fnva -ErrorAction SilentlyContinue)) {
+        $restored = @()
         $lines = Get-Content $envsFile -ErrorAction SilentlyContinue
         foreach ($line in $lines) {
             if ($line -notmatch '^\s*(\w+)\s*=\s*"([^"]*)"') { continue }
             $key = $Matches[1]
             $value = $Matches[2]
             if ([string]::IsNullOrWhiteSpace($value)) { continue }
+            $env:_FNVA_QUIET = "1"
             $envScript = & fnva $key use $value 2>$null
-            if ($envScript) { Invoke-Expression $envScript }
+            Remove-Item Env:\_FNVA_QUIET
+            if ($envScript) { Invoke-Expression $envScript; $restored += $value }
+        }
+        if ($restored.Count -gt 0) {
+            Write-Host "[fnva] restored: $($restored -join ' ')" -ForegroundColor DarkGray
         }
     }
 }
@@ -472,13 +480,15 @@ export FNVA_CURRENT_JAVA="{{env_name}}"
 export FNVA_ENV_TYPE="Java"
 
 # Verify the switch
-echo "[OK] Switched to Java environment: {{env_name}}"
-echo "[DIR] JAVA_HOME: $JAVA_HOME"
-echo "[INFO] Java Version:"
-if [ -x "{{java_bin}}/java" ]; then
-    "{{java_bin}}/java" -version 2>&1 | head -n 1 | sed 's/^/   /'
-else
-    echo "   Failed to get Java version"
+if [[ -z "$_FNVA_QUIET" ]]; then
+    echo "[OK] Switched to Java environment: {{env_name}}"
+    echo "[DIR] JAVA_HOME: $JAVA_HOME"
+    echo "[INFO] Java Version:"
+    if [ -x "{{java_bin}}/java" ]; then
+        "{{java_bin}}/java" -version 2>&1 | head -n 1 | sed 's/^/   /'
+    else
+        echo "   Failed to get Java version"
+    fi
 fi
 
 # Add to shell history
@@ -497,14 +507,21 @@ fnva_autoload_default() {
 
     local envs_file="$HOME/.fnva/current_envs.toml"
     if [[ -f "$envs_file" ]] && command -v fnva >/dev/null 2>&1; then
+        local _restored=""
         while IFS='=' read -r key value; do
             key=$(echo "$key" | tr -d '[:space:]')
             value=$(echo "$value" | tr -d '[:space:]' | tr -d '"')
             [[ -z "$value" ]] && continue
             local env_script
-            env_script=$(fnva "$key" use "$value" 2>/dev/null)
-            if [[ -n "$env_script" ]]; then eval "$env_script"; fi
+            env_script=$(_FNVA_QUIET=1 fnva "$key" use "$value" 2>/dev/null)
+            if [[ -n "$env_script" ]]; then
+                eval "$env_script"
+                _restored="$_restored $value"
+            fi
         done < "$envs_file"
+        if [[ -n "$_restored" ]]; then
+            echo "[fnva] restored:$_restored"
+        fi
     fi
 }
 
@@ -565,15 +582,17 @@ $env:API_TIMEOUT_MS = "30000"
 {{/if}}
 
 # Verify the switch
-Write-Host "[OK] Switched to {{#if (eq env_type "Cc")}}Claude Code (CC){{else}}LLM{{/if}} environment: {{env_name}}" -ForegroundColor Green
+if (-not $env:_FNVA_QUIET) {
+    Write-Host "[OK] Switched to {{#if (eq env_type "Cc")}}Claude Code (CC){{else}}LLM{{/if}} environment: {{env_name}}" -ForegroundColor Green
 
-{{#if config.anthropic_auth_token}}
-Write-Host "[KEY] Anthropic Auth Token: [SET]" -ForegroundColor Yellow
-{{/if}}
+    {{#if config.anthropic_auth_token}}
+    Write-Host "[KEY] Anthropic Auth Token: [SET]" -ForegroundColor Yellow
+    {{/if}}
 
-{{#if config.anthropic_base_url}}
-Write-Host "[URL] Base URL: {{config.anthropic_base_url}}" -ForegroundColor Yellow
-{{/if}}
+    {{#if config.anthropic_base_url}}
+    Write-Host "[URL] Base URL: {{config.anthropic_base_url}}" -ForegroundColor Yellow
+    {{/if}}
+}
 "#;
 
 const BASH_LLM_SWITCH_TEMPLATE: &str = r#"
@@ -613,15 +632,17 @@ export API_TIMEOUT_MS="30000"
 {{/if}}
 
 # Verify the switch
-echo "[OK] Switched to {{#if (eq env_type "Cc")}}Claude Code (CC){{else}}LLM{{/if}} environment: {{env_name}}"
+if [[ -z "$_FNVA_QUIET" ]]; then
+    echo "[OK] Switched to {{#if (eq env_type "Cc")}}Claude Code (CC){{else}}LLM{{/if}} environment: {{env_name}}"
 
-{{#if config.anthropic_auth_token}}
-echo "[KEY] Anthropic Auth Token: [SET]"
-{{/if}}
+    {{#if config.anthropic_auth_token}}
+    echo "[KEY] Anthropic Auth Token: [SET]"
+    {{/if}}
 
-{{#if config.anthropic_base_url}}
-echo "[URL] Base URL: {{config.anthropic_base_url}}"
-{{/if}}
+    {{#if config.anthropic_base_url}}
+    echo "[URL] Base URL: {{config.anthropic_base_url}}"
+    {{/if}}
+fi
 "#;
 
 const FISH_JAVA_SWITCH_TEMPLATE: &str = r#"
@@ -637,13 +658,15 @@ set -gx FNVA_CURRENT_JAVA "{{env_name}}"
 set -gx FNVA_ENV_TYPE "Java"
 
 # Verify the switch
-echo "[OK] Switched to Java environment: {{env_name}}"
-echo "[DIR] JAVA_HOME: $JAVA_HOME"
-echo "[INFO] Java Version:"
-if test -x "{{java_bin}}/java"
-    "{{java_bin}}/java" -version 2>&1 | head -n 1 | sed 's/^/   /'
-else
-    echo "   Failed to get Java version"
+if not set -q _FNVA_QUIET
+    echo "[OK] Switched to Java environment: {{env_name}}"
+    echo "[DIR] JAVA_HOME: $JAVA_HOME"
+    echo "[INFO] Java Version:"
+    if test -x "{{java_bin}}/java"
+        "{{java_bin}}/java" -version 2>&1 | head -n 1 | sed 's/^/   /'
+    else
+        echo "   Failed to get Java version"
+    end
 end
 
 # Add to command history
@@ -661,14 +684,20 @@ function fnva_autoload_default
 
     set envs_file "$HOME/.fnva/current_envs.toml"
     if test -f "$envs_file"; and command -v fnva >/dev/null 2>&1
+        set -l _restored
         for line in (cat "$envs_file")
             set -l match (string match -r '^\s*(\w+)\s*=\s*"([^"]*)"' -- $line)
             test (count $match) -ge 3; or continue
             set key $match[2]
             set value $match[3]
             test -n "$value"; or continue
+            set -x _FNVA_QUIET 1
             set env_script (fnva $key use $value 2>/dev/null)
-            if test -n "$env_script"; eval "$env_script"; end
+            set -e _FNVA_QUIET
+            if test -n "$env_script"; eval "$env_script"; set -a _restored $value; end
+        end
+        if test (count $_restored) -gt 0
+            echo "[fnva] restored: "(string join ' ' $_restored)
         end
     end
 end
@@ -724,15 +753,17 @@ set -gx API_TIMEOUT_MS "30000"
 {{/if}}
 
 # Verify the switch
-echo "[OK] Switched to {{#if (eq env_type "Cc")}}Claude Code (CC){{else}}LLM{{/if}} environment: {{env_name}}"
+if not set -q _FNVA_QUIET
+    echo "[OK] Switched to {{#if (eq env_type "Cc")}}Claude Code (CC){{else}}LLM{{/if}} environment: {{env_name}}"
 
-{{#if config.anthropic_auth_token}}
-echo "[KEY] Anthropic Auth Token: [SET]"
-{{/if}}
+    {{#if config.anthropic_auth_token}}
+    echo "[KEY] Anthropic Auth Token: [SET]"
+    {{/if}}
 
-{{#if config.anthropic_base_url}}
-echo "[URL] Base URL: {{config.anthropic_base_url}}"
-{{/if}}
+    {{#if config.anthropic_base_url}}
+    echo "[URL] Base URL: {{config.anthropic_base_url}}"
+    {{/if}}
+end
 "#;
 
 const CMD_JAVA_SWITCH_TEMPLATE: &str = r#"

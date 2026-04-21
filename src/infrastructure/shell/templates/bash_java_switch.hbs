@@ -11,13 +11,15 @@ export FNVA_CURRENT_JAVA="{{env_name}}"
 export FNVA_ENV_TYPE="Java"
 
 # Verify the switch
-echo "[OK] Switched to Java environment: {{env_name}}"
-echo "[DIR] JAVA_HOME: $JAVA_HOME"
-echo "[INFO] Java Version:"
-if [ -x "{{java_bin}}/java" ]; then
-    "{{java_bin}}/java" -version 2>&1 | head -n 1 | sed 's/^/   /'
-else
-    echo "   Failed to get Java version"
+if [[ -z "$_FNVA_QUIET" ]]; then
+    echo "[OK] Switched to Java environment: {{env_name}}"
+    echo "[DIR] JAVA_HOME: $JAVA_HOME"
+    echo "[INFO] Java Version:"
+    if [ -x "{{java_bin}}/java" ]; then
+        "{{java_bin}}/java" -version 2>&1 | head -n 1 | sed 's/^/   /'
+    else
+        echo "   Failed to get Java version"
+    fi
 fi
 
 # Add to shell history
