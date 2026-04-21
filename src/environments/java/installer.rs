@@ -189,6 +189,7 @@ impl JavaInstaller {
         fs::create_dir_all(&fnva_dir).map_err(|e| format!("Failed to create install dir: {e}"))?;
 
         let java_home = fnva_dir.join(env_name);
+        fs::create_dir_all(&java_home).map_err(|e| format!("Failed to create version dir: {e}"))?;
 
         // 解压文件
         if archive_path.to_str().unwrap().ends_with(".zip") {
