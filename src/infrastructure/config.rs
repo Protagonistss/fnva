@@ -172,60 +172,20 @@ fn default_read_timeout_sec() -> u64 {
     300
 }
 
-/// 默认 CC 环境配置
+/// 默认 CC 环境配置（仅保留一个 anthropic-cc 作为初始示例）
 fn default_cc_environments() -> Vec<CcEnvironment> {
-    vec![
-        CcEnvironment {
-            name: "anthropic-cc".to_string(),
-            provider: "anthropic".to_string(),
-            api_key: "${ANTHROPIC_API_KEY}".to_string(),
-            base_url: "https://api.anthropic.com".to_string(),
-            sonnet_model: "claude-3-sonnet-20240229".to_string(),
-            opus_model: None,
-            haiku_model: None,
-            description: "Anthropic Claude Code 环境".to_string(),
-        },
-        CcEnvironment {
-            name: "moonshot-cc".to_string(),
-            provider: "anthropic".to_string(),
-            api_key: "${MOONSHOT_API_KEY}".to_string(),
-            base_url: "https://api.moonshot.cn/anthropic".to_string(),
-            sonnet_model: "claude-3-sonnet-20240229".to_string(),
-            opus_model: None,
-            haiku_model: None,
-            description: "Moonshot Claude Code 环境".to_string(),
-        },
-        CcEnvironment {
-            name: "glmcc".to_string(),
-            provider: "anthropic".to_string(),
-            api_key: "${GLM_API_KEY}".to_string(),
-            base_url: "https://open.bigmodel.cn/api/paas/v4".to_string(),
-            sonnet_model: "glm-4-6".to_string(),
-            opus_model: None,
-            haiku_model: None,
-            description: "智谱AI Claude Code 环境".to_string(),
-        },
-        CcEnvironment {
-            name: "anycc".to_string(),
-            provider: "anthropic".to_string(),
-            api_key: "${ANY_API_KEY}".to_string(),
-            base_url: "https://api.any-api.com/anthropic".to_string(),
-            sonnet_model: "claude-sonnet-4-5".to_string(),
-            opus_model: None,
-            haiku_model: None,
-            description: "任意API Claude Code 环境".to_string(),
-        },
-        CcEnvironment {
-            name: "kimicc".to_string(),
-            provider: "anthropic".to_string(),
-            api_key: "${KIMI_API_KEY}".to_string(),
-            base_url: "https://api.moonshot.cn/anthropic".to_string(),
-            sonnet_model: "kimi-k2-turbo-preview".to_string(),
-            opus_model: None,
-            haiku_model: None,
-            description: "Kimi Claude Code 环境".to_string(),
-        },
-    ]
+    vec![CcEnvironment {
+        name: "anthropic-cc".to_string(),
+        provider: "anthropic".to_string(),
+        api_key: "${ANTHROPIC_API_KEY}".to_string(),
+        base_url: "https://api.anthropic.com".to_string(),
+        sonnet_model: "claude-sonnet-4-5".to_string(),
+        opus_model: Some("claude-opus-4-5".to_string()),
+        haiku_model: Some("claude-haiku-4-5".to_string()),
+        description: "Anthropic Claude Code environment".to_string(),
+        api_timeout_ms: None,
+        extra_env: std::collections::HashMap::new(),
+    }]
 }
 
 /// Java 环境配置
@@ -278,6 +238,12 @@ pub struct CcEnvironment {
     pub haiku_model: Option<String>,
     #[serde(default)]
     pub description: String,
+    /// API timeout in milliseconds (default: 3000000 = 50 min, for long Claude Code requests)
+    #[serde(default)]
+    pub api_timeout_ms: Option<String>,
+    /// Extra environment variables to export verbatim (e.g. CLAUDE_CODE_AUTO_COMPACT_WINDOW)
+    #[serde(default)]
+    pub extra_env: std::collections::HashMap<String, String>,
 }
 
 impl Default for Config {
@@ -698,7 +664,10 @@ mod tests {
             .unwrap();
         let toml_str = toml::to_string_pretty(&config).expect("serialize");
         let parsed: Config = toml::from_str(&toml_str).expect("deserialize");
-        assert_eq!(parsed.get_maven_env("mvn39").unwrap().maven_home, "/x/maven");
+        assert_eq!(
+            parsed.get_maven_env("mvn39").unwrap().maven_home,
+            "/x/maven"
+        );
         // maven 镜像默认补全
         assert!(!parsed.mirrors.maven.is_empty());
     }

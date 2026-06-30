@@ -306,7 +306,6 @@ pub enum CcCommands {
     },
 }
 
-
 /// Configuration management commands
 #[derive(Subcommand)]
 pub enum ConfigCommands {

@@ -160,7 +160,8 @@ impl CommandHandler {
                 use crate::environments::java::installer::JavaInstaller;
                 use crate::infrastructure::config::Config;
 
-                let mut config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
+                let mut config =
+                    Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
                 match JavaInstaller::install_java(&version, &mut config, auto_switch).await {
                     Ok(java_home) => {
                         println!("Java {version} installed");
@@ -196,7 +197,8 @@ impl CommandHandler {
                 use crate::environments::java::installer::JavaInstaller;
                 use crate::infrastructure::config::Config;
 
-                let mut config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
+                let mut config =
+                    Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
                 JavaInstaller::uninstall_java(&name, &mut config)?;
             }
             JavaCommands::Default {
@@ -314,7 +316,10 @@ impl CommandHandler {
                     return Err("Environment switch failed".to_string());
                 }
             }
-            MavenCommands::Install { version, auto_switch } => {
+            MavenCommands::Install {
+                version,
+                auto_switch,
+            } => {
                 let mut config = crate::infrastructure::config::Config::load()
                     .map_err(|e| format!("Failed to load config: {e}"))?;
                 MavenInstaller::install_maven(&version, &mut config, auto_switch).await?;
@@ -326,7 +331,11 @@ impl CommandHandler {
                     .await?;
                 print!("{output}");
             }
-            MavenCommands::Add { name, home, description: _ } => {
+            MavenCommands::Add {
+                name,
+                home,
+                description: _,
+            } => {
                 let config_value = serde_json::json!({ "maven_home": home });
                 let output = self
                     .switcher
@@ -381,7 +390,12 @@ impl CommandHandler {
                     .await?;
                 print!("{output}");
             }
-            MavenCommands::Default { name, unset, shell, json } => {
+            MavenCommands::Default {
+                name,
+                unset,
+                shell,
+                json,
+            } => {
                 if unset {
                     let output = self
                         .switcher
@@ -413,8 +427,8 @@ impl CommandHandler {
                                     )
                                     .await?;
                                 if json {
-                                    let output =
-                                        FORMATTER.format_switch_result(&result, OutputFormat::Json)?;
+                                    let output = FORMATTER
+                                        .format_switch_result(&result, OutputFormat::Json)?;
                                     print!("{output}");
                                 } else if result.success && !result.script.is_empty() {
                                     print!("{}", result.script);
@@ -449,10 +463,7 @@ impl CommandHandler {
                 print!("{output}");
             }
             CcCommands::Scan => {
-                let output = self
-                    .switcher
-                    .scan_environments(EnvironmentType::Cc)
-                    .await?;
+                let output = self.switcher.scan_environments(EnvironmentType::Cc).await?;
                 print!("{output}");
             }
             CcCommands::Use { name, shell, json } => {
@@ -570,13 +581,26 @@ impl CommandHandler {
                 model,
                 description,
             } => {
+                let base_url_val = base_url.unwrap_or_default();
+                if base_url_val.is_empty() {
+                    return Err("Missing required argument: --base-url <URL>\n\
+                         Example: fnva cc add --name my-cc --provider anthropic \
+                         --base-url https://api.anthropic.com --api-key ${ANTHROPIC_API_KEY}"
+                        .to_string());
+                }
                 let mut json = serde_json::json!({
                     "provider": provider,
-                    "base_url": base_url.unwrap_or_default(),
+                    "base_url": base_url_val,
                 });
-                if let Some(k) = api_key { json["api_key"] = serde_json::Value::String(k); }
-                if let Some(m) = model { json["sonnet_model"] = serde_json::Value::String(m); }
-                if let Some(d) = description { json["description"] = serde_json::Value::String(d); }
+                if let Some(k) = api_key {
+                    json["api_key"] = serde_json::Value::String(k);
+                }
+                if let Some(m) = model {
+                    json["sonnet_model"] = serde_json::Value::String(m);
+                }
+                if let Some(d) = description {
+                    json["description"] = serde_json::Value::String(d);
+                }
                 let output = self
                     .switcher
                     .add_environment(EnvironmentType::Cc, &name, json)
@@ -593,7 +617,6 @@ impl CommandHandler {
         }
         Ok(())
     }
-
 
     /// 处理配置命令
     async fn handle_config_command(&mut self, action: ConfigCommands) -> Result<(), String> {
@@ -612,10 +635,7 @@ impl CommandHandler {
     }
 
     /// Handle Java remote version listing.
-    async fn handle_java_ls_remote(
-        &self,
-        version: Option<u32>,
-    ) -> Result<String, String> {
+    async fn handle_java_ls_remote(&self, version: Option<u32>) -> Result<String, String> {
         use crate::environments::java::installer::JavaInstaller;
 
         println!("Querying available Java versions...");

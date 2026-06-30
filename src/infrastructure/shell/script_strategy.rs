@@ -80,8 +80,10 @@ impl TemplateEngine {
         handlebars.register_template_string("cmd_integration", CMD_INTEGRATION_TEMPLATE)?;
 
         // Maven 模板（各 shell）
-        handlebars
-            .register_template_string("powershell_maven_switch", POWERSHELL_MAVEN_SWITCH_TEMPLATE)?;
+        handlebars.register_template_string(
+            "powershell_maven_switch",
+            POWERSHELL_MAVEN_SWITCH_TEMPLATE,
+        )?;
         handlebars.register_template_string("bash_maven_switch", BASH_MAVEN_SWITCH_TEMPLATE)?;
         handlebars.register_template_string("fish_maven_switch", FISH_MAVEN_SWITCH_TEMPLATE)?;
         handlebars.register_template_string("cmd_maven_switch", CMD_MAVEN_SWITCH_TEMPLATE)?;
@@ -612,7 +614,7 @@ $env:FNVA_ENV_TYPE = "CC"
 # Claude Code specific settings
 {{#if config.anthropic_auth_token}}
 $env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"
-$env:API_TIMEOUT_MS = "30000"
+$env:API_TIMEOUT_MS = "{{config.api_timeout_ms}}"
 {{/if}}
 
 # Verify the switch
@@ -662,7 +664,7 @@ export FNVA_ENV_TYPE="CC"
 # Claude Code specific settings
 {{#if config.anthropic_auth_token}}
 export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"
-export API_TIMEOUT_MS="30000"
+export API_TIMEOUT_MS="{{config.api_timeout_ms}}"
 {{/if}}
 
 # Verify the switch
@@ -787,7 +789,7 @@ set -gx FNVA_ENV_TYPE "CC"
 # Claude Code specific settings
 {{#if config.anthropic_auth_token}}
 set -gx CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC "1"
-set -gx API_TIMEOUT_MS "30000"
+set -gx API_TIMEOUT_MS "{{config.api_timeout_ms}}"
 {{/if}}
 
 # Verify the switch
@@ -893,7 +895,7 @@ set "FNVA_ENV_TYPE=CC"
 REM Claude Code specific settings
 {{#if config.anthropic_auth_token}}
 set "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1"
-set "API_TIMEOUT_MS=30000"
+set "API_TIMEOUT_MS={{config.api_timeout_ms}}"
 {{/if}}
 
 REM Verify the switch
@@ -1083,11 +1085,19 @@ mod tests {
         let generator = ScriptGenerator::new().unwrap();
         let config = json!({"java_home": "C:\\Program Files\\Java\\jdk17", "java_bin": "C:\\Program Files\\Java\\jdk17\\bin", "env_name": "jdk17"});
         let script = generator
-            .generate_switch_script(EnvironmentType::Java, "jdk17", &config, Some(ShellType::PowerShell))
+            .generate_switch_script(
+                EnvironmentType::Java,
+                "jdk17",
+                &config,
+                Some(ShellType::PowerShell),
+            )
             .unwrap();
 
         // escape_backslash 应将单反斜杠替换为双反斜杠
-        assert!(script.contains("C:\\\\Program Files\\\\Java\\\\jdk17"), "escape_backslash helper should escape backslashes: {script}");
+        assert!(
+            script.contains("C:\\\\Program Files\\\\Java\\\\jdk17"),
+            "escape_backslash helper should escape backslashes: {script}"
+        );
     }
 
     #[test]
@@ -1097,9 +1107,15 @@ mod tests {
         let script = strategy
             .generate_switch_script(EnvironmentType::Maven, "mvn39", &config)
             .unwrap();
-        assert!(script.contains("MAVEN_HOME"), "should set MAVEN_HOME: {script}");
+        assert!(
+            script.contains("MAVEN_HOME"),
+            "should set MAVEN_HOME: {script}"
+        );
         assert!(script.contains("M2_HOME"), "should set M2_HOME: {script}");
-        assert!(script.contains("mvn39"), "should include env name: {script}");
+        assert!(
+            script.contains("mvn39"),
+            "should include env name: {script}"
+        );
         assert!(
             script.contains("packages/maven/3.9.16/bin"),
             "should derive maven_bin: {script}"
