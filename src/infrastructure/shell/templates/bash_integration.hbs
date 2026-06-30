@@ -17,13 +17,13 @@ fnva_autoload_default() {
             _FNVA_QUIET=1 eval "$(command fnva "$key" use "$value" 2>/dev/null)" >/dev/null 2>&1
             unset _FNVA_QUIET
             if [[ -z "$_restored" ]]; then
-                _restored="${key}@${value}"
+                _restored="${key} ${value}"
             else
-                _restored="$_restored, ${key}@${value}"
+                _restored="$_restored, ${key} ${value}"
             fi
         done < "$envs_file"
         if [[ -n "$_restored" ]]; then
-            printf '\033[2m· fnva restored: %s\033[0m\n' "$_restored"
+            printf '\033[32m✓\033[0m fnva active: %s\n' "$_restored"
         fi
     fi
 }

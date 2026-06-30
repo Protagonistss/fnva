@@ -17,11 +17,12 @@ function fnva-AutoLoadDefault {
             if ([string]::IsNullOrWhiteSpace($value)) { continue }
             $env:_FNVA_QUIET = "1"
             $envScript = (& fnva.cmd $key use $value 2>$null) -join "`n"
-            if ($envScript) { Invoke-Expression $envScript; $restored += "$key@$value" }
+            if ($envScript) { Invoke-Expression $envScript; $restored += "$key $value" }
             Remove-Item Env:\_FNVA_QUIET
         }
         if ($restored.Count -gt 0) {
-            Write-Host "· fnva restored: $($restored -join ', ')" -ForegroundColor DarkGray
+            Write-Host -NoNewline "✓ " -ForegroundColor Green
+            Write-Host "fnva active: $($restored -join ', ')"
         }
     }
 }

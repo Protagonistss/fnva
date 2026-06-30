@@ -471,11 +471,12 @@ function fnva-AutoLoadDefault {
             if ([string]::IsNullOrWhiteSpace($value)) { continue }
             $env:_FNVA_QUIET = "1"
             $envScript = (& fnva.cmd $key use $value 2>$null) -join "`n"
-            if ($envScript) { Invoke-Expression $envScript; $restored += "$key@$value" }
+            if ($envScript) { Invoke-Expression $envScript; $restored += "$key $value" }
             Remove-Item Env:\_FNVA_QUIET
         }
         if ($restored.Count -gt 0) {
-            Write-Host "· fnva restored: $($restored -join ', ')" -ForegroundColor DarkGray
+            Write-Host -NoNewline "✓ " -ForegroundColor Green
+            Write-Host "fnva active: $($restored -join ', ')"
         }
     }
 }
@@ -554,13 +555,13 @@ fnva_autoload_default() {
             _FNVA_QUIET=1 eval "$(command fnva "$key" use "$value" 2>/dev/null)" >/dev/null 2>&1
             unset _FNVA_QUIET
             if [[ -z "$_restored" ]]; then
-                _restored="${key}@${value}"
+                _restored="${key} ${value}"
             else
-                _restored="$_restored, ${key}@${value}"
+                _restored="$_restored, ${key} ${value}"
             fi
         done < "$envs_file"
         if [[ -n "$_restored" ]]; then
-            printf '\033[2m· fnva restored: %s\033[0m\n' "$_restored"
+            printf '\033[32m✓\033[0m fnva active: %s\n' "$_restored"
         fi
     fi
 }
@@ -738,10 +739,10 @@ function fnva_autoload_default
             source $_t >/dev/null 2>&1
             rm -f $_t
             set -e _FNVA_QUIET
-            set -a _restored "$key@$value"
+            set -a _restored "$key $value"
         end
         if set -q _restored[1]
-            printf '\033[2m· fnva restored: %s\033[0m\n' (string join ', ' $_restored)
+            printf '\033[32m✓\033[0m fnva active: %s\n' (string join ', ' $_restored)
         end
     end
 end
