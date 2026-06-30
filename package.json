@@ -9,7 +9,6 @@
   },
   "scripts": {
     "prepublishOnly": "scripts/prepare-publish.sh",
-    "postinstall": "node scripts/ensure-executable-permissions.js && echo 'Setting up fnva shell integration...' && node scripts/install-shell-integration.js --auto",
     "install-shell": "node scripts/install-shell-integration.js",
     "uninstall-shell": "node scripts/uninstall-shell-integration.js",
     "build": "scripts/build-local.sh",

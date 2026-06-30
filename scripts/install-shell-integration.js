@@ -199,4 +199,5 @@ module.exports = {
   getIntegrationLine,
   isInstalled,
   installShellIntegration,
+  installPowershellWrapper,
 };
