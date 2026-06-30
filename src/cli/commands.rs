@@ -116,8 +116,8 @@ pub enum JavaCommands {
         #[arg(default_value = "java")]
         query_type: String,
         /// Major Java version
-        #[arg(long)]
-        java_version: Option<u32>,
+        #[arg(long, short = 'v')]
+        version: Option<u32>,
         /// Repository URL
         #[arg(long)]
         repository: Option<String>,
@@ -269,7 +269,7 @@ pub enum CcCommands {
         /// Environment name
         name: String,
     },
-    /// Manage the default CC environment
+    /// Set or show the default CC environment
     Default {
         /// CC environment name (shows current default when omitted)
         name: Option<String>,
@@ -297,9 +297,6 @@ pub enum EnvCommands {
     /// Generate the environment switch script (like fnm env)
     #[command(name = "env")]
     GenerateEnv {
-        /// Auto environment switch integration (like fnm env --use-on-cd)
-        #[arg(long)]
-        use_on_cd: bool,
         /// Shell type
         #[arg(short, long)]
         shell: Option<String>,

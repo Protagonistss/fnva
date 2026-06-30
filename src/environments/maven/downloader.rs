@@ -85,7 +85,7 @@ impl ToolDownloader for MavenDownloader {
             println!("URL: {url}");
 
             let cache_dir = crate::infrastructure::paths::downloads_dir()
-                .map_err(|e| DownloadError::Io(e))?;
+                .map_err(DownloadError::Io)?;
             tokio::fs::create_dir_all(&cache_dir)
                 .await
                 .map_err(|e| DownloadError::Io(format!("Failed to create cache directory: {e}")))?;

@@ -132,13 +132,13 @@ impl CommandHandler {
             }
             JavaCommands::LsRemote {
                 query_type,
-                java_version,
+                version,
                 repository,
                 limit: _,
             } => {
                 if query_type == "java" {
                     // 使用新的版本管理器查询 Java 版本
-                    let output = self.handle_java_ls_remote(java_version, repository).await?;
+                    let output = self.handle_java_ls_remote(version, repository).await?;
                     print!("{output}");
                 } else {
                     return Err(format!("Query type '{query_type}' not supported"));
@@ -569,7 +569,6 @@ impl CommandHandler {
         match action {
             EnvCommands::GenerateEnv {
                 shell,
-                use_on_cd: _,
             } => {
                 let shell_type = match shell {
                     Some(s) => Some(parse_shell_type(&s)?),
