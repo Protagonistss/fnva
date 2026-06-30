@@ -69,7 +69,8 @@ execSync('chcp 65001 > nul 2>&1', { stdio: 'ignore' });
 1. **`src/infrastructure/shell/script_strategy.rs`**
    - 在PowerShell模板中添加编码设置
    - 修复`POWERSHELL_JAVA_SWITCH_TEMPLATE`
-   - 修复`POWERSHELL_LLM_SWITCH_TEMPLATE`
+   - 修复`POWERSHELL_CC_SWITCH_TEMPLATE`
+   - 修复`POWERSHELL_MAVEN_SWITCH_TEMPLATE`
 
 ## 使用说明
 
@@ -108,7 +109,8 @@ execSync('chcp 65001 > nul 2>&1', { stdio: 'ignore' });
 1. **Windows PowerShell环境**：
    ```bash
    fnva java use <version>
-   fnva llm use <config>
+   fnva cc use <config>
+   fnva maven use <version>
    ```
 
 2. **PowerShell ISE**：测试在PowerShell ISE中的显示效果
@@ -126,9 +128,3 @@ execSync('chcp 65001 > nul 2>&1', { stdio: 'ignore' });
 1. **代码审查**：新增代码需要遵循编码处理规范
 2. **测试覆盖**：定期在不同环境中测试编码效果
 3. **文档更新**：如需修改，请更新此文档
-
-## 相关资源
-
-- [PowerShell编码文档](https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_character_encoding)
-- [Node.js编码处理](https://nodejs.org/api/buffer.html#buffer_buffers_and_character_encodings)
-- [UTF-8 BOM说明](https://en.wikipedia.org/wiki/Byte_order_mark)

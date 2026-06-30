@@ -69,18 +69,25 @@ fnva java use 17
 fnva cc list
 
 # 切换 CC 环境
-fnva cc use glmcc
+fnva cc use mycc
+
+# 列出 Maven 环境
+fnva maven list
+
+# 切换 Maven 环境
+fnva maven use 3.9.16
 
 # 验证切换
 java --version
+mvn -v
 ```
 
 ## 工作原理
 
 集成脚本会在 shell 启动时加载，提供两个功能：
 
-1. **Autoload（自动恢复）**: 读取 `~/.fnva/current_envs.toml`，恢复上次使用的环境。新终端打开时只显示一行汇总，如 `[fnva] restored: glmcc 17`。
-2. **Wrapper 函数**: 拦截 `fnva java/llm/cc use` 命令，将 fnva 输出的脚本在当前 shell 中执行，使环境变量在当前终端会话生效。
+1. **Autoload（自动恢复）**: 读取 `~/.fnva/state/current_envs.toml`，恢复上次使用的环境。新终端打开时只显示一行汇总，如 `[fnva] restored: mycc 17 3.9.16`。
+2. **Wrapper 函数**: 拦截 `fnva java/cc/maven use` 命令，将 fnva 输出的脚本在当前 shell 中执行，使环境变量在当前终端会话生效。
 
 ## 卸载
 
@@ -118,7 +125,7 @@ eval "$(fnva env env --shell bash)"
 1. 确认 fnva 已安装：`fnva --version`
 2. 确认 wrapper 函数已加载：`type fnva`
 3. 查看当前集成脚本内容：`fnva env env --shell bash`
-4. 检查 current_envs.toml：`cat ~/.fnva/current_envs.toml`
+4. 检查 current_envs.toml：`cat ~/.fnva/state/current_envs.toml`
 
 ### Autoload 输出噪音
 
