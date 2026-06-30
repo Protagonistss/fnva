@@ -191,12 +191,7 @@ zsh 在某些配置下会打印 `var=$(command)` 形式 of 赋值语句。不论
 Autoload 在 wrapper 函数定义之前运行，因此 autoload 内的 `fnva` 调用自然走外部命令。
 但为防御性编程，仍使用 `command fnva` 确保不触发 wrapper。
 
-### 5. 集成命令是 `fnva env env`（两个 env）
-
-正确的集成加载命令是 `eval "$(fnva env env --shell bash)"`，不是 `fnva env --shell bash`。
-第一个 `env` 是顶级子命令，第二个 `env` 是 `GenerateEnv` 子命令。
-
-### 6. Switch 模板中的环境变量转义
+### 5. Switch 模板中的环境变量转义
 
 模板直接将 API Key 等值嵌入 shell 脚本字符串。如果值包含双引号或特殊字符，
 可能导致脚本语法错误。当前未做转义处理。

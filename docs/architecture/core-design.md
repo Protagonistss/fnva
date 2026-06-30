@@ -30,4 +30,4 @@ fnva 采用 Rust 编写，不依赖任何常驻的后台进程（Daemon）。它
 
 ## 3. 终端自动恢复机制
 
-通过 `fnva env env` 生成的集成脚本，会在 shell 启动时自动执行。该脚本会读取 `~/.fnva/state/current_envs.toml` 中记录的上次活跃环境，并自动应用这些环境变量，实现新开终端的无缝环境继承。
+通过 `fnva env` 生成的集成脚本，会在 shell 启动时自动执行。该脚本会读取 `~/.fnva/state/current_envs.toml` 中记录的上次活跃环境，并自动应用这些环境变量，实现新开终端的无缝环境继承。

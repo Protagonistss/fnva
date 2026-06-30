@@ -171,7 +171,7 @@ fnva() {
 Shell 启动
     │
     ▼  加载 .zshrc / .bashrc / $PROFILE
-eval "$(fnva env env --shell bash)"
+eval "$(fnva env --shell bash)"
     │
     ▼  输出 integration script 并执行
     │

@@ -237,10 +237,10 @@ while IFS='=' read -r key value; do
 
 | Shell | 配置文件 | 安装方式 |
 |-------|---------|---------|
-| Bash | `~/.bashrc` | `eval "$(fnva env env --shell bash)"` |
-| Zsh | `~/.zshrc` | `eval "$(fnva env env --shell bash)"` |
-| Fish | `~/.config/fish/config.fish` | `fnva env env --shell fish \| source` |
-| PowerShell | `$PROFILE` | `fnva env env --shell powershell \| Out-String \| Invoke-Expression` |
+| Bash | `~/.bashrc` | `eval "$(fnva env --shell bash)"` |
+| Zsh | `~/.zshrc` | `eval "$(fnva env --shell bash)"` |
+| Fish | `~/.config/fish/config.fish` | `fnva env --shell fish \| source` |
+| PowerShell | `$PROFILE` | `fnva env --shell powershell \| Out-String \| Invoke-Expression` |
 | CMD | 注册表 (AutoRun) | 自动安装 |
 
 ### 安装标记

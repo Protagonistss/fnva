@@ -51,6 +51,11 @@ cargo install fnva
 
 安装 shell 集成后，打开新终端会自动恢复上次使用的 CC/Java/Maven 环境变量，且 `fnva <type> use <name>` 无需 `eval` 包裹即可生效。详细请参考 [Shell 集成指南](docs/user-guide/shell-integration.md)。
 
+```bash
+# 添加到 shell 配置文件（bash/zsh）:
+eval "$(fnva env)"
+```
+
 ## 使用快速入门
 
 ### Java

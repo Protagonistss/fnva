@@ -163,7 +163,7 @@ command -v fnva               # Unix
 Get-Command fnva              # PowerShell
 
 # 重新安装 integration
-eval "$(fnva env env --shell bash)"  # 并添加到 shell 配置文件（注意两个 env）
+eval "$(fnva env --shell bash)"  # 并添加到 shell 配置文件
 ```
 
 ## 版本历史中的已知 Bug

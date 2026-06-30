@@ -19,12 +19,10 @@ fnva 会自动：
 
 | Shell | 配置文件 | 集成命令 |
 |-------|----------|---------|
-| Bash | `~/.bashrc` | `eval "$(fnva env env --shell bash)"` |
-| Zsh | `~/.zshrc` | `eval "$(fnva env env --shell bash)"` |
-| Fish | `~/.config/fish/config.fish` | `fnva env env --shell fish \| source` |
-| PowerShell | `$PROFILE` | `fnva env env --shell powershell \| Out-String \| Invoke-Expression` |
-
-注意：命令是 `fnva env env`（两个 `env`），第一个是顶级子命令，第二个是生成集成脚本的子命令。
+| Bash | `~/.bashrc` | `eval "$(fnva env --shell bash)"` |
+| Zsh | `~/.zshrc` | `eval "$(fnva env --shell bash)"` |
+| Fish | `~/.config/fish/config.fish` | `fnva env --shell fish \| source` |
+| PowerShell | `$PROFILE` | `fnva env --shell powershell \| Out-String \| Invoke-Expression` |
 
 ## 手动安装
 
@@ -35,7 +33,7 @@ fnva 会自动：
 将以下内容添加到 `~/.bashrc` 或 `~/.zshrc`：
 
 ```bash
-eval "$(fnva env env --shell bash)"
+eval "$(fnva env --shell bash)"
 ```
 
 ### Fish
@@ -43,7 +41,7 @@ eval "$(fnva env env --shell bash)"
 将以下内容添加到 `~/.config/fish/config.fish`：
 
 ```fish
-fnva env env --shell fish | source
+fnva env --shell fish | source
 ```
 
 ### PowerShell
@@ -51,7 +49,7 @@ fnva env env --shell fish | source
 将以下内容添加到 `$PROFILE`：
 
 ```powershell
-fnva env env --shell powershell | Out-String | Invoke-Expression
+fnva env --shell powershell | Out-String | Invoke-Expression
 ```
 
 ## 使用方法
@@ -94,7 +92,7 @@ mvn -v
 要移除 shell 集成：
 
 1. 编辑你的 shell 配置文件（`~/.zshrc`、`~/.bashrc`、`$PROFILE` 等）
-2. 删除包含 `fnva env env` 或 `fnva auto integration` 的相关行
+2. 删除包含 `fnva env` 或 `fnva auto integration` 的相关行
 3. 重新加载 shell 配置：`source ~/.zshrc`
 
 ## 故障排除
@@ -117,17 +115,17 @@ Get-Content Function:\fnva
 ```bash
 # 删除旧的集成脚本，重新加载
 # Bash/Zsh: 从 ~/.zshrc 或 ~/.bashrc 中删除旧行，然后添加：
-eval "$(fnva env env --shell bash)"
+eval "$(fnva env --shell bash)"
 ```
 
 ### 环境切换失败
 
 1. 确认 fnva 已安装：`fnva --version`
 2. 确认 wrapper 函数已加载：`type fnva`
-3. 查看当前集成脚本内容：`fnva env env --shell bash`
+3. 查看当前集成脚本内容：`fnva env --shell bash`
 4. 检查 current_envs.toml：`cat ~/.fnva/state/current_envs.toml`
 
 ### Autoload 输出噪音
 
 如果新终端启动时显示多余的变量赋值或切换信息，说明集成脚本版本过旧。
-删除 shell 配置文件中的旧集成代码，重新添加 `eval "$(fnva env env --shell bash)"` 即可。
+删除 shell 配置文件中的旧集成代码，重新添加 `eval "$(fnva env --shell bash)"` 即可。
