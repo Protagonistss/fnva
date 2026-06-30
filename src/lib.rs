@@ -18,5 +18,5 @@ pub use core::session::*;
 pub use core::switcher::*;
 
 // 向后兼容的重新导出
-pub use infrastructure::config::{CcEnvironment, Config, JavaEnvironment, LlmEnvironment};
+pub use infrastructure::config::{CcEnvironment, Config, JavaEnvironment};
 pub use infrastructure::shell::ShellType;

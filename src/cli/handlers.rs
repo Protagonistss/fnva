@@ -13,6 +13,9 @@ pub struct CommandHandler {
 impl CommandHandler {
     /// 创建新的命令处理器
     pub fn new() -> Result<Self, String> {
+        // Migrate legacy flat layout to the grouped layout before anything else
+        // (SessionManager and managers read from the new paths).
+        crate::infrastructure::paths::migrate_layout();
         let mut switcher = EnvironmentSwitcher::new().map_err(|e| e.to_string())?;
 
         // 注册 Java 环境管理器
@@ -21,16 +24,16 @@ impl CommandHandler {
             .register_manager(Arc::new(Mutex::new(java_manager)))
             .map_err(|e| e.to_string())?;
 
-        // 注册 LLM 环境管理器
-        let llm_manager = crate::environments::llm::LlmEnvironmentManager::new();
-        switcher
-            .register_manager(Arc::new(Mutex::new(llm_manager)))
-            .map_err(|e| e.to_string())?;
-
         // 注册 CC 环境管理器
         let cc_manager = crate::environments::cc::CcEnvironmentManager::new();
         switcher
             .register_manager(Arc::new(Mutex::new(cc_manager)))
+            .map_err(|e| e.to_string())?;
+
+        // 注册 Maven 环境管理器
+        let maven_manager = crate::environments::maven::MavenEnvironmentManager::new();
+        switcher
+            .register_manager(Arc::new(Mutex::new(maven_manager)))
             .map_err(|e| e.to_string())?;
 
         Ok(Self { switcher })
@@ -40,8 +43,8 @@ impl CommandHandler {
     pub async fn handle_command(&mut self, command: Commands) -> Result<(), String> {
         match command {
             Commands::Java { action } => self.handle_java_command(action).await,
-            Commands::Llm { action } => self.handle_llm_command(action).await,
             Commands::Cc { action } => self.handle_cc_command(action).await,
+            Commands::Maven { action } => self.handle_maven_command(action).await,
             Commands::Env { action } => self.handle_env_command(action).await,
             Commands::Config { action } => self.handle_config_command(action).await,
             Commands::History {
@@ -130,8 +133,6 @@ impl CommandHandler {
             JavaCommands::LsRemote {
                 query_type,
                 java_version,
-                maven_artifact: _,
-                search: _,
                 repository,
                 limit: _,
             } => {
@@ -140,7 +141,7 @@ impl CommandHandler {
                     let output = self.handle_java_ls_remote(java_version, repository).await?;
                     print!("{output}");
                 } else {
-                    return Err(format!("查询类型 '{query_type}' 尚不支持"));
+                    return Err(format!("Query type '{query_type}' not supported"));
                 }
             }
             JavaCommands::Install {
@@ -153,8 +154,8 @@ impl CommandHandler {
                 let mut config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
                 match JavaInstaller::install_java(&version, &mut config, auto_switch).await {
                     Ok(java_home) => {
-                        println!("[OK] Java {version} installed successfully");
-                        println!("     Path: {java_home}");
+                        println!("Java {version} installed");
+                        println!("Path: {java_home}");
                     }
                     Err(e) => {
                         return Err(format!("Install failed: {e}"));
@@ -253,14 +254,16 @@ impl CommandHandler {
         Ok(())
     }
 
-    /// 处理 LLM 命令
-    async fn handle_llm_command(&mut self, action: LlmCommands) -> Result<(), String> {
+    /// 处理 Maven 命令
+    async fn handle_maven_command(&mut self, action: MavenCommands) -> Result<(), String> {
+        use crate::environments::maven::{MavenInstaller, MirrorDirectoryDiscovery};
+        use crate::infrastructure::tool_protocol::VersionDiscovery;
         match action {
-            LlmCommands::List { json } => {
+            MavenCommands::List { json } => {
                 let output = self
                     .switcher
-                    .list_environments(
-                        EnvironmentType::Llm,
+                    .list_environments_with_default(
+                        EnvironmentType::Maven,
                         if json {
                             OutputFormat::Json
                         } else {
@@ -270,7 +273,7 @@ impl CommandHandler {
                     .await?;
                 print!("{output}");
             }
-            LlmCommands::Use { name, shell, json } => {
+            MavenCommands::Use { name, shell, json } => {
                 let shell_type = match shell {
                     Some(s) => Some(parse_shell_type(&s)?),
                     None => None,
@@ -278,28 +281,66 @@ impl CommandHandler {
                 let result = self
                     .switcher
                     .switch_environment(
-                        EnvironmentType::Llm,
+                        EnvironmentType::Maven,
                         &name,
                         shell_type,
                         Some("Manual switch via command".to_string()),
                     )
                     .await?;
-
-                let output = FORMATTER.format_switch_result(
-                    &result,
-                    if json {
-                        OutputFormat::Json
+                if json {
+                    let output = FORMATTER.format_switch_result(&result, OutputFormat::Json)?;
+                    print!("{output}");
+                } else if result.success {
+                    // 非 JSON 直接输出切换脚本(供 shell source)
+                    if !result.script.is_empty() {
+                        print!("{}", result.script);
                     } else {
-                        OutputFormat::Text
-                    },
-                );
-                print!("{}", output?);
+                        println!("Switched to Maven environment: {name}");
+                    }
+                } else {
+                    eprintln!(
+                        "Failed to switch Maven environment: {}",
+                        result.error.unwrap_or_else(|| "Unknown error".to_string())
+                    );
+                    return Err("Environment switch failed".to_string());
+                }
             }
-            LlmCommands::Current { json } => {
+            MavenCommands::Install { version, auto_switch } => {
+                let mut config = crate::infrastructure::config::Config::load()
+                    .map_err(|e| format!("Failed to load config: {e}"))?;
+                MavenInstaller::install_maven(&version, &mut config, auto_switch).await?;
+            }
+            MavenCommands::Uninstall { name } => {
+                let mut config = crate::infrastructure::config::Config::load()
+                    .map_err(|e| format!("Failed to load config: {e}"))?;
+                MavenInstaller::uninstall_maven(&name, &mut config)?;
+            }
+            MavenCommands::Refresh => {
+                let discovery = MirrorDirectoryDiscovery::new();
+                discovery.refresh().await.map_err(|e| format!("{e:?}"))?;
+                println!("Maven version cache refreshed.");
+            }
+            MavenCommands::LsRemote { version } => {
+                let discovery = MirrorDirectoryDiscovery::new();
+                let versions = discovery.list().await.map_err(|e| format!("{e:?}"))?;
+                println!("Available Maven versions:");
+                let mut shown = 0;
+                for v in versions.iter().take(30) {
+                    if let Some(f) = version.as_deref() {
+                        if !v.version.starts_with(f) {
+                            continue;
+                        }
+                    }
+                    println!("  {}", v.version);
+                    shown += 1;
+                }
+                println!("({shown} versions shown)");
+            }
+            MavenCommands::Current { json } => {
                 let output = self
                     .switcher
                     .get_current_environment(
-                        EnvironmentType::Llm,
+                        EnvironmentType::Maven,
                         if json {
                             OutputFormat::Json
                         } else {
@@ -309,39 +350,51 @@ impl CommandHandler {
                     .await?;
                 print!("{output}");
             }
-            LlmCommands::Add {
-                name,
-                provider,
-                api_key,
-                base_url,
-                model,
-                temperature,
-                max_tokens,
-                description,
-            } => {
-                use crate::infrastructure::config::{Config, LlmEnvironment};
-
-                let mut config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
-                let env = LlmEnvironment {
-                    name: name.clone(),
-                    provider: provider.clone(),
-                    api_key: api_key.unwrap_or_default(),
-                    base_url: base_url.unwrap_or_default(),
-                    model: model.unwrap_or_default(),
-                    temperature,
-                    max_tokens,
-                    description: description.unwrap_or_default(),
-                };
-                config.add_llm_env(env)?;
-                config.save()?;
-                println!("LLM environment '{name}' added ({provider})");
-            }
-            LlmCommands::Remove { name } => {
-                let output = self
-                    .switcher
-                    .remove_environment(EnvironmentType::Llm, &name)
-                    .await?;
-                print!("{output}");
+            MavenCommands::Default { name, unset, shell, json } => {
+                if unset {
+                    let output = self
+                        .switcher
+                        .clear_default_environment(EnvironmentType::Maven)
+                        .await?;
+                    print!("{output}");
+                } else if let Some(env_name) = name {
+                    let output = self
+                        .switcher
+                        .set_default_environment(EnvironmentType::Maven, &env_name)
+                        .await?;
+                    print!("{output}");
+                } else {
+                    match self
+                        .switcher
+                        .get_default_environment(EnvironmentType::Maven)
+                        .await?
+                    {
+                        Some(env_name) => {
+                            if let Some(shell) = shell {
+                                let shell_type = parse_shell_type(&shell)?;
+                                let result = self
+                                    .switcher
+                                    .switch_environment(
+                                        EnvironmentType::Maven,
+                                        &env_name,
+                                        Some(shell_type),
+                                        Some("Switch to default environment".to_string()),
+                                    )
+                                    .await?;
+                                if json {
+                                    let output =
+                                        FORMATTER.format_switch_result(&result, OutputFormat::Json)?;
+                                    print!("{output}");
+                                } else if result.success && !result.script.is_empty() {
+                                    print!("{}", result.script);
+                                }
+                            } else {
+                                println!("Default Maven environment: {env_name}");
+                            }
+                        }
+                        None => println!("No default Maven environment set"),
+                    }
+                }
             }
         }
         Ok(())
@@ -615,9 +668,9 @@ impl CommandHandler {
                 use crate::infrastructure::config::Config;
                 let updated = Config::sync()?;
                 if updated {
-                    println!("配置已同步（补全默认字段，例如清华源）");
+                    println!("Configuration synced");
                 } else {
-                    println!("配置已是最新，无需同步");
+                    println!("Configuration is up to date");
                 }
             }
         }
@@ -647,9 +700,9 @@ impl CommandHandler {
                         .collect();
 
                     if filtered_versions.is_empty() {
-                        output.push_str(&format!("❌ 未找到 Java {major} 的可用版本\n"));
+                        output.push_str(&format!("No Java {major} versions found\n"));
                     } else {
-                        output.push_str(&format!("🎯 Java {major} 可用版本:\n"));
+                        output.push_str(&format!("Available Java {major} versions:\n"));
                         for version in filtered_versions {
                             output.push_str(&format!("  {version}\n"));
                         }
@@ -668,7 +721,7 @@ impl CommandHandler {
 
                 Ok(output)
             }
-            Err(e) => Err(format!("查询版本失败: {e}")),
+            Err(e) => Err(format!("Failed to query versions: {e}")),
         }
     }
 

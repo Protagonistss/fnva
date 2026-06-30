@@ -1,0 +1,10 @@
+# Apache Maven 版本兜底列表(网络抓取失败 / 离线时使用)
+# 来源:https://archive.apache.org/dist/maven/maven-3/
+versions = [
+    "3.9.16",
+    "3.9.9",
+    "3.8.8",
+    "3.6.3",
+    "3.5.4",
+    "3.3.9",
+]

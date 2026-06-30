@@ -162,7 +162,7 @@ impl ValidationUtils {
         Ok(())
     }
 
-    /// 验证温度参数（用于 LLM）
+    /// 验证温度参数
     pub fn validate_temperature(temperature: f64) -> Result<(), String> {
         if !(0.0..=2.0).contains(&temperature) {
             return Err("Temperature must be between 0.0 and 2.0".to_string());

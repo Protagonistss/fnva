@@ -29,14 +29,49 @@ fn default_true() -> bool {
 pub struct MirrorsConfig {
     #[serde(default = "default_java_mirrors")]
     pub java: Vec<MirrorConfig>,
+    #[serde(default = "default_maven_mirrors")]
+    pub maven: Vec<MirrorConfig>,
 }
 
 impl Default for MirrorsConfig {
     fn default() -> Self {
         Self {
             java: default_java_mirrors(),
+            maven: default_maven_mirrors(),
         }
     }
+}
+
+impl MirrorsConfig {
+    /// 通用访问器:按工具 id 取镜像列表(未知工具返回空切片)。
+    pub fn get(&self, tool: &str) -> &[MirrorConfig] {
+        match tool {
+            "java" => &self.java,
+            "maven" => &self.maven,
+            _ => &[],
+        }
+    }
+}
+
+fn default_maven_mirrors() -> Vec<MirrorConfig> {
+    vec![
+        MirrorConfig {
+            name: "tsinghua".to_string(),
+            priority: 1,
+            base_url: "https://mirrors.tuna.tsinghua.edu.cn/apache/maven/maven-3".to_string(),
+            url_template: "{base_url}/{version}/binaries/apache-maven-{version}-bin.tar.gz"
+                .to_string(),
+            enabled: true,
+        },
+        MirrorConfig {
+            name: "apache-archive".to_string(),
+            priority: 2,
+            base_url: "https://archive.apache.org/dist/maven/maven-3".to_string(),
+            url_template: "{base_url}/{version}/binaries/apache-maven-{version}-bin.tar.gz"
+                .to_string(),
+            enabled: true,
+        },
+    ]
 }
 
 fn default_java_mirrors() -> Vec<MirrorConfig> {
@@ -49,15 +84,8 @@ fn default_java_mirrors() -> Vec<MirrorConfig> {
             enabled: true,
         },
         MirrorConfig {
-            name: "aliyun".to_string(),
-            priority: 2,
-            base_url: "https://mirrors.aliyun.com/eclipse/temurin-compliance/temurin".to_string(),
-            url_template: "{base_url}/{major}/{tag}/{filename}".to_string(),
-            enabled: true,
-        },
-        MirrorConfig {
             name: "github".to_string(),
-            priority: 3,
+            priority: 2,
             base_url: String::new(),
             url_template: "https://github.com/adoptium/temurin{major}-binaries/releases/download/{tag}/{filename}".to_string(),
             enabled: true,
@@ -71,7 +99,7 @@ pub struct Config {
     #[serde(default)]
     pub java_environments: Vec<JavaEnvironment>,
     #[serde(default)]
-    pub llm_environments: Vec<LlmEnvironment>,
+    pub maven_environments: Vec<MavenEnvironment>,
     #[serde(default)]
     pub cc_environments: Vec<CcEnvironment>,
     #[serde(default)]
@@ -88,6 +116,12 @@ pub struct Config {
     /// 默认 Java 环境名称（类似 fnm 的默认版本）
     #[serde(default)]
     pub default_java_env: Option<String>,
+    /// 当前激活的 Maven 环境名称
+    #[serde(default)]
+    pub current_maven_env: Option<String>,
+    /// 默认 Maven 环境名称
+    #[serde(default)]
+    pub default_maven_env: Option<String>,
     #[serde(default)]
     pub default_cc_env: Option<String>,
     /// 自定义 Java 扫描路径
@@ -216,23 +250,15 @@ pub enum EnvironmentSource {
     Scanned,
 }
 
-/// LLM 环境配置
+/// Maven 环境配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LlmEnvironment {
+pub struct MavenEnvironment {
     pub name: String,
-    pub provider: String,
-    #[serde(default)]
-    pub api_key: String,
-    #[serde(default)]
-    pub base_url: String,
-    #[serde(default)]
-    pub model: String,
-    #[serde(default)]
-    pub temperature: Option<f64>,
-    #[serde(default)]
-    pub max_tokens: Option<u32>,
+    pub maven_home: String,
     #[serde(default)]
     pub description: String,
+    #[serde(default)]
+    pub source: EnvironmentSource,
 }
 
 /// CC (Claude Code) 环境配置
@@ -265,13 +291,15 @@ impl Config {
     pub fn new() -> Self {
         Config {
             java_environments: Vec::new(),
-            llm_environments: Vec::new(),
+            maven_environments: Vec::new(),
             cc_environments: default_cc_environments(),
             mirrors: MirrorsConfig::default(),
             download: DownloadConfig::default(),
             java_versions_path: None,
             current_java_env: None,
             default_java_env: None,
+            current_maven_env: None,
+            default_maven_env: None,
             default_cc_env: Some("anthropic-cc".to_string()),
             custom_java_scan_paths: Vec::new(),
             removed_java_names: Vec::new(),
@@ -280,6 +308,7 @@ impl Config {
 
     /// 从文件加载配置
     pub fn load() -> Result<Self, String> {
+        crate::infrastructure::paths::migrate_layout();
         let config_path = get_config_path()?;
 
         if !config_path.exists() {
@@ -361,31 +390,6 @@ impl Config {
         self.current_java_env = None;
     }
 
-    /// 添加 LLM 环境
-    pub fn add_llm_env(&mut self, env: LlmEnvironment) -> Result<(), String> {
-        // 检查名称是否已存在
-        if self.llm_environments.iter().any(|e| e.name == env.name) {
-            return Err(format!("LLM 环境 '{}' 已存在", env.name));
-        }
-        self.llm_environments.push(env);
-        Ok(())
-    }
-
-    /// 删除 LLM 环境
-    pub fn remove_llm_env(&mut self, name: &str) -> Result<(), String> {
-        let original_len = self.llm_environments.len();
-        self.llm_environments.retain(|e| e.name != name);
-        if self.llm_environments.len() == original_len {
-            return Err(format!("LLM 环境 '{name}' 不存在"));
-        }
-        Ok(())
-    }
-
-    /// 获取 LLM 环境
-    pub fn get_llm_env(&self, name: &str) -> Option<&LlmEnvironment> {
-        self.llm_environments.iter().find(|e| e.name == name)
-    }
-
     /// 设置默认 Java 环境
     pub fn set_default_java_env(&mut self, name: String) -> Result<(), String> {
         // 跳过验证，直接设置默认环境
@@ -410,6 +414,87 @@ impl Config {
     /// 清除默认 Java 环境
     pub fn clear_default_java_env(&mut self) {
         self.default_java_env = None;
+    }
+
+    /// 添加 Maven 环境
+    pub fn add_maven_env(&mut self, env: MavenEnvironment) -> Result<(), String> {
+        if self.maven_environments.iter().any(|e| e.name == env.name) {
+            return Err(format!("Maven 环境 '{}' 已存在", env.name));
+        }
+        self.maven_environments.push(env);
+        Ok(())
+    }
+
+    /// 删除 Maven 环境
+    pub fn remove_maven_env(&mut self, name: &str) -> Result<(), String> {
+        let original_len = self.maven_environments.len();
+        self.maven_environments.retain(|e| e.name != name);
+        if self.maven_environments.len() == original_len {
+            return Err(format!("Maven 环境 '{name}' 不存在"));
+        }
+        Ok(())
+    }
+
+    /// 获取 Maven 环境
+    pub fn get_maven_env(&self, name: &str) -> Option<&MavenEnvironment> {
+        self.maven_environments.iter().find(|e| e.name == name)
+    }
+
+    /// 设置当前激活的 Maven 环境
+    pub fn set_current_maven_env(&mut self, name: String) -> Result<(), String> {
+        if !self.maven_environments.iter().any(|e| e.name == name) {
+            return Err(format!("Maven 环境 '{name}' 不存在"));
+        }
+        self.current_maven_env = Some(name);
+        Ok(())
+    }
+
+    /// 获取当前激活的 Maven 环境
+    pub fn get_current_maven_env(&self) -> Option<&MavenEnvironment> {
+        if let Some(ref name) = self.current_maven_env {
+            self.get_maven_env(name)
+        } else {
+            None
+        }
+    }
+
+    /// 清除当前激活的 Maven 环境
+    pub fn clear_current_maven_env(&mut self) {
+        self.current_maven_env = None;
+    }
+
+    /// 设置默认 Maven 环境
+    pub fn set_default_maven_env(&mut self, name: String) -> Result<(), String> {
+        self.default_maven_env = Some(name);
+        Ok(())
+    }
+
+    /// 获取默认 Maven 环境
+    pub fn get_default_maven_env(&self) -> Option<&MavenEnvironment> {
+        if let Some(ref name) = self.default_maven_env {
+            self.get_maven_env(name)
+        } else {
+            None
+        }
+    }
+
+    /// 清除默认 Maven 环境
+    pub fn clear_default_maven_env(&mut self) {
+        self.default_maven_env = None;
+    }
+
+    /// 获取有效的 Maven 环境（优先级：当前环境 → 默认环境）
+    pub fn get_effective_maven_env(&self) -> Option<&MavenEnvironment> {
+        if let Some(ref name) = self.current_maven_env {
+            if let Some(env) = self.get_maven_env(name) {
+                return Some(env);
+            }
+        }
+        if let Some(ref name) = self.default_maven_env {
+            self.get_maven_env(name)
+        } else {
+            None
+        }
     }
 
     pub fn clear_default_cc_env(&mut self) {
@@ -495,6 +580,10 @@ impl Config {
             config.mirrors = default_config.mirrors.clone();
             updated = true;
         }
+        if config.mirrors.maven.is_empty() {
+            config.mirrors.maven = default_config.mirrors.maven.clone();
+            updated = true;
+        }
 
         // 序列化配置
         let serialized =
@@ -527,17 +616,12 @@ pub fn resolve_env_var(value: &str) -> String {
 
 /// 获取配置文件路径
 pub fn get_config_path() -> Result<PathBuf, String> {
-    let home_dir = dirs::home_dir().ok_or_else(|| "无法获取用户主目录".to_string())?;
-
-    let config_file = home_dir.join(".fnva").join("config.toml");
-    Ok(config_file)
+    crate::infrastructure::paths::config_path()
 }
 
 /// 获取配置目录
 pub fn get_config_dir() -> Result<PathBuf, String> {
-    let home_dir = dirs::home_dir().ok_or_else(|| "无法获取用户主目录".to_string())?;
-
-    Ok(home_dir.join(".fnva"))
+    crate::infrastructure::paths::fnva_dir()
 }
 
 #[cfg(test)]
@@ -570,5 +654,52 @@ mod tests {
 
         assert!(config.add_java_env(env.clone()).is_ok());
         assert!(config.add_java_env(env).is_err()); // 重复添加应该失败
+    }
+
+    #[test]
+    fn test_config_add_maven_env() {
+        let mut config = Config::new();
+        let env = MavenEnvironment {
+            name: "maven3".to_string(),
+            maven_home: "/home/user/.fnva/packages/maven/3.9.16".to_string(),
+            description: "Maven 3.9.16".to_string(),
+            source: EnvironmentSource::Manual,
+        };
+        assert!(config.add_maven_env(env.clone()).is_ok());
+        assert!(config.add_maven_env(env).is_err()); // 重复添加应该失败
+        assert_eq!(
+            config.get_maven_env("maven3").unwrap().maven_home,
+            "/home/user/.fnva/packages/maven/3.9.16"
+        );
+    }
+
+    #[test]
+    fn test_default_maven_mirrors() {
+        let m = default_maven_mirrors();
+        assert!(m.iter().any(|x| x.name == "tsinghua"));
+        assert!(m.iter().any(|x| x.name == "apache-archive"));
+        // 清华优先级最高
+        assert_eq!(
+            m.iter().min_by_key(|x| x.priority).unwrap().name,
+            "tsinghua"
+        );
+    }
+
+    #[test]
+    fn test_config_maven_toml_roundtrip() {
+        let mut config = Config::new();
+        config
+            .add_maven_env(MavenEnvironment {
+                name: "mvn39".to_string(),
+                maven_home: "/x/maven".to_string(),
+                description: "M".to_string(),
+                source: EnvironmentSource::Manual,
+            })
+            .unwrap();
+        let toml_str = toml::to_string_pretty(&config).expect("serialize");
+        let parsed: Config = toml::from_str(&toml_str).expect("deserialize");
+        assert_eq!(parsed.get_maven_env("mvn39").unwrap().maven_home, "/x/maven");
+        // maven 镜像默认补全
+        assert!(!parsed.mirrors.maven.is_empty());
     }
 }

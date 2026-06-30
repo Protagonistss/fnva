@@ -23,11 +23,11 @@ impl JavaManager {
     ) -> Result<String, String> {
         let env = config
             .get_java_env(name)
-            .ok_or_else(|| format!("Java 环境 '{name}' 不存在"))?;
+            .ok_or_else(|| format!("Java environment '{name}' not found"))?;
 
         // 验证 Java Home 路径
         if !validate_java_home(&env.java_home) {
-            return Err(format!("无效的 JAVA_HOME 路径: {}", env.java_home));
+            return Err(format!("Invalid JAVA_HOME path: {}", env.java_home));
         }
 
         let shell = shell.unwrap_or_else(detect_shell);
@@ -55,20 +55,18 @@ impl JavaManager {
     pub fn generate_switch_script(config: &Config, name: &str) -> Result<String, String> {
         let env = config
             .get_java_env(name)
-            .ok_or_else(|| format!("Java 环境 '{name}' 不存在"))?;
+            .ok_or_else(|| format!("Java environment '{name}' not found"))?;
 
         // 验证 Java Home 路径
         if !validate_java_home(&env.java_home) {
-            return Err(format!("无效的 JAVA_HOME 路径: {}", env.java_home));
+            return Err(format!("Invalid JAVA_HOME path: {}", env.java_home));
         }
 
         // 获取 PowerShell 脚本路径
-        let script_dir = dirs::home_dir()
-            .ok_or_else(|| "无法获取用户主目录".to_string())?
-            .join(".fnva");
+        let script_dir = crate::infrastructure::paths::fnva_dir()?;
 
         // 确保目录存在
-        std::fs::create_dir_all(&script_dir).map_err(|e| format!("创建脚本目录失败: {e}"))?;
+        std::fs::create_dir_all(&script_dir).map_err(|e| format!("Failed to create script directory: {e}"))?;
 
         let script_path = script_dir.join("switch-java.ps1");
 
@@ -95,8 +93,8 @@ $JavaEnvironments = @{{
 $TargetEnv = $JavaEnvironments[$TargetJava]
 
 if (!$TargetEnv) {{
-    Write-Error "找不到 Java 环境: $TargetJava"
-    Write-Host "可用的 Java 环境:"
+    Write-Error "Java environment not found: $TargetJava"
+    Write-Host "Available Java environments:"
     $JavaEnvironments.Keys | ForEach-Object {{
         Write-Host "  - $($_): $($JavaEnvironments[$_].java_home)"
     }}
@@ -107,16 +105,16 @@ if (!$TargetEnv) {{
 $env:JAVA_HOME = $TargetEnv.java_home
 $env:PATH = "$($TargetEnv.java_home)\bin;" + $env:PATH
 
-Write-Host "✅ 已切换到 Java: $TargetJava" -ForegroundColor Green
-Write-Host "📍 JAVA_HOME: $env:JAVA_HOME" -ForegroundColor Yellow
+Write-Host "Switched to Java: $TargetJava" -ForegroundColor Green
+Write-Host "JAVA_HOME: $env:JAVA_HOME" -ForegroundColor Yellow
 
 # 验证切换结果
 try {{
     $VersionOutput = & "$($TargetEnv.java_home)\bin\java.exe" --version 2>&1
-    Write-Host "🔍 Java 版本:" -ForegroundColor Cyan
+    Write-Host "Java version:" -ForegroundColor Cyan
     Write-Host $VersionOutput[0] -ForegroundColor White
 }} catch {{
-    Write-Warning "无法验证 Java 版本，请检查安装"
+    Write-Warning "Unable to verify Java version, please check the installation"
 }}
 "#,
             name, env.java_home
@@ -124,9 +122,9 @@ try {{
 
         // 写入脚本文件
         std::fs::write(&script_path, script_content)
-            .map_err(|e| format!("写入脚本文件失败: {e}"))?;
+            .map_err(|e| format!("Failed to write script file: {e}"))?;
 
-        Ok(format!("✅ 已生成切换脚本: {}\n使用方法: .\\switch-java.ps1 [环境名称]\n\n💡 提示: 将此目录添加到 PATH 或使用完整路径执行", script_path.display()))
+        Ok(format!("Generated switch script: {}\nUsage: .\\switch-java.ps1 [environment name]\n\nTip: Add this directory to PATH or use the full path to run it", script_path.display()))
     }
 
     /// 直接使用指定的 Java 版本执行命令
@@ -137,11 +135,11 @@ try {{
     ) -> Result<(), String> {
         let env = config
             .get_java_env(name)
-            .ok_or_else(|| format!("Java 环境 '{name}' 不存在"))?;
+            .ok_or_else(|| format!("Java environment '{name}' not found"))?;
 
         // 验证 Java Home 路径
         if !validate_java_home(&env.java_home) {
-            return Err(format!("无效的 JAVA_HOME 路径: {}", env.java_home));
+            return Err(format!("Invalid JAVA_HOME path: {}", env.java_home));
         }
 
         let java_exe = if cfg!(target_os = "windows") {
@@ -157,13 +155,13 @@ try {{
         // 执行命令
         let output = cmd
             .output()
-            .map_err(|e| format!("执行 Java 命令失败: {e}"))?;
+            .map_err(|e| format!("Failed to execute Java command: {e}"))?;
 
         if output.status.success() {
             println!("{}", String::from_utf8_lossy(&output.stdout));
         } else {
             let error = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("Java 命令执行失败: {error}"));
+            return Err(format!("Java command failed: {error}"));
         }
 
         Ok(())
@@ -213,7 +211,7 @@ try {{
     ) -> Result<(), String> {
         // 验证路径
         if !validate_java_home(&java_home) {
-            return Err(format!("无效的 JAVA_HOME 路径: {java_home}"));
+            return Err(format!("Invalid JAVA_HOME path: {java_home}"));
         }
 
         let env = JavaEnvironment {
@@ -282,10 +280,10 @@ fn get_java_version(java_exe: &Path) -> Result<String, String> {
     let output = Command::new(java_exe)
         .arg("-version")
         .output()
-        .map_err(|e| format!("执行 java -version 失败: {e}"))?;
+        .map_err(|e| format!("Failed to execute java -version: {e}"))?;
 
     if !output.status.success() {
-        return Err("无法获取 Java 版本".to_string());
+        return Err("Cannot get Java version".to_string());
     }
 
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -300,7 +298,7 @@ fn get_java_version(java_exe: &Path) -> Result<String, String> {
         }
     }
 
-    Err("无法解析版本信息".to_string())
+    Err("Cannot parse version info".to_string())
 }
 
 /// 从 java 可执行文件路径找到 JAVA_HOME

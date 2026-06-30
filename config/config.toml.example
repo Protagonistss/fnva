@@ -92,34 +92,6 @@ base_url = "https://api.moonshot.cn/anthropic"
 sonnet_model = "claude-sonnet-4-5"
 description = "Moonshot Claude Code 环境"
 
-# 仓库配置
-[repositories]
-
-# Maven 仓库配置（用于查询依赖版本）
-maven = [
-    "https://maven.aliyun.com/repository/public",  # 阿里云 Maven 仓库（推荐，国内速度快）
-    "https://search.maven.org/solrsearch/select",  # Maven Central 搜索 API
-    "https://repo1.maven.org/maven2",  # Maven Central 仓库
-]
-
-# Java 下载器配置
-[repositories.java]
-# 主要下载器：tsinghua（清华 Adoptium 镜像），可回退 aliyun/github
-downloader = "tsinghua"
-# 备用下载器列表
-fallback = ["aliyun", "github"]
-# 是否启用自动回退到备用下载器
-enable_fallback = true
-# 传统仓库URL列表（向后兼容，已废弃但保留）
-repositories = []
-
-# Java 下载源配置（旧版，保留向后兼容）
-[java_download_sources]
-# 备用下载源名称列表
-fallback = ["aliyun", "github"]
-# 自定义下载源列表（可选）
-sources = []
-
 # 镜像配置（模板化 URL）
 # 每个镜像定义 URL 模板，按 priority 排序自动回退
 # 可用模板变量: {base_url}, {major}, {tag}, {filename}, {os}, {arch}
@@ -131,22 +103,24 @@ base_url = "https://mirrors.tuna.tsinghua.edu.cn/Adoptium"
 url_template = "{base_url}/{major}/jdk/{arch}/{os}/{filename}"
 
 [[mirrors.java]]
-name = "aliyun"
-priority = 2
-enabled = true
-base_url = "https://mirrors.aliyun.com/eclipse/temurin-compliance/temurin"
-url_template = "{base_url}/{major}/{tag}/{filename}"
-
-[[mirrors.java]]
 name = "github"
-priority = 3
+priority = 2
 enabled = true
 url_template = "https://github.com/adoptium/temurin{major}-binaries/releases/download/{tag}/{filename}"
 
-# Java 版本缓存配置
-[java_version_cache]
-# 缓存生存时间（秒），0 表示禁用缓存
-ttl = 3600  # 1 小时
-# 是否启用版本缓存
+# Maven 下载镜像(Maven 是跨平台单包,模板变量用 {version}/{filename})
+# 版本列表从 apache archive 动态发现;此处只作下载加速
+[[mirrors.maven]]
+name = "tsinghua"
+priority = 1
 enabled = true
+base_url = "https://mirrors.tuna.tsinghua.edu.cn/apache/maven/maven-3"
+url_template = "{base_url}/{version}/binaries/apache-maven-{version}-bin.tar.gz"
+
+[[mirrors.maven]]
+name = "apache-archive"
+priority = 2
+enabled = true
+base_url = "https://archive.apache.org/dist/maven/maven-3"
+url_template = "{base_url}/{version}/binaries/apache-maven-{version}-bin.tar.gz"
 

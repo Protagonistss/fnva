@@ -14,7 +14,7 @@
 
 </div>
 
-fnva 是一个面向 Java、Claude Code (CC) 和通用 LLM 场景的跨平台环境切换工具。基于 Rust 编写，具备**极速启动**、**零依赖**的特点，通过生成 shell 片段完成环境激活，完全**无常驻后台进程**。
+fnva 是一个面向 Java、Maven 和 Claude Code (CC) 场景的跨平台环境切换工具。基于 Rust 编写，具备**极速启动**、**零依赖**的特点，通过生成 shell 片段完成环境激活，完全**无常驻后台进程**。
 
 ## 核心特性
 
@@ -23,7 +23,7 @@ fnva 是一个面向 Java、Claude Code (CC) 和通用 LLM 场景的跨平台环
 - 🐚 **全平台 Shell 支持**: 原生支持 PowerShell、Bash、Zsh、Fish、CMD。
 - 🧠 **自动恢复**: 打开新终端自动恢复上次使用的环境。
 - ☕ **智能 Java 管理**: 扫描本地 JDK，一键切换。
-- 🤖 **统一的大模型管理**: 集中配置 LLM API 密钥。
+- 📦 **Maven 版本管理**: 从镜像下载安装、一键切换 `MAVEN_HOME`。
 
 ## 文档导航
 
@@ -47,7 +47,7 @@ cargo install fnva
 
 ## Shell 集成
 
-安装 shell 集成后，打开新终端会自动恢复上次使用的 CC/Java 环境变量，且 `fnva <type> use <name>` 无需 `eval` 包裹即可生效。详细请参考 [Shell 集成指南](docs/user-guide/shell-integration.md)。
+安装 shell 集成后，打开新终端会自动恢复上次使用的 CC/Java/Maven 环境变量，且 `fnva <type> use <name>` 无需 `eval` 包裹即可生效。详细请参考 [Shell 集成指南](docs/user-guide/shell-integration.md)。
 
 ## 使用快速入门
 
@@ -57,10 +57,16 @@ cargo install fnva
 - 切换: `eval "$(fnva java use jdk-17)"`
 - 设置默认: `fnva java default jdk-17`
 
-### Claude Code (CC) & LLM
+### Maven
+- 远程版本: `fnva maven ls-remote`
+- 安装: `fnva maven install 3.9.16`
+- 列表: `fnva maven list`
+- 切换: `eval "$(fnva maven use 3.9.16)"`
+- 刷新版本缓存: `fnva maven refresh`
+
+### Claude Code (CC)
 - 列表: `fnva cc list`
 - 切换: `eval "$(fnva cc use glmcc)"`
-- 添加 LLM: `fnva llm add --name openai-dev --provider openai --api-key "sk-..." --model gpt-4`
 
 ## 配置
 
