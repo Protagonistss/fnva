@@ -222,9 +222,7 @@ impl JavaInstaller {
         let mut major_versions: Vec<_> = versions_by_major.keys().cloned().collect();
         major_versions.sort_by(|a, b| b.cmp(a));
 
-        result.push(format!(
-            "Available versions (* = LTS):"
-        ));
+        result.push("Available versions (* = LTS):".to_string());
         result.push("".to_string());
 
         for major in major_versions.iter().take(15) {

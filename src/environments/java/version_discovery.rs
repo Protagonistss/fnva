@@ -300,7 +300,7 @@ impl VersionDiscovery for AdoptiumDiscovery {
     ) -> Pin<Box<dyn Future<Output = Result<Vec<ResolvedVersion>, DiscoveryError>> + Send + '_>> {
         Box::pin(async {
             let versions = self.load_versions().await?;
-            Ok(versions.iter().map(|v| Self::make_resolved(v)).collect())
+            Ok(versions.iter().map(Self::make_resolved).collect())
         })
     }
 
@@ -326,7 +326,7 @@ impl VersionDiscovery for AdoptiumDiscovery {
             matching
                 .first()
                 .map(|v| Self::make_resolved(v))
-                .ok_or_else(|| DiscoveryError::NotFound(s))
+                .ok_or(DiscoveryError::NotFound(s))
         })
     }
 

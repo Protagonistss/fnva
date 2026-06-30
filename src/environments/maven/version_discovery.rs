@@ -43,7 +43,7 @@ impl MirrorDirectoryDiscovery {
 
     fn cache_path() -> Result<std::path::PathBuf, DiscoveryError> {
         crate::infrastructure::paths::maven_versions_path()
-            .map_err(|e| DiscoveryError::Io(e.into()))
+            .map_err(DiscoveryError::Io)
     }
 
     /// 手写扫描目录 HTML,提取 `href="X.Y.Z/"` 形态的纯数字版本号。
@@ -56,7 +56,7 @@ impl MirrorDirectoryDiscovery {
             rest = &rest[pos + 6..]; // skip `href="`
             // 候选版本号:读到 `"` 或 `/`
             let end = rest
-                .find(|c: char| c == '"' || c == '/')
+                .find(['"', '/'])
                 .unwrap_or(rest.len());
             let candidate = &rest[..end];
             if Self::is_numeric_version(candidate) {
@@ -99,7 +99,7 @@ impl MirrorDirectoryDiscovery {
         if versions.is_empty() {
             return Self::embedded_versions();
         }
-        versions.sort_by(|a, b| version_sort_key(b).cmp(&version_sort_key(a))); // 倒序,最新优先
+        versions.sort_by_key(|v| std::cmp::Reverse(version_sort_key(v)));
 
         if let Ok(path) = Self::cache_path() {
             if let Some(parent) = path.parent() {
@@ -146,7 +146,7 @@ impl MirrorDirectoryDiscovery {
             .iter()
             .filter_map(|v| v.as_str().map(String::from))
             .collect();
-        vs.sort_by(|a, b| version_sort_key(b).cmp(&version_sort_key(a)));
+        vs.sort_by_key(|v| std::cmp::Reverse(version_sort_key(v)));
         Ok(vs)
     }
 }
