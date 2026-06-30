@@ -35,8 +35,7 @@ impl CurrentEnvsFile {
         }
         let content = fs::read_to_string(&path)
             .map_err(|e| format!("Failed to read current_envs.toml: {e}"))?;
-        toml::from_str(&content)
-            .map_err(|e| format!("Failed to parse current_envs.toml: {e}"))
+        toml::from_str(&content).map_err(|e| format!("Failed to parse current_envs.toml: {e}"))
     }
 
     /// Write (or update) the entry for one environment type.
@@ -65,9 +64,15 @@ impl CurrentEnvsFile {
     /// Convert to a HashMap for template rendering.
     pub fn to_map(&self) -> HashMap<String, String> {
         let mut map = HashMap::new();
-        if let Some(ref v) = self.cc { map.insert("cc".to_string(), v.clone()); }
-        if let Some(ref v) = self.java { map.insert("java".to_string(), v.clone()); }
-        if let Some(ref v) = self.maven { map.insert("maven".to_string(), v.clone()); }
+        if let Some(ref v) = self.cc {
+            map.insert("cc".to_string(), v.clone());
+        }
+        if let Some(ref v) = self.java {
+            map.insert("java".to_string(), v.clone());
+        }
+        if let Some(ref v) = self.maven {
+            map.insert("maven".to_string(), v.clone());
+        }
         map
     }
 
@@ -75,13 +80,11 @@ impl CurrentEnvsFile {
     fn save(&self) -> Result<(), String> {
         let path = Self::path()?;
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create .fnva dir: {e}"))?;
+            fs::create_dir_all(parent).map_err(|e| format!("Failed to create .fnva dir: {e}"))?;
         }
         let content = toml::to_string_pretty(self)
             .map_err(|e| format!("Failed to serialize current_envs: {e}"))?;
-        fs::write(&path, content)
-            .map_err(|e| format!("Failed to write current_envs.toml: {e}"))?;
+        fs::write(&path, content).map_err(|e| format!("Failed to write current_envs.toml: {e}"))?;
         Ok(())
     }
 }

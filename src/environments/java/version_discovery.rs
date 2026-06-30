@@ -78,9 +78,7 @@ pub fn parse_version_spec(spec: &str) -> Result<VersionSpec, String> {
 fn parse_filename(filename: &str, major: u32) -> Option<(String, String)> {
     let key = "_hotspot_";
     let after = filename.find(key)? + key.len();
-    let end = filename
-        .find(".tar.gz")
-        .or_else(|| filename.find(".zip"))?;
+    let end = filename.find(".tar.gz").or_else(|| filename.find(".zip"))?;
     if after >= end {
         return None;
     }
@@ -297,7 +295,8 @@ impl Default for AdoptiumDiscovery {
 impl VersionDiscovery for AdoptiumDiscovery {
     fn list(
         &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<ResolvedVersion>, DiscoveryError>> + Send + '_>> {
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<ResolvedVersion>, DiscoveryError>> + Send + '_>>
+    {
         Box::pin(async {
             let versions = self.load_versions().await?;
             Ok(versions.iter().map(Self::make_resolved).collect())
@@ -345,14 +344,16 @@ mod tests {
 
     #[test]
     fn parse_filename_major21() {
-        let (v, t) = parse_filename("OpenJDK21U-jdk_x64_linux_hotspot_21.0.11_10.tar.gz", 21).unwrap();
+        let (v, t) =
+            parse_filename("OpenJDK21U-jdk_x64_linux_hotspot_21.0.11_10.tar.gz", 21).unwrap();
         assert_eq!(v, "21.0.11+10");
         assert_eq!(t, "jdk-21.0.11+10");
     }
 
     #[test]
     fn parse_filename_major17() {
-        let (v, _) = parse_filename("OpenJDK17U-jdk_x64_linux_hotspot_17.0.19_10.tar.gz", 17).unwrap();
+        let (v, _) =
+            parse_filename("OpenJDK17U-jdk_x64_linux_hotspot_17.0.19_10.tar.gz", 17).unwrap();
         assert_eq!(v, "17.0.19+10");
     }
 
@@ -365,7 +366,8 @@ mod tests {
 
     #[test]
     fn parse_filename_zip() {
-        let (v, _) = parse_filename("OpenJDK21U-jdk_x64_windows_hotspot_21.0.11_10.zip", 21).unwrap();
+        let (v, _) =
+            parse_filename("OpenJDK21U-jdk_x64_windows_hotspot_21.0.11_10.zip", 21).unwrap();
         assert_eq!(v, "21.0.11+10");
     }
 
@@ -374,9 +376,18 @@ mod tests {
         assert_eq!(parse_version_spec("lts").unwrap(), VersionSpec::LatestLts);
         assert_eq!(parse_version_spec("latest").unwrap(), VersionSpec::Latest);
         assert_eq!(parse_version_spec("21").unwrap(), VersionSpec::Major(21));
-        assert_eq!(parse_version_spec("17+").unwrap(), VersionSpec::Range(17, 999));
-        assert_eq!(parse_version_spec("8-11").unwrap(), VersionSpec::Range(8, 11));
-        assert!(matches!(parse_version_spec("21.0.1").unwrap(), VersionSpec::Exact(_)));
+        assert_eq!(
+            parse_version_spec("17+").unwrap(),
+            VersionSpec::Range(17, 999)
+        );
+        assert_eq!(
+            parse_version_spec("8-11").unwrap(),
+            VersionSpec::Range(8, 11)
+        );
+        assert!(matches!(
+            parse_version_spec("21.0.1").unwrap(),
+            VersionSpec::Exact(_)
+        ));
     }
 
     #[test]

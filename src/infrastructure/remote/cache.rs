@@ -49,7 +49,8 @@ impl VersionCacheManager {
         let cache_dir = crate::infrastructure::paths::cache_dir()?;
 
         // 确保缓存目录存在
-        fs::create_dir_all(&cache_dir).map_err(|e| format!("Failed to create cache directory: {e}"))?;
+        fs::create_dir_all(&cache_dir)
+            .map_err(|e| format!("Failed to create cache directory: {e}"))?;
 
         Ok(Self {
             cache_dir,
@@ -77,8 +78,8 @@ impl VersionCacheManager {
         let ttl = ttl.unwrap_or(self.default_ttl);
         let entry = CacheEntry::new(data, ttl);
 
-        let json =
-            serde_json::to_string_pretty(&entry).map_err(|e| format!("Failed to serialize cache: {e}"))?;
+        let json = serde_json::to_string_pretty(&entry)
+            .map_err(|e| format!("Failed to serialize cache: {e}"))?;
 
         let file_path = self.cache_file_path(key);
         async_fs::write(&file_path, json)
@@ -175,9 +176,11 @@ impl VersionCacheManager {
             return Ok(());
         }
 
-        fs::remove_dir_all(&self.cache_dir).map_err(|e| format!("Failed to clear cache directory: {e}"))?;
+        fs::remove_dir_all(&self.cache_dir)
+            .map_err(|e| format!("Failed to clear cache directory: {e}"))?;
 
-        fs::create_dir_all(&self.cache_dir).map_err(|e| format!("Failed to recreate cache directory: {e}"))?;
+        fs::create_dir_all(&self.cache_dir)
+            .map_err(|e| format!("Failed to recreate cache directory: {e}"))?;
 
         println!("All cache cleared");
         Ok(())

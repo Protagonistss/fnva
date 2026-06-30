@@ -68,7 +68,9 @@ fn classify_error(error: &str, status_code: Option<u16>) -> ErrorType {
     if let Some(code) = status_code {
         match code {
             404 | 403 | 401 => {
-                return ErrorType::Permanent(format!("Resource not found or access denied (HTTP {code})"))
+                return ErrorType::Permanent(format!(
+                    "Resource not found or access denied (HTTP {code})"
+                ))
             }
             500..=599 => return ErrorType::Transient(format!("Server error (HTTP {code})")),
             _ => {}
@@ -260,7 +262,9 @@ async fn download_to_bytes_internal(
 
     let status = response.status();
     if !status.is_success() {
-        return Err(format!("Server returned status code: {status} (URL: {url})"));
+        return Err(format!(
+            "Server returned status code: {status} (URL: {url})"
+        ));
     }
 
     let total_size = response.content_length().unwrap_or(0);
@@ -409,7 +413,9 @@ async fn download_to_file_internal(
 
     let status = response.status();
     if !status.is_success() {
-        return Err(format!("Server returned status code: {status} (URL: {url})"));
+        return Err(format!(
+            "Server returned status code: {status} (URL: {url})"
+        ));
     }
 
     let total_size = response.content_length().unwrap_or(0);

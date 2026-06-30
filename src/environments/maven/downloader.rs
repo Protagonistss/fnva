@@ -31,7 +31,8 @@ impl MavenDownloader {
 impl ToolDownloader for MavenDownloader {
     fn list_available_versions(
         &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<ResolvedVersion>, DownloadError>> + Send + '_>> {
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<ResolvedVersion>, DownloadError>> + Send + '_>>
+    {
         Box::pin(async {
             self.discovery
                 .list()
@@ -84,8 +85,8 @@ impl ToolDownloader for MavenDownloader {
             println!("Downloading Maven {version_str}...");
             println!("URL: {url}");
 
-            let cache_dir = crate::infrastructure::paths::downloads_dir()
-                .map_err(DownloadError::Io)?;
+            let cache_dir =
+                crate::infrastructure::paths::downloads_dir().map_err(DownloadError::Io)?;
             tokio::fs::create_dir_all(&cache_dir)
                 .await
                 .map_err(|e| DownloadError::Io(format!("Failed to create cache directory: {e}")))?;
@@ -97,9 +98,9 @@ impl ToolDownloader for MavenDownloader {
             if let Ok(metadata) = tokio::fs::metadata(&file_path).await {
                 if metadata.len() > 0 {
                     println!("Using cached file ({} MB)", metadata.len() / (1024 * 1024));
-                    let canonical = file_path
-                        .canonicalize()
-                        .map_err(|e| DownloadError::Io(format!("Path canonicalization failed: {e}")))?;
+                    let canonical = file_path.canonicalize().map_err(|e| {
+                        DownloadError::Io(format!("Path canonicalization failed: {e}"))
+                    })?;
                     return Ok(DownloadTarget::File(
                         canonical
                             .to_str()

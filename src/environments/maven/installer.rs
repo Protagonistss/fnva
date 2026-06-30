@@ -34,7 +34,11 @@ impl MavenInstaller {
             println!("Found local Maven package: {version_spec}");
             println!("Using local install: {home}");
             return Self::complete_installation(
-                version_spec, config, auto_switch, &home, version_spec,
+                version_spec,
+                config,
+                auto_switch,
+                &home,
+                version_spec,
             )
             .await;
         }

@@ -103,10 +103,16 @@ pub fn migrate_layout() {
     }
     move_item(&base.join("current_envs.toml"), &current_envs_path().ok());
     move_item(&base.join("history.toml"), &history_path().ok());
-    move_item(&base.join("maven_versions.json"), &maven_versions_path().ok());
+    move_item(
+        &base.join("maven_versions.json"),
+        &maven_versions_path().ok(),
+    );
 
     move_item(&base.join("java-packages"), &tool_packages_dir("java").ok());
-    move_item(&base.join("maven-packages"), &tool_packages_dir("maven").ok());
+    move_item(
+        &base.join("maven-packages"),
+        &tool_packages_dir("maven").ok(),
+    );
 
     // 删除死代码遗留的 current_env 单文件
     let _ = std::fs::remove_file(base.join("current_env"));
@@ -149,7 +155,9 @@ fn clean_aliyun_mirror() {
 /// Remove interrupted download leftovers (`*.downloading`).
 fn clean_downloading() {
     let Ok(dir) = downloads_dir() else { return };
-    let Ok(entries) = std::fs::read_dir(&dir) else { return };
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return;
+    };
     for entry in entries.flatten() {
         let path = entry.path();
         if path.extension().and_then(|e| e.to_str()) == Some("downloading") {
