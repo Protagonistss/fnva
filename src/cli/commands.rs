@@ -245,6 +245,8 @@ pub enum CcCommands {
         #[arg(long)]
         json: bool,
     },
+    /// Scan the system for CC environments
+    Scan,
     /// Switch to a CC environment
     Use {
         /// Environment name

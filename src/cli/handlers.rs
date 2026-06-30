@@ -148,7 +148,6 @@ impl CommandHandler {
             JavaCommands::Refresh => {
                 use crate::environments::java::downloader::JavaDownloader;
                 use crate::infrastructure::config::Config;
-                use crate::infrastructure::tool_protocol::VersionDiscovery;
                 let config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
                 let downloader = JavaDownloader::new(config.mirrors.java);
                 downloader.refresh().await.map_err(|e| format!("{e:?}"))?;
@@ -449,6 +448,13 @@ impl CommandHandler {
                     .await?;
                 print!("{output}");
             }
+            CcCommands::Scan => {
+                let output = self
+                    .switcher
+                    .scan_environments(EnvironmentType::Cc)
+                    .await?;
+                print!("{output}");
+            }
             CcCommands::Use { name, shell, json } => {
                 let shell_type = match shell {
                     Some(s) => Some(parse_shell_type(&s)?),
@@ -564,26 +570,18 @@ impl CommandHandler {
                 model,
                 description,
             } => {
-                use crate::infrastructure::config::{CcEnvironment, Config};
-
-                let mut config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
-                let env = CcEnvironment {
-                    name: name.clone(),
-                    provider: provider.clone(),
-                    api_key: api_key.unwrap_or_default(),
-                    base_url: base_url.unwrap_or_default(),
-                    sonnet_model: model.unwrap_or_else(|| "claude-sonnet-4-5".to_string()),
-                    opus_model: None,
-                    haiku_model: None,
-                    description: description.unwrap_or_default(),
-                };
-                // Check duplicate
-                if config.cc_environments.iter().any(|e| e.name == env.name) {
-                    return Err(format!("CC environment '{}' already exists", env.name));
-                }
-                config.cc_environments.push(env);
-                config.save()?;
-                println!("CC environment '{name}' added ({provider})");
+                let mut json = serde_json::json!({
+                    "provider": provider,
+                    "base_url": base_url.unwrap_or_default(),
+                });
+                if let Some(k) = api_key { json["api_key"] = serde_json::Value::String(k); }
+                if let Some(m) = model { json["sonnet_model"] = serde_json::Value::String(m); }
+                if let Some(d) = description { json["description"] = serde_json::Value::String(d); }
+                let output = self
+                    .switcher
+                    .add_environment(EnvironmentType::Cc, &name, json)
+                    .await?;
+                print!("{output}");
             }
             CcCommands::Remove { name } => {
                 let output = self

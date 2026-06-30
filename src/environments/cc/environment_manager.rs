@@ -111,7 +111,7 @@ impl EnvironmentManager for CcEnvironmentManager {
             .get("sonnet_model")
             .or_else(|| config.get("model"))
             .and_then(|v| v.as_str())
-            .unwrap_or("claude-3-sonnet-20240229");
+            .unwrap_or("claude-sonnet-4-5");
 
         let opus_model = config.get("opus_model").and_then(|v| v.as_str());
         let haiku_model = config.get("haiku_model").and_then(|v| v.as_str());
