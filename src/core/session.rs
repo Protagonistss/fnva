@@ -199,7 +199,7 @@ impl HistoryManager {
 
         // 加载现有历史
         if let Err(e) = history_manager.load_history() {
-            eprintln!("Failed to load history: {e}");
+            crate::cli::print::warn(&format!("Failed to load history: {e}"));
         }
 
         Ok(history_manager)
@@ -246,7 +246,9 @@ impl HistoryManager {
         }) {
             Ok(content) => content,
             Err(e) => {
-                eprintln!("Failed to serialize history: {e}. Skipping history save.");
+                crate::cli::print::warn(&format!(
+                    "Failed to serialize history: {e}. Skipping history save."
+                ));
                 return Ok(());
             }
         };
@@ -282,7 +284,7 @@ impl HistoryManager {
 
         // 尝试保存历史，但不影响主要功能
         if let Err(e) = self.save_history() {
-            eprintln!("Failed to save history: {e}");
+            crate::cli::print::warn(&format!("Failed to save history: {e}"));
         }
 
         Ok(())

@@ -7,11 +7,11 @@ pub fn create_progress_bar() -> Result<ProgressBar, AppError> {
     let pb = ProgressBar::new(0);
     pb.set_style(
         ProgressStyle::default_bar()
-            .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta}) {percent}%")
+            .template("{spinner:.green} [{elapsed_precise}] {bar:40.cyan/blue} {bytes:>8}/{total_bytes:<8} ({eta})")
             .map_err(|e| AppError::Internal {
                 message: format!("Failed to create progress bar style: {e}")
             })?
-            .progress_chars("#>-")
+            .progress_chars("━╸ ")
     );
     Ok(pb)
 }

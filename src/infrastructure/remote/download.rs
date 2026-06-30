@@ -168,12 +168,7 @@ pub async fn download_to_bytes_with_options(
             Ok(data) => {
                 if let Some(expected) = &options.expected_sha256 {
                     if let Err(e) = verify_sha256(&data, expected) {
-                        println!(
-                            "Checksum verification failed (attempt {}/{}): {}",
-                            attempts,
-                            options.retry_count + 1,
-                            e
-                        );
+                        crate::cli::print::step("Error", &format!("Checksum verification failed (attempt {}/{}): {}", attempts, options.retry_count + 1, e));
                         if attempts > options.retry_count {
                             return Err(format!(
                                 "Checksum failed (retried {} times): {}",
@@ -184,7 +179,7 @@ pub async fn download_to_bytes_with_options(
                         tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
                         continue;
                     }
-                    println!("SHA256 checksum verified");
+                    crate::cli::print::step("Status", "SHA256 checksum verified");
                 }
                 return Ok(data);
             }
@@ -327,7 +322,7 @@ pub async fn download_to_file_with_options(
                         tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
                         continue;
                     }
-                    println!("File SHA256 checksum verified");
+                    crate::cli::print::step("Status", "File SHA256 checksum verified");
                 }
                 return Ok(());
             }

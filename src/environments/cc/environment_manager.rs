@@ -26,7 +26,7 @@ impl CcEnvironmentManager {
 
         // 从配置文件加载 CC 环境
         if let Err(e) = manager.load_from_config() {
-            eprintln!("Warning: Failed to load CC environments from config: {e}");
+            crate::cli::print::warn(&format!("Failed to load CC environments from config: {e}"));
         }
 
         manager
@@ -193,7 +193,7 @@ impl EnvironmentManager for CcEnvironmentManager {
     fn use_env(&mut self, name: &str, shell_type: Option<ShellType>) -> Result<String, String> {
         // 重新加载配置以获取最新的设置
         if let Err(e) = self.load_from_config() {
-            eprintln!("Warning: Failed to reload CC config: {e}");
+            crate::cli::print::warn(&format!("Failed to reload CC config: {e}"));
         }
 
         let cc_env = self

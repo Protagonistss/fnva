@@ -85,7 +85,7 @@ impl JavaValidator {
         }
 
         // 如果不在已知列表中，给出警告但不阻止
-        eprintln!("Warning: Unknown Java vendor: {vendor}");
+        crate::cli::print::warn(&format!("Unknown Java vendor: {vendor}"));
         Ok(())
     }
 }

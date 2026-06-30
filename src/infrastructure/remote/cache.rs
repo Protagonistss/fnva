@@ -86,7 +86,7 @@ impl VersionCacheManager {
             .await
             .map_err(|e| format!("Failed to write cache file: {e}"))?;
 
-        println!("Cache saved: {key}");
+        crate::cli::print::step("Cache", &format!("Saved {key}"));
         Ok(())
     }
 
@@ -124,7 +124,7 @@ impl VersionCacheManager {
             async_fs::remove_file(&file_path)
                 .await
                 .map_err(|e| format!("Failed to remove expired cache file: {e}"))?;
-            println!("Cache expired: {key}");
+            crate::cli::print::step("Cache", &format!("Expired {key}"));
             Ok(None)
         }
     }
@@ -164,7 +164,7 @@ impl VersionCacheManager {
         }
 
         if removed_count > 0 {
-            println!("Cleaned {removed_count} expired cache files");
+            crate::cli::print::success(&format!("Cleaned {removed_count} expired cache files"));
         }
 
         Ok(removed_count)
@@ -182,7 +182,7 @@ impl VersionCacheManager {
         fs::create_dir_all(&self.cache_dir)
             .map_err(|e| format!("Failed to recreate cache directory: {e}"))?;
 
-        println!("All cache cleared");
+        crate::cli::print::success("All cache cleared");
         Ok(())
     }
 }

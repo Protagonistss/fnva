@@ -102,8 +102,7 @@ impl ToolDownloader for JavaDownloader {
                 .resolve(&vars)
                 .await
                 .map_err(|e| DownloadError::from(e.to_string()))?;
-            println!("Downloading Java {version_str}...");
-            println!("URL: {url}");
+            crate::cli::print::step("Source", &url);
 
             let cache_dir = crate::infrastructure::paths::downloads_dir()
                 .map_err(|e| DownloadError::Io(format!("Cannot get downloads dir: {e}")))?;
@@ -117,7 +116,10 @@ impl ToolDownloader for JavaDownloader {
 
             if let Ok(metadata) = tokio::fs::metadata(&file_path).await {
                 if metadata.len() > 0 {
-                    println!("Using cached file ({} MB)", metadata.len() / (1024 * 1024));
+                    crate::cli::print::step(
+                        "Status",
+                        &format!("Using cached file ({} MB)", metadata.len() / (1024 * 1024)),
+                    );
                     let canonical = file_path.canonicalize().map_err(|e| {
                         DownloadError::Io(format!("Path canonicalization failed: {e}"))
                     })?;
@@ -140,7 +142,10 @@ impl ToolDownloader for JavaDownloader {
                 .await
                 .map_err(|e| DownloadError::Io(format!("Failed to get file size: {e}")))?
                 .len();
-            println!("Download complete ({} MB)", file_size / (1024 * 1024));
+            crate::cli::print::step(
+                "Status",
+                &format!("Download complete ({} MB)", file_size / (1024 * 1024)),
+            );
 
             let canonical = file_path
                 .canonicalize()

@@ -109,13 +109,13 @@ impl CommandHandler {
                         print!("{}", result.script);
                     } else {
                         // 如果没有脚本，显示成功消息
-                        println!("Switched to Java environment: {name}");
+                        crate::cli::print::success(&format!("{name}  [java]"));
                     }
                 } else {
                     // 如果切换失败，显示错误信息
-                    eprintln!(
-                        "Failed to switch Java environment: {}",
-                        result.error.unwrap_or_else(|| "Unknown error".to_string())
+                    crate::cli::print::failure(
+                        "Failed to switch java environment",
+                        Some(result.error.as_deref().unwrap_or("Unknown error")),
                     );
                     return Err("Environment switch failed".to_string());
                 }
@@ -151,7 +151,7 @@ impl CommandHandler {
                 let config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
                 let downloader = JavaDownloader::new(config.mirrors.java);
                 downloader.refresh().await.map_err(|e| format!("{e:?}"))?;
-                println!("Java version cache refreshed.");
+                crate::cli::print::success("Java version cache refreshed");
             }
             JavaCommands::Install {
                 version,
@@ -164,8 +164,8 @@ impl CommandHandler {
                     Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
                 match JavaInstaller::install_java(&version, &mut config, auto_switch).await {
                     Ok(java_home) => {
-                        println!("Java {version} installed");
-                        println!("Path: {java_home}");
+                        crate::cli::print::success(&format!("java {version} installed"));
+                        crate::cli::print::detail("Path", &java_home);
                     }
                     Err(e) => {
                         return Err(format!("Install failed: {e}"));
@@ -254,10 +254,12 @@ impl CommandHandler {
                                     Err(e) => return Err(e),
                                 }
                             } else {
-                                println!("Default Java environment: {env_name}");
+                                crate::cli::print::success(&format!(
+                                    "{env_name}  [java] (default)"
+                                ));
                             }
                         }
-                        None => println!("No default Java environment set"),
+                        None => crate::cli::print::warn("No default java environment set"),
                     }
                 }
             }
@@ -306,12 +308,12 @@ impl CommandHandler {
                     if !result.script.is_empty() {
                         print!("{}", result.script);
                     } else {
-                        println!("Switched to Maven environment: {name}");
+                        crate::cli::print::success(&format!("{name}  [maven]"));
                     }
                 } else {
-                    eprintln!(
-                        "Failed to switch Maven environment: {}",
-                        result.error.unwrap_or_else(|| "Unknown error".to_string())
+                    crate::cli::print::failure(
+                        "Failed to switch maven environment",
+                        Some(result.error.as_deref().unwrap_or("Unknown error")),
                     );
                     return Err("Environment switch failed".to_string());
                 }
@@ -358,12 +360,12 @@ impl CommandHandler {
             MavenCommands::Refresh => {
                 let discovery = MirrorDirectoryDiscovery::new();
                 discovery.refresh().await.map_err(|e| format!("{e:?}"))?;
-                println!("Maven version cache refreshed.");
+                crate::cli::print::success("Maven version cache refreshed");
             }
             MavenCommands::LsRemote { version } => {
                 let discovery = MirrorDirectoryDiscovery::new();
                 let versions = discovery.list().await.map_err(|e| format!("{e:?}"))?;
-                println!("Available Maven versions:");
+                crate::cli::print::step("Status", "Available Maven versions:");
                 let mut shown = 0;
                 for v in versions.iter().take(30) {
                     if let Some(f) = version.as_deref() {
@@ -371,10 +373,10 @@ impl CommandHandler {
                             continue;
                         }
                     }
-                    println!("  {}", v.version);
+                    crate::cli::print::step("version", &v.version);
                     shown += 1;
                 }
-                println!("({shown} versions shown)");
+                crate::cli::print::step("Status", &format!("({shown} versions shown)"));
             }
             MavenCommands::Current { json } => {
                 let output = self
@@ -434,10 +436,12 @@ impl CommandHandler {
                                     print!("{}", result.script);
                                 }
                             } else {
-                                println!("Default Maven environment: {env_name}");
+                                crate::cli::print::success(&format!(
+                                    "{env_name}  [maven] (default)"
+                                ));
                             }
                         }
-                        None => println!("No default Maven environment set"),
+                        None => crate::cli::print::warn("No default maven environment set"),
                     }
                 }
             }
@@ -491,13 +495,13 @@ impl CommandHandler {
                         print!("{}", result.script);
                     } else {
                         // 如果没有脚本，显示成功消息
-                        println!("Switched to CC environment: {name}");
+                        crate::cli::print::success(&format!("{name}  [cc]"));
                     }
                 } else {
                     // 如果切换失败，显示错误信息
-                    eprintln!(
-                        "Failed to switch CC environment: {}",
-                        result.error.unwrap_or_else(|| "Unknown error".to_string())
+                    crate::cli::print::failure(
+                        "Failed to switch cc environment",
+                        Some(result.error.as_deref().unwrap_or("Unknown error")),
                     );
                     return Err("Environment switch failed".to_string());
                 }
@@ -552,10 +556,10 @@ impl CommandHandler {
                                     Err(e) => return Err(e),
                                 }
                             } else {
-                                println!("Default CC environment: {env_name}");
+                                crate::cli::print::success(&format!("{env_name}  [cc] (default)"));
                             }
                         }
-                        None => println!("No default CC environment set"),
+                        None => crate::cli::print::warn("No default cc environment set"),
                     }
                 }
             }
@@ -625,9 +629,9 @@ impl CommandHandler {
                 use crate::infrastructure::config::Config;
                 let updated = Config::sync()?;
                 if updated {
-                    println!("Configuration synced");
+                    crate::cli::print::success("Configuration synced");
                 } else {
-                    println!("Configuration is up to date");
+                    crate::cli::print::success("Configuration is up to date");
                 }
             }
         }
@@ -638,7 +642,7 @@ impl CommandHandler {
     async fn handle_java_ls_remote(&self, version: Option<u32>) -> Result<String, String> {
         use crate::environments::java::installer::JavaInstaller;
 
-        println!("Querying available Java versions...");
+        crate::cli::print::action("Querying available Java versions...");
 
         match JavaInstaller::list_installable_versions().await {
             Ok(versions) => {
