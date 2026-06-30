@@ -47,10 +47,11 @@ pub enum Commands {
         #[command(subcommand)]
         action: CcCommands,
     },
-    /// Switch and manage environments
+    /// Generate shell integration script (eval "$(fnva env)")
     Env {
-        #[command(subcommand)]
-        action: EnvCommands,
+        /// Shell type (bash/zsh/fish/powershell/cmd, auto-detected if omitted)
+        #[arg(short, long)]
+        shell: Option<String>,
     },
     /// Manage configuration
     Config {
@@ -291,59 +292,6 @@ pub enum CcCommands {
     },
 }
 
-/// Environment management commands
-#[derive(Subcommand)]
-pub enum EnvCommands {
-    /// Generate the environment switch script (like fnm env)
-    #[command(name = "env")]
-    GenerateEnv {
-        /// Shell type
-        #[arg(short, long)]
-        shell: Option<String>,
-    },
-    /// Switch environment
-    Switch {
-        /// Environment type
-        #[arg(short = 't', long)]
-        env_type: String,
-        /// Environment name
-        #[arg(short, long)]
-        name: String,
-        /// Shell type
-        #[arg(short, long)]
-        shell: Option<String>,
-        /// Switch reason
-        #[arg(long)]
-        reason: Option<String>,
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-    },
-    /// List environments
-    List {
-        /// Environment type
-        #[arg(short = 't', long)]
-        env_type: Option<String>,
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-    },
-    /// Show the current environment
-    Current {
-        /// Environment type
-        #[arg(short = 't', long)]
-        env_type: Option<String>,
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-    },
-    /// Generate the shell integration script
-    ShellIntegration {
-        /// Shell type
-        #[arg(short, long)]
-        shell: Option<String>,
-    },
-}
 
 /// Configuration management commands
 #[derive(Subcommand)]

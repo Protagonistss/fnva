@@ -45,7 +45,18 @@ impl CommandHandler {
             Commands::Java { action } => self.handle_java_command(action).await,
             Commands::Cc { action } => self.handle_cc_command(action).await,
             Commands::Maven { action } => self.handle_maven_command(action).await,
-            Commands::Env { action } => self.handle_env_command(action).await,
+            Commands::Env { shell } => {
+                let shell_type = match shell {
+                    Some(s) => Some(parse_shell_type(&s)?),
+                    None => Some(detect_shell()),
+                };
+                let script = self
+                    .switcher
+                    .generate_shell_integration(shell_type.unwrap())
+                    .await?;
+                print!("{script}");
+                Ok(())
+            }
             Commands::Config { action } => self.handle_config_command(action).await,
             Commands::History {
                 env_type,
@@ -564,101 +575,6 @@ impl CommandHandler {
         Ok(())
     }
 
-    /// 处理环境管理命令
-    async fn handle_env_command(&mut self, action: EnvCommands) -> Result<(), String> {
-        match action {
-            EnvCommands::GenerateEnv {
-                shell,
-            } => {
-                let shell_type = match shell {
-                    Some(s) => Some(parse_shell_type(&s)?),
-                    None => Some(detect_shell()),
-                };
-
-                // 生成完整的环境设置脚本（autoload + wrapper）
-                let script = self
-                    .switcher
-                    .generate_shell_integration(shell_type.unwrap())
-                    .await?;
-                print!("{script}");
-            }
-            EnvCommands::Switch {
-                env_type,
-                name,
-                shell,
-                reason,
-                json,
-            } => {
-                let env_type = parse_environment_type(&env_type)?;
-                let shell_type = match shell {
-                    Some(s) => Some(parse_shell_type(&s)?),
-                    None => None,
-                };
-                let result = self
-                    .switcher
-                    .switch_environment(env_type, &name, shell_type, reason)
-                    .await?;
-
-                let output = FORMATTER.format_switch_result(
-                    &result,
-                    if json {
-                        OutputFormat::Json
-                    } else {
-                        OutputFormat::Text
-                    },
-                );
-                print!("{}", output?);
-            }
-            EnvCommands::List { env_type, json } => {
-                let env_type = match env_type {
-                    Some(t) => parse_environment_type(&t)?,
-                    None => EnvironmentType::Java,
-                };
-                let output = self
-                    .switcher
-                    .list_environments(
-                        env_type,
-                        if json {
-                            OutputFormat::Json
-                        } else {
-                            OutputFormat::Text
-                        },
-                    )
-                    .await?;
-                print!("{output}");
-            }
-            EnvCommands::Current { env_type, json } => {
-                let env_type = match env_type {
-                    Some(t) => parse_environment_type(&t)?,
-                    None => EnvironmentType::Java,
-                };
-                let output = self
-                    .switcher
-                    .get_current_environment(
-                        env_type,
-                        if json {
-                            OutputFormat::Json
-                        } else {
-                            OutputFormat::Text
-                        },
-                    )
-                    .await?;
-                print!("{output}");
-            }
-            EnvCommands::ShellIntegration { shell } => {
-                let shell_type = match shell {
-                    Some(s) => Some(parse_shell_type(&s)?),
-                    None => Some(crate::infrastructure::shell::platform::detect_shell()),
-                };
-                let output = self
-                    .switcher
-                    .generate_shell_integration(shell_type.unwrap())
-                    .await?;
-                print!("{output}");
-            }
-        }
-        Ok(())
-    }
 
     /// 处理配置命令
     async fn handle_config_command(&mut self, action: ConfigCommands) -> Result<(), String> {
