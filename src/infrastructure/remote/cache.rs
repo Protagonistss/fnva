@@ -46,11 +46,10 @@ pub struct VersionCacheManager {
 
 impl VersionCacheManager {
     pub fn new() -> Result<Self, String> {
-        let home_dir = dirs::home_dir().ok_or("无法获取用户目录")?;
-        let cache_dir = home_dir.join(".fnva").join("cache");
+        let cache_dir = crate::infrastructure::paths::cache_dir()?;
 
         // 确保缓存目录存在
-        fs::create_dir_all(&cache_dir).map_err(|e| format!("创建缓存目录失败: {e}"))?;
+        fs::create_dir_all(&cache_dir).map_err(|e| format!("Failed to create cache directory: {e}"))?;
 
         Ok(Self {
             cache_dir,
@@ -79,14 +78,14 @@ impl VersionCacheManager {
         let entry = CacheEntry::new(data, ttl);
 
         let json =
-            serde_json::to_string_pretty(&entry).map_err(|e| format!("序列化缓存失败: {e}"))?;
+            serde_json::to_string_pretty(&entry).map_err(|e| format!("Failed to serialize cache: {e}"))?;
 
         let file_path = self.cache_file_path(key);
         async_fs::write(&file_path, json)
             .await
-            .map_err(|e| format!("写入缓存文件失败: {e}"))?;
+            .map_err(|e| format!("Failed to write cache file: {e}"))?;
 
-        println!("💾 缓存已保存: {key}");
+        println!("Cache saved: {key}");
         Ok(())
     }
 
@@ -101,14 +100,14 @@ impl VersionCacheManager {
 
         let json = async_fs::read_to_string(&file_path)
             .await
-            .map_err(|e| format!("读取缓存文件失败: {e}"))?;
+            .map_err(|e| format!("Failed to read cache file: {e}"))?;
 
         let entry: CacheEntry<T> =
-            serde_json::from_str(&json).map_err(|e| format!("反序列化缓存失败: {e}"))?;
+            serde_json::from_str(&json).map_err(|e| format!("Failed to deserialize cache: {e}"))?;
 
         if entry.is_valid() {
             println!(
-                "📖 使用缓存: {} (剩余时间: {}分钟)",
+                "Using cache: {} ({} min remaining)",
                 key,
                 (entry.ttl
                     - (SystemTime::now()
@@ -123,8 +122,8 @@ impl VersionCacheManager {
             // 缓存已过期，删除文件
             async_fs::remove_file(&file_path)
                 .await
-                .map_err(|e| format!("删除过期缓存文件失败: {e}"))?;
-            println!("⏰ 缓存已过期: {key}");
+                .map_err(|e| format!("Failed to remove expired cache file: {e}"))?;
+            println!("Cache expired: {key}");
             Ok(None)
         }
     }
@@ -139,12 +138,12 @@ impl VersionCacheManager {
 
         let mut entries = async_fs::read_dir(&self.cache_dir)
             .await
-            .map_err(|e| format!("读取缓存目录失败: {e}"))?;
+            .map_err(|e| format!("Failed to read cache directory: {e}"))?;
 
         while let Some(entry) = entries
             .next_entry()
             .await
-            .map_err(|e| format!("遍历缓存目录失败: {e}"))?
+            .map_err(|e| format!("Failed to iterate cache directory: {e}"))?
         {
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("json") {
@@ -155,7 +154,7 @@ impl VersionCacheManager {
                         if entry.is_expired() {
                             async_fs::remove_file(&path)
                                 .await
-                                .map_err(|e| format!("删除过期缓存文件失败: {e}"))?;
+                                .map_err(|e| format!("Failed to remove expired cache file: {e}"))?;
                             removed_count += 1;
                         }
                     }
@@ -164,7 +163,7 @@ impl VersionCacheManager {
         }
 
         if removed_count > 0 {
-            println!("🧹 清理了 {removed_count} 个过期缓存文件");
+            println!("Cleaned {removed_count} expired cache files");
         }
 
         Ok(removed_count)
@@ -176,11 +175,11 @@ impl VersionCacheManager {
             return Ok(());
         }
 
-        fs::remove_dir_all(&self.cache_dir).map_err(|e| format!("清除缓存目录失败: {e}"))?;
+        fs::remove_dir_all(&self.cache_dir).map_err(|e| format!("Failed to clear cache directory: {e}"))?;
 
-        fs::create_dir_all(&self.cache_dir).map_err(|e| format!("重新创建缓存目录失败: {e}"))?;
+        fs::create_dir_all(&self.cache_dir).map_err(|e| format!("Failed to recreate cache directory: {e}"))?;
 
-        println!("🗑️  所有缓存已清除");
+        println!("All cache cleared");
         Ok(())
     }
 }

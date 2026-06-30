@@ -68,9 +68,9 @@ fn classify_error(error: &str, status_code: Option<u16>) -> ErrorType {
     if let Some(code) = status_code {
         match code {
             404 | 403 | 401 => {
-                return ErrorType::Permanent(format!("资源不存在或无权访问 (HTTP {code})"))
+                return ErrorType::Permanent(format!("Resource not found or access denied (HTTP {code})"))
             }
-            500..=599 => return ErrorType::Transient(format!("服务器错误 (HTTP {code})")),
+            500..=599 => return ErrorType::Transient(format!("Server error (HTTP {code})")),
             _ => {}
         }
     }
@@ -78,13 +78,13 @@ fn classify_error(error: &str, status_code: Option<u16>) -> ErrorType {
     // 根据错误消息判断
     let error_lower = error.to_lowercase();
     if error_lower.contains("not found") || error_lower.contains("404") {
-        ErrorType::Permanent("资源未找到".to_string())
+        ErrorType::Permanent("Resource not found".to_string())
     } else if error_lower.contains("timeout") || error_lower.contains("timed out") {
-        ErrorType::Transient("连接超时".to_string())
+        ErrorType::Transient("Connection timed out".to_string())
     } else if error_lower.contains("network") || error_lower.contains("connection") {
-        ErrorType::Transient("网络连接问题".to_string())
+        ErrorType::Transient("Network connection issue".to_string())
     } else if error_lower.contains("dns") || error_lower.contains("resolve") {
-        ErrorType::Transient("DNS 解析失败".to_string())
+        ErrorType::Transient("DNS resolution failed".to_string())
     } else {
         ErrorType::Transient(error.to_string())
     }
@@ -167,14 +167,14 @@ pub async fn download_to_bytes_with_options(
                 if let Some(expected) = &options.expected_sha256 {
                     if let Err(e) = verify_sha256(&data, expected) {
                         println!(
-                            "⚠️  校验失败 (尝试 {}/{}): {}",
+                            "Checksum verification failed (attempt {}/{}): {}",
                             attempts,
                             options.retry_count + 1,
                             e
                         );
                         if attempts > options.retry_count {
                             return Err(format!(
-                                "校验失败 (已重试 {} 次): {}",
+                                "Checksum failed (retried {} times): {}",
                                 options.retry_count, e
                             ));
                         }
@@ -182,14 +182,14 @@ pub async fn download_to_bytes_with_options(
                         tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
                         continue;
                     }
-                    println!("✅ SHA256 校验通过");
+                    println!("SHA256 checksum verified");
                 }
                 return Ok(data);
             }
             Err(e) => {
                 // 尝试从错误消息中提取状态码
-                if e.contains("状态码:") {
-                    if let Some(code_str) = e.split("状态码:").nth(1) {
+                if e.contains("status code:") {
+                    if let Some(code_str) = e.split("status code:").nth(1) {
                         if let Ok(code) = code_str
                             .split_whitespace()
                             .next()
@@ -218,14 +218,14 @@ pub async fn download_to_bytes_with_options(
 
                 if attempts > options.retry_count {
                     return Err(format!(
-                        "下载失败 (已重试 {} 次): {}。URL: {}",
+                        "Download failed (retried {} times): {}. URL: {}",
                         options.retry_count, e, url
                     ));
                 }
 
                 let delay = options.calculate_retry_delay(attempts);
                 println!(
-                    "⚠️  下载出错 (尝试 {}/{}): {}。{}ms 后重试...",
+                    "Download error (attempt {}/{}): {}. Retrying in {}ms...",
                     attempts,
                     options.retry_count + 1,
                     e,
@@ -250,17 +250,17 @@ async fn download_to_bytes_internal(
         .map_err(|e| {
             let error_msg = e.to_string();
             if error_msg.contains("timeout") {
-                format!("连接超时: {error_msg}")
+                format!("Connection timed out: {error_msg}")
             } else if error_msg.contains("dns") || error_msg.contains("resolve") {
-                format!("DNS 解析失败: {error_msg}")
+                format!("DNS resolution failed: {error_msg}")
             } else {
-                format!("网络请求失败: {error_msg} (URL: {url})")
+                format!("Network request failed: {error_msg} (URL: {url})")
             }
         })?;
 
     let status = response.status();
     if !status.is_success() {
-        return Err(format!("服务器返回状态码: {status} (URL: {url})"));
+        return Err(format!("Server returned status code: {status} (URL: {url})"));
     }
 
     let total_size = response.content_length().unwrap_or(0);
@@ -269,7 +269,7 @@ async fn download_to_bytes_internal(
     let mut stream = response.bytes_stream();
 
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| format!("读取数据失败: {e}"))?;
+        let chunk = chunk.map_err(|e| format!("Failed to read data: {e}"))?;
         downloaded += chunk.len() as u64;
         progress(downloaded, total_size);
         data.extend_from_slice(&chunk);
@@ -305,7 +305,7 @@ pub async fn download_to_file_with_options(
                 if let Some(expected) = &options.expected_sha256 {
                     if let Err(e) = verify_file_sha256(file_path, expected).await {
                         println!(
-                            "⚠️  文件校验失败 (尝试 {}/{}): {}",
+                            "File checksum verification failed (attempt {}/{}): {}",
                             attempts,
                             options.retry_count + 1,
                             e
@@ -315,7 +315,7 @@ pub async fn download_to_file_with_options(
 
                         if attempts > options.retry_count {
                             return Err(format!(
-                                "校验失败 (已重试 {} 次): {}",
+                                "Checksum failed (retried {} times): {}",
                                 options.retry_count, e
                             ));
                         }
@@ -323,14 +323,14 @@ pub async fn download_to_file_with_options(
                         tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
                         continue;
                     }
-                    println!("✅ 文件 SHA256 校验通过");
+                    println!("File SHA256 checksum verified");
                 }
                 return Ok(());
             }
             Err(e) => {
                 // 尝试从错误消息中提取状态码
-                if e.contains("状态码:") {
-                    if let Some(code_str) = e.split("状态码:").nth(1) {
+                if e.contains("status code:") {
+                    if let Some(code_str) = e.split("status code:").nth(1) {
                         if let Ok(code) = code_str
                             .split_whitespace()
                             .next()
@@ -363,7 +363,7 @@ pub async fn download_to_file_with_options(
 
                 if attempts > options.retry_count {
                     return Err(format!(
-                        "下载失败 (已重试 {} 次): {}。URL: {}，文件: {}",
+                        "Download failed (retried {} times): {}. URL: {}, file: {}",
                         options.retry_count,
                         e,
                         url,
@@ -373,7 +373,7 @@ pub async fn download_to_file_with_options(
 
                 let delay = options.calculate_retry_delay(attempts);
                 println!(
-                    "⚠️  下载出错 (尝试 {}/{}): {}。{}ms 后重试...",
+                    "Download error (attempt {}/{}): {}. Retrying in {}ms...",
                     attempts,
                     options.retry_count + 1,
                     e,
@@ -399,17 +399,17 @@ async fn download_to_file_internal(
         .map_err(|e| {
             let error_msg = e.to_string();
             if error_msg.contains("timeout") {
-                format!("连接超时: {error_msg}")
+                format!("Connection timed out: {error_msg}")
             } else if error_msg.contains("dns") || error_msg.contains("resolve") {
-                format!("DNS 解析失败: {error_msg}")
+                format!("DNS resolution failed: {error_msg}")
             } else {
-                format!("网络请求失败: {error_msg} (URL: {url})")
+                format!("Network request failed: {error_msg} (URL: {url})")
             }
         })?;
 
     let status = response.status();
     if !status.is_success() {
-        return Err(format!("服务器返回状态码: {status} (URL: {url})"));
+        return Err(format!("Server returned status code: {status} (URL: {url})"));
     }
 
     let total_size = response.content_length().unwrap_or(0);
@@ -420,26 +420,26 @@ async fn download_to_file_internal(
     let temp_path = file_path.with_extension("downloading");
     let mut file = tokio::fs::File::create(&temp_path)
         .await
-        .map_err(|e| format!("创建文件失败: {e}"))?;
+        .map_err(|e| format!("Failed to create file: {e}"))?;
 
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| format!("读取数据失败: {e}"))?;
+        let chunk = chunk.map_err(|e| format!("Failed to read data: {e}"))?;
         downloaded += chunk.len() as u64;
         progress(downloaded, total_size);
         file.write_all(&chunk)
             .await
-            .map_err(|e| format!("写入文件失败: {e}"))?;
+            .map_err(|e| format!("Failed to write file: {e}"))?;
     }
 
     file.flush()
         .await
-        .map_err(|e| format!("刷新文件失败: {e}"))?;
+        .map_err(|e| format!("Failed to flush file: {e}"))?;
     drop(file); // 关闭文件
 
     // 重命名为目标文件
     tokio::fs::rename(&temp_path, file_path)
         .await
-        .map_err(|e| format!("重命名文件失败: {e}"))?;
+        .map_err(|e| format!("Failed to rename file: {e}"))?;
 
     Ok(())
 }

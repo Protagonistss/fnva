@@ -2,10 +2,10 @@ use crate::core::environment_manager::EnvironmentType;
 use crate::infrastructure::shell::ShellType;
 use clap::{Command, CommandFactory, Parser, Subcommand};
 
-/// fnva CLI 应用程序
+/// fnva CLI application
 #[derive(Parser)]
 #[command(name = "fnva")]
-#[command(about = "跨平台环境切换工具，支持 Java 和 LLM 环境配置", long_about = None)]
+#[command(about = "Cross-platform environment switcher for Java / Maven / Claude Code", long_about = None)]
 #[command(version = env!("CARGO_PKG_VERSION"))]
 pub struct Cli {
     #[command(subcommand)]
@@ -29,229 +29,226 @@ impl Cli {
     }
 }
 
-/// 顶级命令
+/// Top-level commands
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Java 环境管理
+    /// Manage Java environments
     Java {
         #[command(subcommand)]
         action: JavaCommands,
     },
-    /// LLM 环境管理
-    Llm {
+    /// Manage Maven environments
+    Maven {
         #[command(subcommand)]
-        action: LlmCommands,
+        action: MavenCommands,
     },
-    /// CC (Claude Code) 环境管理
+    /// Manage CC (Claude Code) environments
     Cc {
         #[command(subcommand)]
         action: CcCommands,
     },
-    /// 环境切换和管理
+    /// Switch and manage environments
     Env {
         #[command(subcommand)]
         action: EnvCommands,
     },
-    /// 配置管理
+    /// Manage configuration
     Config {
         #[command(subcommand)]
         action: ConfigCommands,
     },
-    /// 环境历史
+    /// Environment history
     History {
-        /// 环境类型
+        /// Environment type
         #[arg(short, long)]
         env_type: Option<String>,
-        /// 显示数量限制
+        /// Result limit
         #[arg(short = 'n', long, default_value = "10")]
         limit: usize,
-        /// JSON 格式输出
+        /// Output as JSON
         #[arg(long)]
         json: bool,
     },
 }
 
-/// Java 环境管理命令
+/// Java environment management commands
 #[derive(Subcommand)]
 pub enum JavaCommands {
-    /// 列出所有 Java 环境
+    /// List Java environments
     List {
-        /// JSON 格式输出
+        /// Output as JSON
         #[arg(long)]
         json: bool,
     },
-    /// 切换到指定的 Java 环境
+    /// Switch to a Java environment
     Use {
-        /// 环境名称
+        /// Environment name
         name: String,
-        /// Shell 类型
+        /// Shell type
         #[arg(short, long)]
         shell: Option<String>,
-        /// 输出格式
+        /// Output format
         #[arg(long)]
         json: bool,
     },
-    /// 扫描系统中的 Java 安装
+    /// Scan the system for Java installations
     Scan,
-    /// 添加 Java 环境
+    /// Add a Java environment
     Add {
-        /// 环境名称
+        /// Environment name
         #[arg(short, long)]
         name: String,
-        /// JAVA_HOME 路径
+        /// JAVA_HOME path
         #[arg(long)]
         home: String,
-        /// 描述
+        /// Description
         #[arg(short = 'd', long)]
         description: Option<String>,
     },
-    /// 删除 Java 环境
+    /// Remove a Java environment
     Remove {
-        /// 环境名称
+        /// Environment name
         name: String,
     },
-    /// 远程查询可用版本
+    /// Query available remote versions
     LsRemote {
-        /// 查询类型
+        /// Query type
         #[arg(default_value = "java")]
         query_type: String,
-        /// Java 主要版本
-        #[arg(long)]
-        java_version: Option<u32>,
-        /// Maven Group ID
-        #[arg(long)]
-        maven_artifact: Option<String>,
-        /// 搜索关键词
-        #[arg(long)]
-        search: Option<String>,
-        /// 仓库 URL
+        /// Major Java version
+        #[arg(long, short = 'v')]
+        version: Option<u32>,
+        /// Repository URL
         #[arg(long)]
         repository: Option<String>,
-        /// 结果数量限制
+        /// Result limit
         #[arg(short = 'n', long, default_value = "20")]
         limit: u32,
     },
-    /// 安装 Java 版本
+    /// Install a Java version
     Install {
-        /// Java 版本
+        /// Java version
         version: String,
-        /// 安装后自动切换
+        /// Auto-switch after install
         #[arg(long)]
         auto_switch: bool,
     },
-    /// 卸载 Java 版本
+    /// Uninstall a Java version
     Uninstall {
-        /// Java 环境名称
+        /// Java environment name
         name: String,
     },
-    /// 设置或查看默认 Java 环境
+    /// Set or show the default Java environment
     Default {
-        /// Java 环境名称（不提供时显示当前默认环境）
+        /// Java environment name (shows current default when omitted)
         name: Option<String>,
-        /// 清除默认设置
+        /// Clear the default
         #[arg(long)]
         unset: bool,
-        /// Shell 类型
+        /// Shell type
         #[arg(short, long)]
         shell: Option<String>,
-        /// JSON 格式输出
+        /// Output as JSON
         #[arg(long)]
         json: bool,
     },
-    /// 显示当前激活的 Java 环境
+    /// Show the current Java environment
     Current {
-        /// JSON 格式输出
+        /// Output as JSON
         #[arg(long)]
         json: bool,
     },
 }
 
-/// LLM 环境管理命令
+/// Maven environment management commands
 #[derive(Subcommand)]
-pub enum LlmCommands {
-    /// 列出所有 LLM 环境
+pub enum MavenCommands {
+    /// List Maven environments
     List {
-        /// JSON 格式输出
+        /// Output as JSON
         #[arg(long)]
         json: bool,
     },
-    /// 切换到指定的 LLM 环境
+    /// Switch to a Maven environment
     Use {
-        /// 环境名称
+        /// Environment name
         name: String,
-        /// Shell 类型
+        /// Shell type
         #[arg(short, long)]
         shell: Option<String>,
-        /// JSON 格式输出
+        /// Output as JSON
         #[arg(long)]
         json: bool,
     },
-    /// 添加 LLM 环境
-    Add {
-        /// 环境名称
-        #[arg(short, long)]
-        name: String,
-        /// 提供商
-        #[arg(short, long)]
-        provider: String,
-        /// API Key
-        #[arg(short = 'k', long)]
-        api_key: Option<String>,
-        /// Base URL
-        #[arg(short = 'u', long)]
-        base_url: Option<String>,
-        /// 模型名称
-        #[arg(short, long)]
-        model: Option<String>,
-        /// Temperature
-        #[arg(short = 't', long)]
-        temperature: Option<f64>,
-        /// Max tokens
-        #[arg(short = 'm', long)]
-        max_tokens: Option<u32>,
-        /// 描述
-        #[arg(short = 'd', long)]
-        description: Option<String>,
+    /// Install a Maven version
+    Install {
+        /// Version (e.g. 3.9.16 / latest / 3.9)
+        version: String,
+        /// Auto-switch to the environment after install
+        #[arg(long)]
+        auto_switch: bool,
     },
-    /// 删除 LLM 环境
-    Remove {
-        /// 环境名称
+    /// Uninstall a Maven version
+    Uninstall {
+        /// Environment name
         name: String,
     },
-    /// 显示当前激活的 LLM 环境
+    /// Refresh the remote version cache
+    Refresh,
+    /// List available remote versions
+    LsRemote {
+        /// Version prefix filter (e.g. 3.9)
+        #[arg(long)]
+        version: Option<String>,
+    },
+    /// Show the current Maven environment
     Current {
-        /// JSON 格式输出
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Set or show the default Maven environment
+    Default {
+        /// Environment name (shows current default when omitted)
+        name: Option<String>,
+        /// Clear the default
+        #[arg(long)]
+        unset: bool,
+        /// Shell type
+        #[arg(short, long)]
+        shell: Option<String>,
+        /// Output as JSON
         #[arg(long)]
         json: bool,
     },
 }
 
-/// CC (Claude Code) 环境管理命令
+/// CC (Claude Code) environment management commands
 #[derive(Subcommand)]
 pub enum CcCommands {
-    /// 列出所有 CC 环境
+    /// List CC environments
     List {
-        /// JSON 格式输出
+        /// Output as JSON
         #[arg(long)]
         json: bool,
     },
-    /// 切换到指定的 CC 环境
+    /// Switch to a CC environment
     Use {
-        /// 环境名称
+        /// Environment name
         name: String,
-        /// Shell 类型
+        /// Shell type
         #[arg(short, long)]
         shell: Option<String>,
-        /// JSON 格式输出
+        /// Output as JSON
         #[arg(long)]
         json: bool,
     },
-    /// 添加 CC 环境
+    /// Add a CC environment
     Add {
-        /// 环境名称
+        /// Environment name
         #[arg(short, long)]
         name: String,
-        /// 提供商
+        /// Provider
         #[arg(short, long)]
         provider: String,
         /// API Key
@@ -260,101 +257,98 @@ pub enum CcCommands {
         /// Base URL
         #[arg(short = 'u', long)]
         base_url: Option<String>,
-        /// 模型名称
+        /// Model name
         #[arg(short, long)]
         model: Option<String>,
-        /// 描述
+        /// Description
         #[arg(short = 'd', long)]
         description: Option<String>,
     },
-    /// 删除 CC 环境
+    /// Remove a CC environment
     Remove {
-        /// 环境名称
+        /// Environment name
         name: String,
     },
-    /// 管理默认 CC 环境
+    /// Set or show the default CC environment
     Default {
-        /// CC 环境名称，省略则查看当前默认
+        /// CC environment name (shows current default when omitted)
         name: Option<String>,
-        /// 取消默认
+        /// Clear the default
         #[arg(long)]
         unset: bool,
-        /// Shell 类型
+        /// Shell type
         #[arg(short, long)]
         shell: Option<String>,
-        /// JSON 输出
+        /// Output as JSON
         #[arg(long)]
         json: bool,
     },
-    /// 显示当前激活的 CC 环境
+    /// Show the current CC environment
     Current {
-        /// JSON 格式输出
+        /// Output as JSON
         #[arg(long)]
         json: bool,
     },
 }
 
-/// 环境管理命令
+/// Environment management commands
 #[derive(Subcommand)]
 pub enum EnvCommands {
-    /// 生成环境切换脚本（类似 fnm env）
+    /// Generate the environment switch script (like fnm env)
     #[command(name = "env")]
     GenerateEnv {
-        /// 自动环境切换集成（类似 fnm env --use-on-cd）
-        #[arg(long)]
-        use_on_cd: bool,
-        /// Shell 类型
+        /// Shell type
         #[arg(short, long)]
         shell: Option<String>,
     },
-    /// 切换环境
+    /// Switch environment
     Switch {
-        /// 环境类型
+        /// Environment type
         #[arg(short = 't', long)]
         env_type: String,
-        /// 环境名称
+        /// Environment name
         #[arg(short, long)]
         name: String,
-        /// Shell 类型
+        /// Shell type
         #[arg(short, long)]
         shell: Option<String>,
-        /// 切换原因
+        /// Switch reason
         #[arg(long)]
         reason: Option<String>,
-        /// JSON 格式输出
+        /// Output as JSON
         #[arg(long)]
         json: bool,
     },
-    /// 列出环境
+    /// List environments
     List {
-        /// 环境类型
+        /// Environment type
         #[arg(short = 't', long)]
         env_type: Option<String>,
-        /// JSON 格式输出
+        /// Output as JSON
         #[arg(long)]
         json: bool,
     },
-    /// 获取当前环境
+    /// Show the current environment
     Current {
-        /// 环境类型
+        /// Environment type
         #[arg(short = 't', long)]
         env_type: Option<String>,
-        /// JSON 格式输出
+        /// Output as JSON
         #[arg(long)]
         json: bool,
     },
-    /// 生成 shell 集成脚本
+    /// Generate the shell integration script
     ShellIntegration {
-        /// Shell 类型
+        /// Shell type
         #[arg(short, long)]
         shell: Option<String>,
     },
 }
 
-/// 配置管理命令
+/// Configuration management commands
 #[derive(Subcommand)]
 pub enum ConfigCommands {
-    /// 补全并同步配置文件
+    /// Complete and sync the configuration file
     Sync,
 }
 
@@ -362,10 +356,10 @@ pub enum ConfigCommands {
 pub fn parse_environment_type(env_type_str: &str) -> Result<EnvironmentType, String> {
     match env_type_str.to_lowercase().as_str() {
         "java" => Ok(EnvironmentType::Java),
-        "llm" => Ok(EnvironmentType::Llm),
         "cc" => Ok(EnvironmentType::Cc),
+        "maven" => Ok(EnvironmentType::Maven),
         other => Err(format!(
-            "Unsupported environment type: '{other}'. Supported: java, llm, cc"
+            "Unsupported environment type: '{other}'. Supported: java, cc, maven"
         )),
     }
 }

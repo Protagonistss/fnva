@@ -97,18 +97,18 @@ impl std::fmt::Display for ContextualError {
 impl ContextualError {
     /// 获取用户友好的错误消息
     pub fn user_message(&self) -> String {
-        let mut msg = format!("❌ {}\n", self.context.operation);
-        msg.push_str(&format!("原因: {}\n", self.error));
+        let mut msg = format!("{}\n", self.context.operation);
+        msg.push_str(&format!("Cause: {}\n", self.error));
 
         if !self.context.suggestions.is_empty() {
-            msg.push_str("💡 建议:\n");
+            msg.push_str("Suggestions:\n");
             for suggestion in &self.context.suggestions {
-                msg.push_str(&format!("  • {suggestion}\n"));
+                msg.push_str(&format!("  - {suggestion}\n"));
             }
         }
 
         if let Some(help_url) = &self.context.help_url {
-            msg.push_str(&format!("📖 更多帮助: {help_url}\n"));
+            msg.push_str(&format!("Help: {help_url}\n"));
         }
 
         msg

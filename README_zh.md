@@ -14,7 +14,7 @@
 
 </div>
 
-fnva 是一个面向 Java、Claude Code (CC) 和通用 LLM 场景的跨平台环境切换工具。基于 Rust 编写，具备**极速启动**、**零依赖**的特点，通过生成 shell 片段完成环境激活，完全**无常驻后台进程**。
+fnva 是一个面向 Java、Maven 和 Claude Code (CC) 场景的跨平台环境切换工具。基于 Rust 编写，具备**极速启动**、**零依赖**的特点，通过生成 shell 片段完成环境激活，完全**无常驻后台进程**。
 
 ## 核心特性
 
@@ -22,14 +22,16 @@ fnva 是一个面向 Java、Claude Code (CC) 和通用 LLM 场景的跨平台环
 - 🔄 **会话与全局切换**: 支持当前终端会话级别的切换，也可设置全局默认环境。
 - 🐚 **全平台 Shell 支持**: 原生支持 PowerShell、Bash、Zsh、Fish、CMD。
 - 🧠 **自动恢复**: 打开新终端自动恢复上次使用的环境。
-- ☕ **智能 Java 管理**: 扫描本地 JDK，一键切换。
-- 🤖 **统一的大模型管理**: 集中配置 LLM API 密钥。
+- ☕ **智能 Java 管理**: 扫描本地 JDK，并支持通过 Adoptium 清华镜像源自动下载、安装和管理不同版本的 JDK。
+- 📦 **Maven 版本管理**: 支持基于清华镜像源动态发现多版本、下载安装和一键切换。
+- 🔌 **Tool Source Protocol (TSP)**: 提供工具无关协议，支持 Java 和 Maven 模块的动态发现与通用下载安装。
 
 ## 文档导航
 
 - [架构设计与原理](docs/architecture/core-design.md)
 - [开发路线图](docs/development/roadmap.md)
 - [贡献指南](docs/development/contributing.md)
+- [工具源协议规范](docs/spec/tool-source-protocol.md)
 - [Shell 集成与自动恢复](docs/user-guide/shell-integration.md)
 - [终端乱码修复指南](docs/user-guide/encoding-fixes.md)
 
@@ -47,24 +49,32 @@ cargo install fnva
 
 ## Shell 集成
 
-安装 shell 集成后，打开新终端会自动恢复上次使用的 CC/Java 环境变量，且 `fnva <type> use <name>` 无需 `eval` 包裹即可生效。详细请参考 [Shell 集成指南](docs/user-guide/shell-integration.md)。
+安装 shell 集成后，打开新终端会自动恢复上次使用的 CC/Java/Maven 环境变量，且 `fnva <type> use <name>` 无需 `eval` 包裹即可生效。详细请参考 [Shell 集成指南](docs/user-guide/shell-integration.md)。
 
 ## 使用快速入门
 
 ### Java
-- 扫描: `fnva java scan`
-- 列表: `fnva java list`
-- 切换: `eval "$(fnva java use jdk-17)"`
-- 设置默认: `fnva java default jdk-17`
+- 扫描本地 JDK: `fnva java scan`
+- 远程版本列表: `fnva java ls-remote`
+- 自动安装: `fnva java install 17`
+- 本地列表: `fnva java list`
+- 切换版本: `fnva java use 17` （未安装 shell 集成时使用 `eval "$(fnva java use 17)"`）
+- 设置默认: `fnva java default 17`
 
-### Claude Code (CC) & LLM
-- 列表: `fnva cc list`
-- 切换: `eval "$(fnva cc use glmcc)"`
-- 添加 LLM: `fnva llm add --name openai-dev --provider openai --api-key "sk-..." --model gpt-4`
+### Maven
+- 远程版本列表: `fnva maven ls-remote`
+- 自动安装: `fnva maven install 3.9.16`
+- 本地列表: `fnva maven list`
+- 切换版本: `fnva maven use 3.9.16` （未安装 shell 集成时使用 `eval "$(fnva maven use 3.9.16)"`）
+- 刷新版本缓存: `fnva maven refresh`
+
+### Claude Code (CC)
+- 本地列表: `fnva cc list`
+- 切换环境: `fnva cc use mycc` （未安装 shell 集成时使用 `eval "$(fnva cc use mycc)"`）
 
 ## 配置
 
-配置文件位于 `~/.fnva/config.toml` (Windows: `%USERPROFILE%\.fnva\config.toml`)。
+用户配置位于 `~/.fnva/config.toml` (Windows: `%USERPROFILE%\.fnva\config.toml`)。
 
 ## 许可证
 
