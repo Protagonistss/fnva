@@ -9,11 +9,11 @@ impl ShellIntegration {
     pub fn generate_env_script(config: &Config, env_name: &str) -> Result<String, String> {
         let env = config
             .get_java_env(env_name)
-            .ok_or_else(|| format!("Java 环境 '{env_name}' 不存在"))?;
+            .ok_or_else(|| format!("Java environment '{env_name}' not found"))?;
 
         // 验证 Java Home 路径
         if !crate::utils::validate_java_home(&env.java_home) {
-            return Err(format!("无效的 JAVA_HOME 路径: {}", env.java_home));
+            return Err(format!("Invalid JAVA_HOME path: {}", env.java_home));
         }
 
         // 获取脚本目录
@@ -35,19 +35,19 @@ impl ShellIntegration {
         // 生成批处理脚本
         let bat_content = Self::generate_batch_script(config, env_name)?;
         std::fs::write(&batch_script, bat_content)
-            .map_err(|e| format!("写入批处理脚本失败: {e}"))?;
+            .map_err(|e| format!("Failed to write batch script: {e}"))?;
 
         Ok(format!(
-            "✅ 环境切换脚本已生成\n\
+            "Environment switch script generated\n\
             PowerShell: {}\n\
             CMD: {}\n\
             \n\
-            💡 使用方法:\n\
+            Usage:\n\
             PowerShell: . fnva-env.ps1 {}\n\
             CMD: fnva-env.bat {}\n\
             \n\
-            🚀 推荐安装 Shell 集成以获得更好体验:\n\
-            fnva java shell-install",
+            Tip: install shell integration for a better experience:\n\
+            fnva env shell-integration",
             powershell_script.display(),
             batch_script.display(),
             env_name,
@@ -229,22 +229,22 @@ impl ShellIntegration {
             .map_err(|e| format!("Failed to write CMD integration script: {e}"))?;
 
         Ok(format!(
-            "✅ Shell 集成脚本已生成\n\
+            "Shell integration script generated\n\
             \n\
-            📋 PowerShell 集成:\n\
-            将以下内容添加到你的 PowerShell Profile 中:\n\
+            PowerShell integration:\n\
+            Add the following to your PowerShell profile:\n\
             {}\n\
             \n\
-            📋 CMD 集成:\n\
-            将以下内容添加到你的启动脚本中:\n\
+            CMD integration:\n\
+            Add the following to your startup script:\n\
             {}\n\
             \n\
-            🚀 或者直接运行集成脚本:\n\
+            Or run the integration script directly:\n\
             PowerShell: powershell -ExecutionPolicy Bypass -File {}\n\
             CMD: {}\n\
             \n\
-            📖 安装后，你就可以直接使用:\n\
-            fnva jdk21  # 切换到 jdk21 环境",
+            After installing, you can use:\n\
+            fnva java use jdk21  # switch to the jdk21 environment",
             std::fs::read_to_string(&ps_profile_path).unwrap_or_default(),
             std::fs::read_to_string(&cmd_integration_path).unwrap_or_default(),
             ps_profile_path.display(),
@@ -271,10 +271,10 @@ if (Test-Path $fnvaScript) {
         }
     }
 
-    Write-Host "🚀 fnva 环境切换已加载" -ForegroundColor Green
-    Write-Host "💡 使用 'fnva jdk21' 切换 Java 环境" -ForegroundColor Cyan
+    Write-Host "fnva environment switching loaded" -ForegroundColor Green
+    Write-Host "Use 'fnva java use jdk21' to switch Java environments" -ForegroundColor Cyan
 } else {
-    Write-Warning "fnva 环境脚本不存在，请先运行: fnva java shell-install"
+    Write-Warning "fnva environment script not found; run: fnva env shell-integration"
 }"#
         .to_string();
 
@@ -296,10 +296,10 @@ if exist "%fnvaScript%" (
     REM 添加到 PATH
     set "PATH=%USERPROFILE%\.fnva;%PATH%"
 
-    echo 🚀 fnva 环境切换已加载
-    echo 💡 使用 'fnva jdk21' 切换 Java 环境
+    echo fnva environment switching loaded
+    echo Use 'fnva java use jdk21' to switch Java environments
 ) else (
-    echo 警告: fnva 环境脚本不存在，请先运行: fnva java shell-install
+    echo Warning: fnva environment script not found; run: fnva env shell-integration
 )"#
         .to_string();
 
@@ -312,12 +312,12 @@ if exist "%fnvaScript%" (
 
         let env = config
             .get_java_env(env_name)
-            .ok_or_else(|| format!("Java 环境 '{env_name}' 不存在"))?
+            .ok_or_else(|| format!("Java environment '{env_name}' not found"))?
             .clone(); // 提前克隆以避免借用冲突
 
         // 验证路径
         if !crate::utils::validate_java_home(&env.java_home) {
-            return Err(format!("无效的 JAVA_HOME 路径: {}", env.java_home));
+            return Err(format!("Invalid JAVA_HOME path: {}", env.java_home));
         }
 
         // 保存为当前激活环境
@@ -334,12 +334,12 @@ if exist "%fnvaScript%" (
         }
 
         Ok(format!(
-            "✅ 已激活 Java 环境: {} ({})\n\
-            📍 JAVA_HOME: {}\n\
-            📁 BIN 目录: {}\n\
+            "Activated Java environment: {} ({})\n\
+            JAVA_HOME: {}\n\
+            BIN directory: {}\n\
             \n\
-            💡 提示: 环境变量已在当前会话中生效\n\
-            🔄 重新打开终端将自动激活此环境",
+            Tip: environment variables are active in the current session\n\
+            Reopening the terminal will reactivate this environment",
             env_name, env.description, env.java_home, bin_path
         ))
     }

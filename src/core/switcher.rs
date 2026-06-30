@@ -107,7 +107,7 @@ impl EnvironmentSwitcher {
             session_manager
                 .set_current_environment(env_type, name)
                 .map_err(|e| AppError::Config {
-                    message: format!("更新会话状态失败: {e}"),
+                    message: format!("Failed to update session state: {e}"),
                 })?;
         }
 
@@ -124,7 +124,7 @@ impl EnvironmentSwitcher {
             history_manager
                 .record_switch(env_type, old_env, name.to_string(), reason)
                 .map_err(|e| AppError::Internal {
-                    message: format!("记录切换历史失败: {e}"),
+                    message: format!("Failed to record switch history: {e}"),
                 })?;
         }
 
@@ -242,7 +242,7 @@ impl EnvironmentSwitcher {
             manager_guard
                 .remove(name)
                 .map_err(|e| AppError::Environment {
-                    message: format!("删除环境失败: {e}"),
+                    message: format!("Failed to remove environment: {e}"),
                 })?;
         }
 
@@ -254,7 +254,7 @@ impl EnvironmentSwitcher {
                     session_manager
                         .remove_current_environment(env_type)
                         .map_err(|e| AppError::Config {
-                            message: format!("清除当前环境失败: {e}"),
+                            message: format!("Failed to clear current environment: {e}"),
                         })?;
                     if let Err(e) = CurrentEnvsFile::clear(env_type) {
                         eprintln!("Warning: Failed to clear current_envs.toml: {e}");

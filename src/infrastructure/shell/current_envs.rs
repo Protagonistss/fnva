@@ -19,13 +19,12 @@ pub struct CurrentEnvsFile {
     #[serde(default)]
     pub java: Option<String>,
     #[serde(default)]
-    pub llm: Option<String>,
+    pub maven: Option<String>,
 }
 
 impl CurrentEnvsFile {
     fn path() -> Result<PathBuf, String> {
-        let home = dirs::home_dir().ok_or("Cannot get home directory")?;
-        Ok(home.join(".fnva").join("current_envs.toml"))
+        crate::infrastructure::paths::current_envs_path()
     }
 
     /// Read the file. Returns default (all None) if missing.
@@ -59,7 +58,7 @@ impl CurrentEnvsFile {
         match env_type {
             EnvironmentType::Cc => self.cc = value,
             EnvironmentType::Java => self.java = value,
-            EnvironmentType::Llm => self.llm = value,
+            EnvironmentType::Maven => self.maven = value,
         }
     }
 
@@ -68,7 +67,7 @@ impl CurrentEnvsFile {
         let mut map = HashMap::new();
         if let Some(ref v) = self.cc { map.insert("cc".to_string(), v.clone()); }
         if let Some(ref v) = self.java { map.insert("java".to_string(), v.clone()); }
-        if let Some(ref v) = self.llm { map.insert("llm".to_string(), v.clone()); }
+        if let Some(ref v) = self.maven { map.insert("maven".to_string(), v.clone()); }
         map
     }
 

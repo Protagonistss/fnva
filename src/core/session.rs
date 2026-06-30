@@ -1,104 +1,50 @@
 use crate::core::environment_manager::EnvironmentType;
 use crate::infrastructure::config::Config;
+use crate::infrastructure::shell::current_envs::CurrentEnvsFile;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
-/// 会话状态管理器
+/// 会话管理器:当前激活环境(与 shell autoload 共用 current_envs.toml 单一存储)。
 #[derive(Debug, Clone)]
 pub struct SessionManager {
-    /// 当前激活的环境
     current_environments: HashMap<EnvironmentType, String>,
-    /// 配置文件路径
-    config_path: PathBuf,
-}
-
-/// 持久化的会话状态
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SessionState {
-    /// 当前环境
-    pub current_environments: HashMap<EnvironmentType, String>,
-    /// 最后更新时间
-    pub last_updated: chrono::DateTime<chrono::Utc>,
-}
-
-impl Default for SessionState {
-    fn default() -> Self {
-        Self {
-            current_environments: HashMap::new(),
-            last_updated: chrono::Utc::now(),
-        }
-    }
 }
 
 impl SessionManager {
-    /// 创建新的会话管理器
+    /// 创建新的会话管理器,从 current_envs.toml 加载当前环境。
     pub fn new() -> Result<Self, String> {
-        let config_dir = dirs::home_dir()
-            .ok_or_else(|| "Cannot get user home directory".to_string())?
-            .join(".fnva");
-
-        // 确保目录存在
-        fs::create_dir_all(&config_dir)
-            .map_err(|e| format!("Failed to create config directory: {e}"))?;
-
-        let config_path = config_dir.join("session.toml");
-
-        let mut session_manager = Self {
+        let mut manager = Self {
             current_environments: HashMap::new(),
-            config_path,
         };
+        manager.load_from_current_envs();
+        Ok(manager)
+    }
 
-        // 加载现有的会话状态
-        if let Err(e) = session_manager.load_state() {
-            eprintln!("Warning: Failed to load session state: {e}");
+    /// 从 current_envs.toml 读取当前环境到内存。
+    fn load_from_current_envs(&mut self) {
+        if let Ok(file) = CurrentEnvsFile::read() {
+            if let Some(v) = file.cc {
+                self.current_environments.insert(EnvironmentType::Cc, v);
+            }
+            if let Some(v) = file.java {
+                self.current_environments.insert(EnvironmentType::Java, v);
+            }
+            if let Some(v) = file.maven {
+                self.current_environments.insert(EnvironmentType::Maven, v);
+            }
         }
-
-        Ok(session_manager)
     }
 
-    /// 加载会话状态
-    pub fn load_state(&mut self) -> Result<(), String> {
-        if !self.config_path.exists() {
-            return Ok(());
-        }
-
-        let content = fs::read_to_string(&self.config_path)
-            .map_err(|e| format!("Failed to read session file: {e}"))?;
-
-        let state: SessionState =
-            toml::from_str(&content).map_err(|e| format!("Failed to parse session file: {e}"))?;
-
-        self.current_environments = state.current_environments;
-
-        Ok(())
-    }
-
-    /// 保存会话状态
-    pub fn save_state(&self) -> Result<(), String> {
-        let state = SessionState {
-            current_environments: self.current_environments.clone(),
-            last_updated: chrono::Utc::now(),
-        };
-
-        let content = toml::to_string_pretty(&state)
-            .map_err(|e| format!("Failed to serialize session state: {e}"))?;
-
-        fs::write(&self.config_path, content)
-            .map_err(|e| format!("Failed to write session file: {e}"))?;
-
-        Ok(())
-    }
-
-    /// 设置当前环境
+    /// 设置当前环境(写 current_envs.toml)。
     pub fn set_current_environment(
         &mut self,
         env_type: EnvironmentType,
         name: &str,
     ) -> Result<(), String> {
         self.current_environments.insert(env_type, name.to_string());
-        self.save_state()
+        CurrentEnvsFile::write(env_type, name)
     }
 
     /// 获取当前环境
@@ -106,10 +52,10 @@ impl SessionManager {
         self.current_environments.get(&env_type)
     }
 
-    /// 移除当前环境
+    /// 移除当前环境(清 current_envs.toml 对应字段)。
     pub fn remove_current_environment(&mut self, env_type: EnvironmentType) -> Result<(), String> {
         self.current_environments.remove(&env_type);
-        self.save_state()
+        CurrentEnvsFile::clear(env_type)
     }
 
     /// 获取所有当前环境
@@ -119,8 +65,15 @@ impl SessionManager {
 
     /// 清除所有环境
     pub fn clear_all(&mut self) -> Result<(), String> {
+        for env_type in [
+            EnvironmentType::Java,
+            EnvironmentType::Cc,
+            EnvironmentType::Maven,
+        ] {
+            CurrentEnvsFile::clear(env_type)?;
+        }
         self.current_environments.clear();
-        self.save_state()
+        Ok(())
     }
 
     /// 检查环境是否为当前激活
@@ -169,7 +122,7 @@ impl SessionManager {
         match env_type {
             EnvironmentType::Java => config.default_java_env.as_deref(),
             EnvironmentType::Cc => config.default_cc_env.as_deref(),
-            _ => None,
+            EnvironmentType::Maven => config.default_maven_env.as_deref(),
         }
     }
 
@@ -191,7 +144,7 @@ impl SessionManager {
         if let Some(default) = match env_type {
             EnvironmentType::Java => config.default_java_env.as_deref(),
             EnvironmentType::Cc => config.default_cc_env.as_deref(),
-            _ => None,
+            EnvironmentType::Maven => config.default_maven_env.as_deref(),
         } {
             if default == name {
                 return true;
@@ -231,14 +184,12 @@ pub struct HistoryManager {
 impl HistoryManager {
     /// 创建新的历史管理器
     pub fn new(max_history: usize) -> Result<Self, String> {
-        let config_dir = dirs::home_dir()
-            .ok_or_else(|| "Cannot get user home directory".to_string())?
-            .join(".fnva");
+        let history_path = crate::infrastructure::paths::history_path()?;
 
-        fs::create_dir_all(&config_dir)
-            .map_err(|e| format!("Failed to create config directory: {e}"))?;
-
-        let history_path = config_dir.join("history.toml");
+        if let Some(parent) = history_path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create config directory: {e}"))?;
+        }
 
         let mut history_manager = Self {
             history: Vec::new(),
@@ -248,7 +199,7 @@ impl HistoryManager {
 
         // 加载现有历史
         if let Err(e) = history_manager.load_history() {
-            eprintln!("Warning: Failed to load history: {e}");
+            eprintln!("Failed to load history: {e}");
         }
 
         Ok(history_manager)
@@ -295,7 +246,7 @@ impl HistoryManager {
         }) {
             Ok(content) => content,
             Err(e) => {
-                eprintln!("Warning: Failed to serialize history: {e}. Skipping history save.");
+                eprintln!("Failed to serialize history: {e}. Skipping history save.");
                 return Ok(());
             }
         };
@@ -331,7 +282,7 @@ impl HistoryManager {
 
         // 尝试保存历史，但不影响主要功能
         if let Err(e) = self.save_history() {
-            eprintln!("Warning: Failed to save history: {e}");
+            eprintln!("Failed to save history: {e}");
         }
 
         Ok(())

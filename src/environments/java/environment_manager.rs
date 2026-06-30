@@ -28,7 +28,7 @@ impl JavaEnvironmentManager {
 
         // 仅从配置文件加载环境
         if let Err(e) = manager.load_from_config() {
-            eprintln!("Warning: Failed to load environments from config: {e}");
+            eprintln!("Failed to load environments from config: {e}");
         }
 
         manager
@@ -46,7 +46,7 @@ impl JavaEnvironmentManager {
                 manager.installations.entry(name).or_insert_with(|| {
                     // 将扫描发现的环境也保存到配置文件中
                     if let Err(e) = Self::save_scanned_environment_to_config(&installation) {
-                        eprintln!("Warning: Failed to save scanned environment to config: {e}");
+                        eprintln!("Failed to save scanned environment to config: {e}");
                     }
                     installation
                 });
@@ -67,7 +67,7 @@ impl JavaEnvironmentManager {
             self.installations.entry(name).or_insert_with(|| {
                 // 将扫描发现的环境保存到配置文件中
                 if let Err(e) = Self::save_scanned_environment_to_config(&installation) {
-                    eprintln!("Warning: Failed to save scanned environment to config: {e}");
+                    eprintln!("Failed to save scanned environment to config: {e}");
                 }
                 installation
             });
@@ -278,7 +278,7 @@ impl EnvironmentManager for JavaEnvironmentManager {
     fn list(&self) -> Result<Vec<DynEnvironment>, String> {
         // 重新从配置文件加载最新数据，确保同步
         let config = crate::infrastructure::config::Config::load().unwrap_or_else(|_| {
-            eprintln!("Warning: Failed to load config");
+            eprintln!("Failed to load config");
             crate::infrastructure::config::Config::new()
         });
 
@@ -371,7 +371,7 @@ impl EnvironmentManager for JavaEnvironmentManager {
             if let Err(e) = Self::remove_from_config(name) {
                 // 如果配置文件中没有这个环境，那也没关系
                 // 可能是通过扫描发现的环境
-                eprintln!("Note: {e}");
+                eprintln!("{e}");
             }
             Ok(())
         } else {
@@ -385,8 +385,8 @@ impl EnvironmentManager for JavaEnvironmentManager {
             .get(name)
             .ok_or_else(|| {
                 let mut msg = format!("Java environment '{name}' not found.");
-                if std::path::Path::new(&dirs::home_dir().map_or(String::new(), |h| format!("{}/.fnva/java-packages/{name}", h.to_string_lossy()))).exists() {
-                    msg.push_str(&format!("\n  Hint: Java files exist at ~/.fnva/java-packages/{name}, but no config entry found."));
+                if std::path::Path::new(&dirs::home_dir().map_or(String::new(), |h| format!("{}/.fnva/packages/java/{name}", h.to_string_lossy()))).exists() {
+                    msg.push_str(&format!("\n  Hint: Java files exist at ~/.fnva/packages/java/{name}, but no config entry found."));
                     msg.push_str("\n  Try: fnva java scan  or  fnva java install <version>");
                 } else {
                     msg.push_str("\n  Available environments: fnva java list");

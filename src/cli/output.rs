@@ -75,7 +75,7 @@ impl OutputFormatter {
     /// 格式化错误信息
     pub fn format_error(&self, error: &str, format: OutputFormat) -> String {
         match format {
-            OutputFormat::Text => format!("Error: {error}\n"),
+            OutputFormat::Text => format!("{error}\n"),
             OutputFormat::Json => {
                 let json_output = serde_json::json!({
                     "error": error,

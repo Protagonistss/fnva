@@ -3,8 +3,6 @@ pub mod download;
 pub mod java_downloader;
 pub mod mirror_utils;
 pub mod platform;
-pub mod template_downloader;
-pub mod version_registry;
 
 pub use platform::Platform;
 
@@ -12,8 +10,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub use java_downloader::{DownloadError, DownloadTarget, JavaDownloader};
-pub use template_downloader::TemplateDownloader;
-pub use version_registry::{RegistryEntry, VersionRegistry};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DownloadSource {
