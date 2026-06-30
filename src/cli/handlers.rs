@@ -141,19 +141,18 @@ impl CommandHandler {
                     .await?;
                 print!("{output}");
             }
-            JavaCommands::LsRemote {
-                query_type,
-                version,
-                repository,
-                limit: _,
-            } => {
-                if query_type == "java" {
-                    // 使用新的版本管理器查询 Java 版本
-                    let output = self.handle_java_ls_remote(version, repository).await?;
-                    print!("{output}");
-                } else {
-                    return Err(format!("Query type '{query_type}' not supported"));
-                }
+            JavaCommands::LsRemote { version } => {
+                let output = self.handle_java_ls_remote(version).await?;
+                print!("{output}");
+            }
+            JavaCommands::Refresh => {
+                use crate::environments::java::downloader::JavaDownloader;
+                use crate::infrastructure::config::Config;
+                use crate::infrastructure::tool_protocol::VersionDiscovery;
+                let config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
+                let downloader = JavaDownloader::new(config.mirrors.java);
+                downloader.refresh().await.map_err(|e| format!("{e:?}"))?;
+                println!("Java version cache refreshed.");
             }
             JavaCommands::Install {
                 version,
@@ -320,6 +319,28 @@ impl CommandHandler {
                 let mut config = crate::infrastructure::config::Config::load()
                     .map_err(|e| format!("Failed to load config: {e}"))?;
                 MavenInstaller::install_maven(&version, &mut config, auto_switch).await?;
+            }
+            MavenCommands::Scan => {
+                let output = self
+                    .switcher
+                    .scan_environments(EnvironmentType::Maven)
+                    .await?;
+                print!("{output}");
+            }
+            MavenCommands::Add { name, home, description: _ } => {
+                let config_value = serde_json::json!({ "maven_home": home });
+                let output = self
+                    .switcher
+                    .add_environment(EnvironmentType::Maven, &name, config_value)
+                    .await?;
+                print!("{output}");
+            }
+            MavenCommands::Remove { name } => {
+                let output = self
+                    .switcher
+                    .remove_environment(EnvironmentType::Maven, &name)
+                    .await?;
+                print!("{output}");
             }
             MavenCommands::Uninstall { name } => {
                 let mut config = crate::infrastructure::config::Config::load()
@@ -592,47 +613,38 @@ impl CommandHandler {
         Ok(())
     }
 
-    /// 处理 Java 远程查询（简化版本）
+    /// Handle Java remote version listing.
     async fn handle_java_ls_remote(
         &self,
-        java_version: Option<u32>,
-        _repository: Option<String>,
+        version: Option<u32>,
     ) -> Result<String, String> {
         use crate::environments::java::installer::JavaInstaller;
 
         println!("Querying available Java versions...");
 
-        // 暂时使用旧的实现，确保基本功能可用
         match JavaInstaller::list_installable_versions().await {
             Ok(versions) => {
                 let mut output = String::new();
-                output.push_str("Available Java versions:\n\n");
 
-                if let Some(major) = java_version {
-                    let filtered_versions: Vec<String> = versions
+                if let Some(major) = version {
+                    let filtered: Vec<String> = versions
                         .into_iter()
                         .filter(|v| v.contains(&major.to_string()))
                         .collect();
-
-                    if filtered_versions.is_empty() {
+                    if filtered.is_empty() {
                         output.push_str(&format!("No Java {major} versions found\n"));
                     } else {
                         output.push_str(&format!("Available Java {major} versions:\n"));
-                        for version in filtered_versions {
-                            output.push_str(&format!("  {version}\n"));
+                        for v in filtered {
+                            output.push_str(&format!("  {v}\n"));
                         }
                     }
                 } else {
-                    output.push_str("All available versions:\n");
-                    for version in versions {
-                        output.push_str(&format!("  {version}\n"));
+                    output.push_str("Available Java versions:\n");
+                    for v in versions {
+                        output.push_str(&format!("  {v}\n"));
                     }
                 }
-
-                output.push_str("\nUsage:\n");
-                output.push_str("  fnva java install 21        # Install Java 21\n");
-                output.push_str("  fnva java install lts        # Install latest LTS\n");
-                output.push_str("  fnva java install latest     # Install latest version\n");
 
                 Ok(output)
             }

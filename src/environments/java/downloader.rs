@@ -35,6 +35,14 @@ impl JavaDownloader {
             "tar.gz"
         }
     }
+
+    /// Force re-fetch the remote version cache.
+    pub async fn refresh(&self) -> Result<(), DownloadError> {
+        self.discovery
+            .refresh()
+            .await
+            .map_err(|e| DownloadError::from(format!("{e}")))
+    }
 }
 
 impl ToolDownloader for JavaDownloader {

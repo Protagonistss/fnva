@@ -113,19 +113,12 @@ pub enum JavaCommands {
     },
     /// Query available remote versions
     LsRemote {
-        /// Query type
-        #[arg(default_value = "java")]
-        query_type: String,
-        /// Major Java version
+        /// Major version filter
         #[arg(long, short = 'v')]
         version: Option<u32>,
-        /// Repository URL
-        #[arg(long)]
-        repository: Option<String>,
-        /// Result limit
-        #[arg(short = 'n', long, default_value = "20")]
-        limit: u32,
     },
+    /// Refresh the remote version cache
+    Refresh,
     /// Install a Java version
     Install {
         /// Java version
@@ -180,6 +173,25 @@ pub enum MavenCommands {
         /// Output as JSON
         #[arg(long)]
         json: bool,
+    },
+    /// Scan the system for Maven installations
+    Scan,
+    /// Add a Maven environment
+    Add {
+        /// Environment name
+        #[arg(short, long)]
+        name: String,
+        /// MAVEN_HOME path
+        #[arg(long)]
+        home: String,
+        /// Description
+        #[arg(short = 'd', long)]
+        description: Option<String>,
+    },
+    /// Remove a Maven environment
+    Remove {
+        /// Environment name
+        name: String,
     },
     /// Install a Maven version
     Install {
