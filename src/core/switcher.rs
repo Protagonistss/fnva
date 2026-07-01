@@ -396,10 +396,24 @@ impl EnvironmentSwitcher {
                 output.push_str(&format!("  URL     : {}\n", env.path));
                 output.push_str(&format!("  Model   : {model}\n"));
                 output.push_str(&format!("  Source  : {desc}\n"));
-                output.push_str(&format!(
-                    "  Import  : fnva cc add {} --base-url \"{}\" --auto\n\n",
-                    env.name, env.path
-                ));
+                // 生成与该环境类型对应的导入命令（不同类型的 add 子命令参数不同）
+                let import_cmd = match env_type {
+                    EnvironmentType::Java | EnvironmentType::Maven => {
+                        format!(
+                            "fnva {env_type} add --name {} --home \"{}\"",
+                            env.name, env.path
+                        )
+                    }
+                    EnvironmentType::Cc => {
+                        // CC 的 add 必填 --provider，但扫描只能拿到 base_url，无法推断 provider，
+                        // 故 --provider 留作占位符让用户补全。
+                        format!(
+                            "fnva cc add --name {} --provider <provider> --base-url \"{}\"",
+                            env.name, env.path
+                        )
+                    }
+                };
+                output.push_str(&format!("  Import  : {import_cmd}\n\n"));
             }
         }
 
