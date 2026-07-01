@@ -254,70 +254,59 @@ impl EnvironmentManager for CcEnvironmentManager {
             .map(|e| e.name.clone())
             .collect();
 
-        // 1. Scan ~/.claude/settings.json (Claude Code local config)
-        if let Some(home) = dirs::home_dir() {
-            let claude_settings = home.join(".claude").join("settings.json");
-            if claude_settings.exists() {
-                if let Ok(content) = std::fs::read_to_string(&claude_settings) {
-                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-                        if let Some(env_map) = json.get("env").and_then(|v| v.as_object()) {
-                            let auth_token = env_map
-                                .get("ANTHROPIC_AUTH_TOKEN")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("")
-                                .to_string();
-                            let base_url = env_map
-                                .get("ANTHROPIC_BASE_URL")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("")
-                                .to_string();
-                            let sonnet_model = env_map
-                                .get("ANTHROPIC_DEFAULT_SONNET_MODEL")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("claude-sonnet-4-5")
-                                .to_string();
-                            let opus_model = env_map
-                                .get("ANTHROPIC_DEFAULT_OPUS_MODEL")
-                                .and_then(|v| v.as_str())
-                                .map(String::from);
-                            let haiku_model = env_map
-                                .get("ANTHROPIC_DEFAULT_HAIKU_MODEL")
-                                .and_then(|v| v.as_str())
-                                .map(String::from);
-                            let api_timeout_ms = env_map
-                                .get("API_TIMEOUT_MS")
-                                .and_then(|v| v.as_str())
-                                .map(String::from);
-
-                            if !base_url.is_empty() {
-                                // Generate a meaningful name from base_url domain
-                                let name = url_to_env_name(&base_url);
-
-                                // Check if already managed by fnva (by name or matching base_url)
-                                let already_managed = existing_names.contains(&name)
-                                    || existing_config.cc_environments.iter().any(|e| {
-                                        e.base_url == base_url
-                                    });
-
-                                if !already_managed {
-                                    result.push(DynEnvironment {
-                                        name: name.clone(),
-                                        path: base_url.clone(),
-                                        version: Some(sonnet_model.clone()),
-                                        description: Some(format!(
-                                            "Detected from ~/.claude/settings.json (model: {sonnet_model})"
-                                        )),
-                                        is_active: false,
-                                    });
-
-                                    // Also store the full info for potential import
-                                    let _ = (auth_token, opus_model, haiku_model, api_timeout_ms);
-                                }
-                            }
-                        }
-                    }
-                }
+        // 1. Scan Claude Code settings.json across all supported platforms
+        for candidate in claude_settings_candidates() {
+            if !candidate.exists() {
+                continue;
             }
+            let Ok(content) = std::fs::read_to_string(&candidate) else {
+                continue;
+            };
+            let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) else {
+                continue;
+            };
+            let Some(env_map) = json.get("env").and_then(|v| v.as_object()) else {
+                continue;
+            };
+
+            let base_url = env_map
+                .get("ANTHROPIC_BASE_URL")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+
+            if base_url.is_empty() {
+                continue;
+            }
+
+            // Skip if already tracked by fnva (by name or base_url)
+            let name = url_to_env_name(&base_url);
+            if existing_names.contains(&name)
+                || existing_config.cc_environments.iter().any(|e| e.base_url == base_url)
+                || result.iter().any(|e: &DynEnvironment| e.path == base_url)
+            {
+                continue;
+            }
+
+            let sonnet_model = env_map
+                .get("ANTHROPIC_DEFAULT_SONNET_MODEL")
+                .and_then(|v| v.as_str())
+                .unwrap_or("claude-sonnet-4-5")
+                .to_string();
+
+            let source_label = candidate
+                .to_string_lossy()
+                .replace(&std::env::var("HOME").unwrap_or_default(), "~");
+
+            result.push(DynEnvironment {
+                name,
+                path: base_url,
+                version: Some(sonnet_model.clone()),
+                description: Some(format!(
+                    "Detected from {source_label} (model: {sonnet_model})"
+                )),
+                is_active: false,
+            });
         }
 
         // 2. Check system environment variables (original logic)
@@ -326,7 +315,6 @@ impl EnvironmentManager for CcEnvironmentManager {
             std::env::var("ANTHROPIC_BASE_URL"),
         ) {
             let name = url_to_env_name(&base_url);
-            // Avoid duplicates with what was found from settings.json or already managed
             let already_in_result = result.iter().any(|e| e.path == base_url);
             let already_managed = existing_config
                 .cc_environments
@@ -365,6 +353,36 @@ impl EnvironmentManager for CcEnvironmentManager {
     fn get_details(&self, name: &str) -> Result<Option<DynEnvironment>, String> {
         self.get(name)
     }
+}
+
+/// Returns all candidate paths for Claude Code's settings.json on the current platform.
+///
+/// | Platform | Path |
+/// |----------|------|
+/// | Linux    | `~/.claude/settings.json` |
+/// | macOS    | `~/.claude/settings.json` |
+/// | Windows  | `%APPDATA%\Claude\settings.json` |
+fn claude_settings_candidates() -> Vec<std::path::PathBuf> {
+    let mut candidates = Vec::new();
+
+    // Linux / macOS: ~/.claude/settings.json
+    if let Some(home) = dirs::home_dir() {
+        candidates.push(home.join(".claude").join("settings.json"));
+    }
+
+    // Windows: %APPDATA%\Claude\settings.json
+    #[cfg(target_os = "windows")]
+    if let Some(appdata) = dirs::config_dir() {
+        candidates.push(appdata.join("Claude").join("settings.json"));
+    }
+
+    // macOS also stores in ~/Library/Application Support/Claude/settings.json
+    #[cfg(target_os = "macos")]
+    if let Some(app_support) = dirs::data_dir() {
+        candidates.push(app_support.join("Claude").join("settings.json"));
+    }
+
+    candidates
 }
 
 /// Convert a base URL to a meaningful short env name.
