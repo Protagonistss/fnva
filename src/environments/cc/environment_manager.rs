@@ -247,32 +247,106 @@ impl EnvironmentManager for CcEnvironmentManager {
 
     async fn scan(&self) -> Result<Vec<DynEnvironment>, String> {
         let mut result = Vec::new();
+        let existing_config = crate::infrastructure::config::Config::load().unwrap_or_default();
+        let existing_names: std::collections::HashSet<String> = existing_config
+            .cc_environments
+            .iter()
+            .map(|e| e.name.clone())
+            .collect();
 
-        // "Scan" for CC environments by checking Anthropic environment variables
+        // 1. Scan ~/.claude/settings.json (Claude Code local config)
+        if let Some(home) = dirs::home_dir() {
+            let claude_settings = home.join(".claude").join("settings.json");
+            if claude_settings.exists() {
+                if let Ok(content) = std::fs::read_to_string(&claude_settings) {
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                        if let Some(env_map) = json.get("env").and_then(|v| v.as_object()) {
+                            let auth_token = env_map
+                                .get("ANTHROPIC_AUTH_TOKEN")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string();
+                            let base_url = env_map
+                                .get("ANTHROPIC_BASE_URL")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string();
+                            let sonnet_model = env_map
+                                .get("ANTHROPIC_DEFAULT_SONNET_MODEL")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("claude-sonnet-4-5")
+                                .to_string();
+                            let opus_model = env_map
+                                .get("ANTHROPIC_DEFAULT_OPUS_MODEL")
+                                .and_then(|v| v.as_str())
+                                .map(String::from);
+                            let haiku_model = env_map
+                                .get("ANTHROPIC_DEFAULT_HAIKU_MODEL")
+                                .and_then(|v| v.as_str())
+                                .map(String::from);
+                            let api_timeout_ms = env_map
+                                .get("API_TIMEOUT_MS")
+                                .and_then(|v| v.as_str())
+                                .map(String::from);
+
+                            if !base_url.is_empty() {
+                                // Generate a meaningful name from base_url domain
+                                let name = url_to_env_name(&base_url);
+
+                                // Check if already managed by fnva (by name or matching base_url)
+                                let already_managed = existing_names.contains(&name)
+                                    || existing_config.cc_environments.iter().any(|e| {
+                                        e.base_url == base_url
+                                    });
+
+                                if !already_managed {
+                                    result.push(DynEnvironment {
+                                        name: name.clone(),
+                                        path: base_url.clone(),
+                                        version: Some(sonnet_model.clone()),
+                                        description: Some(format!(
+                                            "Detected from ~/.claude/settings.json (model: {sonnet_model})"
+                                        )),
+                                        is_active: false,
+                                    });
+
+                                    // Also store the full info for potential import
+                                    let _ = (auth_token, opus_model, haiku_model, api_timeout_ms);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Check system environment variables (original logic)
         if let (Ok(auth_token), Ok(base_url)) = (
             std::env::var("ANTHROPIC_AUTH_TOKEN"),
             std::env::var("ANTHROPIC_BASE_URL"),
         ) {
-            let cc_env = ConfigCcEnvironment {
-                name: "cc-detected".to_string(),
-                provider: "anthropic".to_string(),
-                description: "Detected CC environment from system variables".to_string(),
-                api_key: auth_token,
-                base_url,
-                sonnet_model: std::env::var("ANTHROPIC_DEFAULT_SONNET_MODEL")
-                    .unwrap_or_else(|_| "claude-sonnet-4-5".to_string()),
-                opus_model: None,
-                haiku_model: None,
-                api_timeout_ms: None,
-                extra_env: std::collections::HashMap::new(),
-            };
-            result.push(DynEnvironment {
-                name: cc_env.name.clone(),
-                path: cc_env.base_url.clone(),
-                version: Some(cc_env.sonnet_model.clone()),
-                description: Some(cc_env.description.clone()),
-                is_active: cc_env.is_active(),
-            });
+            let name = url_to_env_name(&base_url);
+            // Avoid duplicates with what was found from settings.json or already managed
+            let already_in_result = result.iter().any(|e| e.path == base_url);
+            let already_managed = existing_config
+                .cc_environments
+                .iter()
+                .any(|e| e.base_url == base_url);
+
+            if !already_in_result && !already_managed {
+                let sonnet = std::env::var("ANTHROPIC_DEFAULT_SONNET_MODEL")
+                    .unwrap_or_else(|_| "claude-sonnet-4-5".to_string());
+                result.push(DynEnvironment {
+                    name,
+                    path: base_url,
+                    version: Some(sonnet.clone()),
+                    description: Some(format!(
+                        "Detected from system environment variables (model: {sonnet})"
+                    )),
+                    is_active: true,
+                });
+                let _ = auth_token;
+            }
         }
 
         Ok(result)
@@ -291,6 +365,26 @@ impl EnvironmentManager for CcEnvironmentManager {
     fn get_details(&self, name: &str) -> Result<Option<DynEnvironment>, String> {
         self.get(name)
     }
+}
+
+/// Convert a base URL to a meaningful short env name.
+/// e.g. "https://open.bigmodel.cn/api/anthropic" → "bigmodel-cc"
+///      "https://api.anthropic.com"              → "anthropic-cc"
+fn url_to_env_name(base_url: &str) -> String {
+    // Strip scheme
+    let without_scheme = base_url
+        .trim_start_matches("https://")
+        .trim_start_matches("http://");
+    // Take only the hostname portion
+    let host = without_scheme.split('/').next().unwrap_or(without_scheme);
+    // Take the second-level domain segment (e.g. "bigmodel" from "open.bigmodel.cn")
+    let parts: Vec<&str> = host.split('.').collect();
+    let label = if parts.len() >= 2 {
+        parts[parts.len() - 2]
+    } else {
+        parts.first().copied().unwrap_or("cc")
+    };
+    format!("{label}-cc")
 }
 
 // 为 ConfigCcEnvironment 添加扩展方法

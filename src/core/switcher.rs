@@ -382,15 +382,24 @@ impl EnvironmentSwitcher {
 
         let mut output = String::new();
         if found_envs.is_empty() {
-            output.push_str(&format!("No {env_type} environments found on system\n"));
+            output.push_str(&format!("No new {env_type} environments found on system\n"));
+            output.push_str("(Tip: already-managed environments are excluded from scan results)\n");
         } else {
             output.push_str(&format!(
-                "Found {} {} environments:\n",
+                "Found {} new {env_type} environment(s):\n\n",
                 found_envs.len(),
-                env_type
             ));
-            for env in found_envs {
-                output.push_str(&format!("  {}: {}\n", env.name, env.path));
+            for env in &found_envs {
+                let desc = env.description.as_deref().unwrap_or("-");
+                let model = env.version.as_deref().unwrap_or("-");
+                output.push_str(&format!("  Name    : {}\n", env.name));
+                output.push_str(&format!("  URL     : {}\n", env.path));
+                output.push_str(&format!("  Model   : {model}\n"));
+                output.push_str(&format!("  Source  : {desc}\n"));
+                output.push_str(&format!(
+                    "  Import  : fnva cc add {} --base-url \"{}\" --auto\n\n",
+                    env.name, env.path
+                ));
             }
         }
 
