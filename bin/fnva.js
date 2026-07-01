@@ -182,19 +182,7 @@ function applyEnvironmentVariables(envVars) {
 }
 
 function displaySuccessMessage(envType, envName, envVars) {
-  console.log(`[OK] Switched to ${envType} environment: ${envName}`);
-
-  if (envVars.JAVA_HOME) {
-    console.log(`[DIR] JAVA_HOME: ${envVars.JAVA_HOME}`);
-  }
-
-  if (envVars.ANTHROPIC_AUTH_TOKEN) {
-    console.log(`[KEY] ANTHROPIC_AUTH_TOKEN: [Set]`);
-  }
-
-  if (envVars.OPENAI_API_KEY) {
-    console.log(`[KEY] OPENAI_API_KEY: [Set]`);
-  }
+  console.log(`\x1b[32m✓\x1b[0m Switched to ${envType}: ${envName}`);
 }
 
 function generateSimpleScript(envVars, envType, envName) {
@@ -203,7 +191,7 @@ function generateSimpleScript(envVars, envType, envName) {
   if (process.platform === 'win32') {
     // Windows PowerShell - 使用编码工具设置
     lines.push(EncodingUtils.generatePowerShellEncodingSetup());
-    lines.push(`Write-Host "Switched to ${envType} environment: ${envName}" -ForegroundColor Green`);
+    lines.push(`Write-Host "✓ Switched to ${envType}: ${envName}" -ForegroundColor Green`);
 
     if (envVars.JAVA_HOME) {
       lines.push(`$env:JAVA_HOME = "${envVars.JAVA_HOME}"`);
@@ -217,31 +205,26 @@ function generateSimpleScript(envVars, envType, envName) {
       lines.push(`    }`);
       lines.push(`}`);
       lines.push(`$env:PATH = "${envVars.JAVA_HOME}\\bin;" + ($cleanPath -join ';')`);
-      lines.push(`Write-Host "JAVA_HOME: $env:JAVA_HOME" -ForegroundColor Yellow`);
     }
 
     if (envVars.ANTHROPIC_AUTH_TOKEN) {
       lines.push(`$env:ANTHROPIC_AUTH_TOKEN = "${envVars.ANTHROPIC_AUTH_TOKEN}"`);
-      lines.push(`Write-Host "ANTHROPIC_AUTH_TOKEN: [Set]" -ForegroundColor Yellow`);
     }
 
     if (envVars.ANTHROPIC_BASE_URL) {
       lines.push(`$env:ANTHROPIC_BASE_URL = "${envVars.ANTHROPIC_BASE_URL}"`);
-      lines.push(`Write-Host "ANTHROPIC_BASE_URL: ${envVars.ANTHROPIC_BASE_URL}" -ForegroundColor Yellow`);
     }
 
     if (envVars.ANTHROPIC_DEFAULT_SONNET_MODEL) {
       lines.push(`$env:ANTHROPIC_DEFAULT_SONNET_MODEL = "${envVars.ANTHROPIC_DEFAULT_SONNET_MODEL}"`);
-      lines.push(`Write-Host "ANTHROPIC_DEFAULT_SONNET_MODEL: ${envVars.ANTHROPIC_DEFAULT_SONNET_MODEL}" -ForegroundColor Yellow`);
     }
 
     if (envVars.OPENAI_API_KEY) {
       lines.push(`$env:OPENAI_API_KEY = "${envVars.OPENAI_API_KEY}"`);
-      lines.push(`Write-Host "OPENAI_API_KEY: [Set]" -ForegroundColor Yellow`);
     }
   } else {
     // Unix-like systems
-    lines.push(`echo "Switched to ${envType} environment: ${envName}"`);
+    lines.push(`printf '\\033[32m✓\\033[0m Switched to ${envType}: ${envName}\\n'`);
 
     if (envVars.JAVA_HOME) {
       lines.push(`export JAVA_HOME="${envVars.JAVA_HOME}"`);
@@ -250,27 +233,22 @@ function generateSimpleScript(envVars, envType, envName) {
       lines.push(`echo $PATH | tr ':' '\\n' | grep -v java | grep -v jdk | tr '\\n' ':' | sed 's/:$//' > /tmp/clean_path`);
       lines.push(`export PATH="${envVars.JAVA_HOME}/bin:$(cat /tmp/clean_path)"`);
       lines.push(`rm -f /tmp/clean_path`);
-      lines.push(`echo "JAVA_HOME: $JAVA_HOME"`);
     }
 
     if (envVars.ANTHROPIC_AUTH_TOKEN) {
       lines.push(`export ANTHROPIC_AUTH_TOKEN="${envVars.ANTHROPIC_AUTH_TOKEN}"`);
-      lines.push(`echo "ANTHROPIC_AUTH_TOKEN: [Set]"`);
     }
 
     if (envVars.ANTHROPIC_BASE_URL) {
       lines.push(`export ANTHROPIC_BASE_URL="${envVars.ANTHROPIC_BASE_URL}"`);
-      lines.push(`echo "ANTHROPIC_BASE_URL: ${envVars.ANTHROPIC_BASE_URL}"`);
     }
 
     if (envVars.ANTHROPIC_DEFAULT_SONNET_MODEL) {
       lines.push(`export ANTHROPIC_DEFAULT_SONNET_MODEL="${envVars.ANTHROPIC_DEFAULT_SONNET_MODEL}"`);
-      lines.push(`echo "ANTHROPIC_DEFAULT_SONNET_MODEL: ${envVars.ANTHROPIC_DEFAULT_SONNET_MODEL}"`);
     }
 
     if (envVars.OPENAI_API_KEY) {
       lines.push(`export OPENAI_API_KEY="${envVars.OPENAI_API_KEY}"`);
-      lines.push(`echo "OPENAI_API_KEY: [Set]"`);
     }
   }
 

@@ -8,7 +8,7 @@ function fnva_autoload_default
 
     set envs_file "$HOME/.fnva/state/current_envs.toml"
     if test -f "$envs_file"; and command -v fnva >/dev/null 2>&1
-        set _restored ""
+        set -l _restored
         for line in (cat "$envs_file")
             set -l match (string match -r '^\s*(\w+)\s*=\s*"([^"]*)"' -- $line)
             test (count $match) -ge 3; or continue
@@ -25,7 +25,6 @@ function fnva_autoload_default
         if set -q _restored[1]
             printf '\033[32m✓\033[0m fnva active: %s\n' (string join ', ' $_restored)
         end
-        end
     end
 end
 
@@ -33,7 +32,7 @@ fnva_autoload_default
 
 # --- Shell wrapper (auto-source on use) ---
 function fnva
-    if test (count $argv) -ge 2; and string match -q -r "^(java|llm|cc)$" $argv[1]; and test $argv[2] = "use"
+    if test (count $argv) -ge 2; and string match -q -r "^(java|cc|maven)$" $argv[1]; and test $argv[2] = "use"
         set temp_file (mktemp)
         command fnva $argv > $temp_file
         source $temp_file

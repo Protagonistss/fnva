@@ -486,14 +486,7 @@ $env:FNVA_ENV_TYPE = "Java"
 
 # Verify the switch
 if (-not $env:_FNVA_QUIET) {
-    Write-Host "Switched to Java environment: {{env_name}}" -ForegroundColor Green
-    Write-Host "JAVA_HOME: $env:JAVA_HOME" -ForegroundColor Yellow
-    Write-Host "Java Version:" -ForegroundColor Cyan
-    try {
-        & "{{escape_backslash java_bin}}\\java.exe" -version 2>&1 | ForEach-Object { Write-Host "   $_" -ForegroundColor Gray }
-    } catch {
-        Write-Host "   Failed to get Java version" -ForegroundColor Red
-    }
+    Write-Host "✓ Switched to Java: {{env_name}}" -ForegroundColor Green
 }
 "#;
 
@@ -569,16 +562,8 @@ export FNVA_ENV_TYPE="Java"
 
 # Verify the switch
 if [[ -z "$_FNVA_QUIET" ]]; then
-    echo "Switched to Java environment: {{env_name}}"
-    echo "JAVA_HOME: $JAVA_HOME"
-    echo "Java Version:"
-    if [ -x "{{java_bin}}/java" ]; then
-        "{{java_bin}}/java" -version 2>&1 | head -n 1 | sed 's/^/   /'
-    else
-        echo "   Failed to get Java version"
-    fi
+    printf '\033[32m✓\033[0m Switched to Java: {{env_name}}\n'
 fi
-
 "#;
 
 const BASH_INTEGRATION_TEMPLATE: &str = r#"
@@ -668,17 +653,33 @@ $env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"
 $env:API_TIMEOUT_MS = "{{config.api_timeout_ms}}"
 {{/if}}
 
+{{#if config.api_key}}
+$env:OPENAI_API_KEY = "{{config.api_key}}"
+{{/if}}
+
+{{#if config.openai_base_url}}
+$env:OPENAI_API_BASE = "{{config.openai_base_url}}"
+{{/if}}
+
+{{#if config.base_url}}
+$env:OPENAI_API_BASE = "{{config.base_url}}"
+{{/if}}
+
+{{#if config.model}}
+$env:OPENAI_MODEL = "{{config.model}}"
+{{/if}}
+
+{{#if config.temperature}}
+$env:OPENAI_TEMPERATURE = "{{config.temperature}}"
+{{/if}}
+
+{{#if config.max_tokens}}
+$env:OPENAI_MAX_TOKENS = "{{config.max_tokens}}"
+{{/if}}
+
 # Verify the switch
 if (-not $env:_FNVA_QUIET) {
-    Write-Host "Switched to Claude Code (CC) environment: {{env_name}}" -ForegroundColor Green
-
-    {{#if config.anthropic_auth_token}}
-    Write-Host "Anthropic Auth Token: [SET]" -ForegroundColor Yellow
-    {{/if}}
-
-    {{#if config.anthropic_base_url}}
-    Write-Host "Base URL: {{config.anthropic_base_url}}" -ForegroundColor Yellow
-    {{/if}}
+    Write-Host "✓ Switched to CC: {{env_name}}" -ForegroundColor Green
 }
 "#;
 
@@ -718,17 +719,33 @@ export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"
 export API_TIMEOUT_MS="{{config.api_timeout_ms}}"
 {{/if}}
 
+{{#if config.api_key}}
+export OPENAI_API_KEY="{{config.api_key}}"
+{{/if}}
+
+{{#if config.openai_base_url}}
+export OPENAI_API_BASE="{{config.openai_base_url}}"
+{{/if}}
+
+{{#if config.base_url}}
+export OPENAI_API_BASE="{{config.base_url}}"
+{{/if}}
+
+{{#if config.model}}
+export OPENAI_MODEL="{{config.model}}"
+{{/if}}
+
+{{#if config.temperature}}
+export OPENAI_TEMPERATURE="{{config.temperature}}"
+{{/if}}
+
+{{#if config.max_tokens}}
+export OPENAI_MAX_TOKENS="{{config.max_tokens}}"
+{{/if}}
+
 # Verify the switch
 if [[ -z "$_FNVA_QUIET" ]]; then
-    echo "Switched to Claude Code (CC) environment: {{env_name}}"
-
-    {{#if config.anthropic_auth_token}}
-    echo "Anthropic Auth Token: [SET]"
-    {{/if}}
-
-    {{#if config.anthropic_base_url}}
-    echo "Base URL: {{config.anthropic_base_url}}"
-    {{/if}}
+    printf '\033[32m✓\033[0m Switched to CC: {{env_name}}\n'
 fi
 "#;
 
@@ -750,16 +767,8 @@ set -gx FNVA_ENV_TYPE "Java"
 
 # Verify the switch
 if not set -q _FNVA_QUIET
-    echo "Switched to Java environment: {{env_name}}"
-    echo "JAVA_HOME: $JAVA_HOME"
-    echo "Java Version:"
-    if test -x "{{java_bin}}/java"
-        "{{java_bin}}/java" -version 2>&1 | head -n 1 | sed 's/^/   /'
-    else
-        echo "   Failed to get Java version"
-    end
+    printf '\033[32m✓\033[0m Switched to Java: {{env_name}}\n'
 end
-
 "#;
 
 const FISH_INTEGRATION_TEMPLATE: &str = r#"
@@ -843,17 +852,33 @@ set -gx CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC "1"
 set -gx API_TIMEOUT_MS "{{config.api_timeout_ms}}"
 {{/if}}
 
+{{#if config.api_key}}
+set -gx OPENAI_API_KEY "{{config.api_key}}"
+{{/if}}
+
+{{#if config.openai_base_url}}
+set -gx OPENAI_API_BASE "{{config.openai_base_url}}"
+{{/if}}
+
+{{#if config.base_url}}
+set -gx OPENAI_API_BASE "{{config.base_url}}"
+{{/if}}
+
+{{#if config.model}}
+set -gx OPENAI_MODEL "{{config.model}}"
+{{/if}}
+
+{{#if config.temperature}}
+set -gx OPENAI_TEMPERATURE "{{config.temperature}}"
+{{/if}}
+
+{{#if config.max_tokens}}
+set -gx OPENAI_MAX_TOKENS "{{config.max_tokens}}"
+{{/if}}
+
 # Verify the switch
 if not set -q _FNVA_QUIET
-    echo "Switched to Claude Code (CC) environment: {{env_name}}"
-
-    {{#if config.anthropic_auth_token}}
-    echo "Anthropic Auth Token: [SET]"
-    {{/if}}
-
-    {{#if config.anthropic_base_url}}
-    echo "Base URL: {{config.anthropic_base_url}}"
-    {{/if}}
+    printf '\033[32m✓\033[0m Switched to CC: {{env_name}}\n'
 end
 "#;
 
@@ -875,15 +900,7 @@ set "FNVA_JAVA_BIN={{escape_backslash java_bin}}"
 set "PATH=%FNVA_JAVA_BIN%;%PATH%"
 
 REM Verify the switch
-echo Switched to Java environment: {{env_name}}
-echo JAVA_HOME: %JAVA_HOME%
-echo Java Version:
-if exist "{{escape_backslash java_bin}}\java.exe" (
-    "{{escape_backslash java_bin}}\java.exe" -version 2>&1
-) else (
-    echo    Failed to get Java version
-)
-
+echo ✓ Switched to Java: {{env_name}}
 "#;
 
 const CMD_INTEGRATION_TEMPLATE: &str = r#"
@@ -949,17 +966,32 @@ set "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1"
 set "API_TIMEOUT_MS={{config.api_timeout_ms}}"
 {{/if}}
 
+{{#if config.api_key}}
+set "OPENAI_API_KEY={{config.api_key}}"
+{{/if}}
+
+{{#if config.openai_base_url}}
+set "OPENAI_API_BASE={{config.openai_base_url}}"
+{{/if}}
+
+{{#if config.base_url}}
+set "OPENAI_API_BASE={{config.base_url}}"
+{{/if}}
+
+{{#if config.model}}
+set "OPENAI_MODEL={{config.model}}"
+{{/if}}
+
+{{#if config.temperature}}
+set "OPENAI_TEMPERATURE={{config.temperature}}"
+{{/if}}
+
+{{#if config.max_tokens}}
+set "OPENAI_MAX_TOKENS={{config.max_tokens}}"
+{{/if}}
+
 REM Verify the switch
-echo Switched to Claude Code (CC) environment: {{env_name}}
-
-{{#if config.anthropic_auth_token}}
-echo Anthropic Auth Token: [SET]
-{{/if}}
-
-{{#if config.anthropic_base_url}}
-echo Base URL: {{config.anthropic_base_url}}"
-{{/if}}
-
+echo ✓ Switched to CC: {{env_name}}
 "#;
 
 const POWERSHELL_MAVEN_SWITCH_TEMPLATE: &str = r#"
@@ -992,17 +1024,7 @@ $env:FNVA_ENV_TYPE = "Maven"
 
 # Verify the switch
 if (-not $env:_FNVA_QUIET) {
-    Write-Host "Switched to Maven environment: {{env_name}}" -ForegroundColor Green
-    Write-Host "MAVEN_HOME: $env:MAVEN_HOME" -ForegroundColor Yellow
-{{#if has_maven_opts}}
-    Write-Host "MAVEN_OPTS: $env:MAVEN_OPTS" -ForegroundColor DarkYellow
-{{/if}}
-    Write-Host "Maven Version:" -ForegroundColor Cyan
-    try {
-        & "{{escape_backslash maven_bin}}\\mvn.cmd" -v 2>&1 | ForEach-Object { Write-Host "   $_" -ForegroundColor Gray }
-    } catch {
-        Write-Host "   Failed to get Maven version" -ForegroundColor Red
-    }
+    Write-Host "✓ Switched to Maven: {{env_name}}" -ForegroundColor Green
 }
 "#;
 
@@ -1033,19 +1055,8 @@ export FNVA_ENV_TYPE="Maven"
 
 # Verify the switch
 if [[ -z "$_FNVA_QUIET" ]]; then
-    echo "Switched to Maven environment: {{env_name}}"
-    echo "MAVEN_HOME: $MAVEN_HOME"
-{{#if has_maven_opts}}
-    echo "MAVEN_OPTS: $MAVEN_OPTS"
-{{/if}}
-    echo "Maven Version:"
-    if [ -x "{{maven_bin}}/mvn" ]; then
-        "{{maven_bin}}/mvn" -v 2>&1 | head -n 1 | sed 's/^/   /'
-    else
-        echo "   Failed to get Maven version"
-    fi
+    printf '\033[32m✓\033[0m Switched to Maven: {{env_name}}\n'
 fi
-
 "#;
 
 const FISH_MAVEN_SWITCH_TEMPLATE: &str = r#"
@@ -1074,19 +1085,8 @@ set -gx FNVA_ENV_TYPE "Maven"
 
 # Verify the switch
 if not set -q _FNVA_QUIET
-    echo "Switched to Maven environment: {{env_name}}"
-    echo "MAVEN_HOME: $MAVEN_HOME"
-{{#if has_maven_opts}}
-    echo "MAVEN_OPTS: $MAVEN_OPTS"
-{{/if}}
-    echo "Maven Version:"
-    if test -x "{{maven_bin}}/mvn"
-        "{{maven_bin}}/mvn" -v 2>&1 | head -n 1 | sed 's/^/   /'
-    else
-        echo "   Failed to get Maven version"
-    end
+    printf '\033[32m✓\033[0m Switched to Maven: {{env_name}}\n'
 end
-
 "#;
 
 const CMD_MAVEN_SWITCH_TEMPLATE: &str = r#"
@@ -1115,18 +1115,7 @@ set "MAVEN_OPTS="
 {{/if}}
 
 REM Verify the switch
-echo Switched to Maven environment: {{env_name}}
-echo MAVEN_HOME: %MAVEN_HOME%
-{{#if has_maven_opts}}
-echo MAVEN_OPTS: %MAVEN_OPTS%
-{{/if}}
-echo Maven Version:
-if exist "{{escape_backslash maven_bin}}\mvn.cmd" (
-    "{{escape_backslash maven_bin}}\mvn.cmd" -v 2>&1
-) else (
-    echo    Failed to get Maven version
-)
-
+echo ✓ Switched to Maven: {{env_name}}
 "#;
 
 #[cfg(test)]

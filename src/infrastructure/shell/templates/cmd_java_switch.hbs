@@ -10,17 +10,9 @@ set "FNVA_CURRENT_JAVA={{env_name}}"
 set "FNVA_ENV_TYPE=Java"
 
 REM Update PATH to include Java bin
-set "PATH={{escape_backslash java_bin}};%PATH%"
+if defined FNVA_JAVA_BIN call set "PATH=%%PATH:%FNVA_JAVA_BIN%;=%%"
+set "FNVA_JAVA_BIN={{escape_backslash java_bin}}"
+set "PATH=%FNVA_JAVA_BIN%;%PATH%"
 
 REM Verify the switch
-echo ✅ Switched to Java environment: {{env_name}}
-echo 📁 JAVA_HOME: %JAVA_HOME%
-echo 🔍 Java Version:
-if exist "{{escape_backslash java_bin}}\java.exe" (
-    "{{escape_backslash java_bin}}\java.exe" -version 2>&1
-) else (
-    echo    Failed to get Java version
-)
-
-REM Add to history
-echo fnva java use {{env_name}} >> "%USERPROFILE%\.fnva\history" 2>nul
+echo ✓ Switched to Java: {{env_name}}

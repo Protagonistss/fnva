@@ -31,7 +31,7 @@ fnva-AutoLoadDefault
 
 # --- Shell wrapper (auto-source on use) ---
 function fnva {
-    if ($args.Count -ge 2 -and ($args[0] -eq "java" -or $args[0] -eq "llm" -or $args[0] -eq "cc") -and ($args[1] -eq "use")) {
+    if ($args.Count -ge 2 -and ($args[0] -eq "java" -or $args[0] -eq "cc" -or $args[0] -eq "maven") -and ($args[1] -eq "use")) {
         $tempFile = Join-Path $env:TEMP ("fnva_script_" + (Get-Random) + ".ps1")
         try {
             & fnva.cmd @args 2>&1 | Out-File -FilePath $tempFile -Encoding UTF8

@@ -32,7 +32,7 @@ fnva_autoload_default
 
 # --- Shell wrapper (auto-source on use) ---
 fnva() {
-    if [[ $# -ge 2 && ("$1" == "java" || "$1" == "llm" || "$1" == "cc") && "$2" == "use" ]]; then
+    if [[ $# -ge 2 && ("$1" == "java" || "$1" == "cc" || "$1" == "maven") && "$2" == "use" ]]; then
         local temp_file
         temp_file="$(mktemp)"
         command fnva "$@" > "$temp_file"
