@@ -25,7 +25,9 @@ impl MavenEnvironmentManager {
             installations: HashMap::new(),
         };
         if let Err(e) = manager.load_from_config() {
-            crate::cli::print::warn(&format!("Failed to load Maven environments from config: {e}"));
+            crate::cli::print::warn(&format!(
+                "Failed to load Maven environments from config: {e}"
+            ));
         }
         manager
     }

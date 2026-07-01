@@ -370,6 +370,8 @@ pub fn parse_shell_type(shell_str: &str) -> Result<ShellType, String> {
         "fish" => Ok(ShellType::Fish),
         "powershell" | "ps1" => Ok(ShellType::PowerShell),
         "cmd" => Ok(ShellType::Cmd),
-        _ => Err(format!("Unknown shell '{shell_str}'. Valid: bash, zsh, fish, powershell, cmd")),
+        _ => Err(format!(
+            "Unknown shell '{shell_str}'. Valid: bash, zsh, fish, powershell, cmd"
+        )),
     }
 }

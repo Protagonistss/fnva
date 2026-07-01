@@ -474,9 +474,9 @@ pub async fn download_with_cache(
                 "Status",
                 &format!("Using cached file ({} MB)", metadata.len() / (1024 * 1024)),
             );
-            let canonical = file_path.canonicalize().map_err(|e| {
-                format!("Path canonicalization failed: {}", e)
-            })?;
+            let canonical = file_path
+                .canonicalize()
+                .map_err(|e| format!("Path canonicalization failed: {}", e))?;
             return Ok(crate::infrastructure::remote::DownloadTarget::File(
                 canonical
                     .to_str()

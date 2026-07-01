@@ -282,7 +282,10 @@ impl EnvironmentManager for CcEnvironmentManager {
             // Skip if already tracked by fnva (by name or base_url)
             let name = url_to_env_name(&base_url);
             if existing_names.contains(&name)
-                || existing_config.cc_environments.iter().any(|e| e.base_url == base_url)
+                || existing_config
+                    .cc_environments
+                    .iter()
+                    .any(|e| e.base_url == base_url)
                 || result.iter().any(|e: &DynEnvironment| e.path == base_url)
             {
                 continue;

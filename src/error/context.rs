@@ -39,7 +39,10 @@ impl<T> SafeMutex<T> {
                 error: AppError::lock_failed(&format!("Unable to acquire lock: {}", self.name)),
                 context: ErrorContext {
                     operation: format!("Acquiring {} lock failed because it is busy", self.name),
-                    suggestions: vec!["Try again later".to_string(), "Check the holder of the lock".to_string()],
+                    suggestions: vec![
+                        "Try again later".to_string(),
+                        "Check the holder of the lock".to_string(),
+                    ],
                     help_url: None,
                 },
             })

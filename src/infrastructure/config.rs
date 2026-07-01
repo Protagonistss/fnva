@@ -293,8 +293,8 @@ impl Config {
             return Ok(config);
         }
 
-        let content =
-            fs::read_to_string(&config_path).map_err(|e| format!("Failed to read config file: {e}"))?;
+        let content = fs::read_to_string(&config_path)
+            .map_err(|e| format!("Failed to read config file: {e}"))?;
 
         toml::from_str(&content).map_err(|e| format!("Failed to parse config file: {e}"))
     }
@@ -305,13 +305,15 @@ impl Config {
 
         // 确保配置目录存在
         if let Some(parent) = config_path.parent() {
-            fs::create_dir_all(parent).map_err(|e| format!("Failed to create config directory: {e}"))?;
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create config directory: {e}"))?;
         }
 
         let toml_content =
             toml::to_string_pretty(self).map_err(|e| format!("Failed to serialize config: {e}"))?;
 
-        fs::write(&config_path, toml_content).map_err(|e| format!("Failed to write config file: {e}"))?;
+        fs::write(&config_path, toml_content)
+            .map_err(|e| format!("Failed to write config file: {e}"))?;
 
         Ok(())
     }
@@ -517,8 +519,8 @@ impl Config {
 
         let mut config = if existed {
             // 如果配置文件存在，加载现有配置
-            let content =
-                fs::read_to_string(&config_path).map_err(|e| format!("Failed to read config file: {e}"))?;
+            let content = fs::read_to_string(&config_path)
+                .map_err(|e| format!("Failed to read config file: {e}"))?;
             toml::from_str(&content).map_err(|e| format!("Failed to parse config file: {e}"))?
         } else {
             // 如果配置文件不存在，创建默认配置
@@ -561,8 +563,8 @@ impl Config {
         }
 
         // 序列化配置
-        let serialized =
-            toml::to_string_pretty(&config).map_err(|e| format!("Failed to serialize config: {e}"))?;
+        let serialized = toml::to_string_pretty(&config)
+            .map_err(|e| format!("Failed to serialize config: {e}"))?;
 
         // 检查是否有变更
         if existed {

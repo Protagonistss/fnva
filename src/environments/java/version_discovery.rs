@@ -145,7 +145,13 @@ impl AdoptiumDiscovery {
         let mut html = String::new();
         while attempts < 3 {
             attempts += 1;
-            match self.client.get(&url).timeout(std::time::Duration::from_secs(15)).send().await {
+            match self
+                .client
+                .get(&url)
+                .timeout(std::time::Duration::from_secs(15))
+                .send()
+                .await
+            {
                 Ok(resp) => {
                     if let Ok(text) = resp.text().await {
                         html = text;
@@ -154,7 +160,10 @@ impl AdoptiumDiscovery {
                 }
                 Err(e) => {
                     if attempts == 3 {
-                        return Err(DiscoveryError::Network(format!("Failed to fetch {} after 3 attempts: {}", url, e)));
+                        return Err(DiscoveryError::Network(format!(
+                            "Failed to fetch {} after 3 attempts: {}",
+                            url, e
+                        )));
                     }
                     tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
                 }

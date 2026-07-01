@@ -349,11 +349,11 @@ impl JavaScanner {
                 if java_exe.exists() && java_exe.is_file() {
                     // 找到 Java，尝试确定 JAVA_HOME
                     if let Some(java_home) = java_exe.parent().and_then(|p| p.parent()) {
-                        let home_str = java_home.to_str().ok_or_else(|| "Invalid path encoding".to_string())?;
+                        let home_str = java_home
+                            .to_str()
+                            .ok_or_else(|| "Invalid path encoding".to_string())?;
                         if Self::is_valid_java_installation(home_str) {
-                            return Ok(Some(Self::create_installation_from_path(
-                                home_str,
-                            )?));
+                            return Ok(Some(Self::create_installation_from_path(home_str)?));
                         }
                     }
                 }

@@ -375,9 +375,12 @@ impl EnvironmentSwitcher {
 
         let found_envs = {
             let manager_guard = manager.lock().await;
-            manager_guard.scan().await.map_err(|e| AppError::Environment {
-                message: format!("Failed to scan environments: {e}"),
-            })?
+            manager_guard
+                .scan()
+                .await
+                .map_err(|e| AppError::Environment {
+                    message: format!("Failed to scan environments: {e}"),
+                })?
         };
 
         let mut output = String::new();

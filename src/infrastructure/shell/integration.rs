@@ -22,7 +22,8 @@ impl ShellIntegration {
             .join(".fnva");
 
         // 确保目录存在
-        std::fs::create_dir_all(&script_dir).map_err(|e| format!("Failed to create script directory: {e}"))?;
+        std::fs::create_dir_all(&script_dir)
+            .map_err(|e| format!("Failed to create script directory: {e}"))?;
 
         let powershell_script = script_dir.join("fnva-env.ps1");
         let batch_script = script_dir.join("fnva-env.bat");
