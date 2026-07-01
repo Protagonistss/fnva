@@ -357,26 +357,24 @@ impl EnvironmentManager for CcEnvironmentManager {
 
 /// Returns all candidate paths for Claude Code's settings.json on the current platform.
 ///
+/// Claude Code (CLI) uses `~/.claude/settings.json` on **all** platforms.
+/// Note: `%APPDATA%\Claude\` is used by Claude Desktop (not Claude Code).
+///
 /// | Platform | Path |
 /// |----------|------|
 /// | Linux    | `~/.claude/settings.json` |
 /// | macOS    | `~/.claude/settings.json` |
-/// | Windows  | `%APPDATA%\Claude\settings.json` |
+/// | Windows  | `%USERPROFILE%\.claude\settings.json` (same as ~/.claude) |
 fn claude_settings_candidates() -> Vec<std::path::PathBuf> {
     let mut candidates = Vec::new();
 
-    // Linux / macOS: ~/.claude/settings.json
+    // All platforms: ~/.claude/settings.json
+    // On Windows this resolves to %USERPROFILE%\.claude\settings.json
     if let Some(home) = dirs::home_dir() {
         candidates.push(home.join(".claude").join("settings.json"));
     }
 
-    // Windows: %APPDATA%\Claude\settings.json
-    #[cfg(target_os = "windows")]
-    if let Some(appdata) = dirs::config_dir() {
-        candidates.push(appdata.join("Claude").join("settings.json"));
-    }
-
-    // macOS also stores in ~/Library/Application Support/Claude/settings.json
+    // macOS additional location: ~/Library/Application Support/Claude/settings.json
     #[cfg(target_os = "macos")]
     if let Some(app_support) = dirs::data_dir() {
         candidates.push(app_support.join("Claude").join("settings.json"));
