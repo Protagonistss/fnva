@@ -8,7 +8,8 @@ use crate::infrastructure::config::Config;
 use crate::infrastructure::shell::current_envs::CurrentEnvsFile;
 use crate::infrastructure::shell::{script_factory::ScriptGenerator, ShellType};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 /// 环境切换器
 pub struct EnvironmentSwitcher {
@@ -37,12 +38,11 @@ impl EnvironmentSwitcher {
         })
     }
 
-    /// 注册环境管理器
     pub fn register_manager(
         &mut self,
+        env_type: EnvironmentType,
         manager: Arc<Mutex<dyn EnvironmentManager>>,
     ) -> ContextualResult<()> {
-        let env_type = manager.lock().map(|guard| guard.environment_type())?;
         self.managers.insert(env_type, manager);
         Ok(())
     }
@@ -64,7 +64,7 @@ impl EnvironmentSwitcher {
 
         // 获取当前环境（不可变）
         let old_env = {
-            let manager_guard = manager.lock()?;
+            let manager_guard = manager.lock().await;
             manager_guard
                 .get_current()
                 .map_err(|e| AppError::Environment {
@@ -74,7 +74,7 @@ impl EnvironmentSwitcher {
 
         // 验证环境是否存在
         let env_info = {
-            let manager_guard = manager.lock()?;
+            let manager_guard = manager.lock().await;
             manager_guard.get(name).map_err(|e| AppError::Environment {
                 message: format!("查找环境 '{name}' 失败: {e}"),
             })?
@@ -92,7 +92,7 @@ impl EnvironmentSwitcher {
 
         // 生成切换脚本（需要可变借用）
         let script = {
-            let mut manager_guard = manager.lock()?;
+            let mut manager_guard = manager.lock().await;
             manager_guard
                 .use_env(name, shell_type)
                 .map_err(|e| AppError::ScriptGeneration {
@@ -150,7 +150,7 @@ impl EnvironmentSwitcher {
         )?;
 
         let environments = {
-            let manager_guard = manager.lock()?;
+            let manager_guard = manager.lock().await;
             manager_guard.list().map_err(|e| AppError::Environment {
                 message: format!("获取环境列表失败: {e}"),
             })?
@@ -210,7 +210,7 @@ impl EnvironmentSwitcher {
         // TODO: 实现配置解析逻辑
 
         let result = {
-            let mut manager_guard = manager.lock()?;
+            let mut manager_guard = manager.lock().await;
 
             // Convert JSON Value to string for the object-safe interface
             let config_str = safe_to_json(&config)?;
@@ -240,7 +240,7 @@ impl EnvironmentSwitcher {
         )?;
 
         {
-            let mut manager_guard = manager.lock()?;
+            let mut manager_guard = manager.lock().await;
             manager_guard
                 .remove(name)
                 .map_err(|e| AppError::Environment {
@@ -283,7 +283,7 @@ impl EnvironmentSwitcher {
         )?;
 
         let (current_env, manager_guard) = {
-            let manager_guard = manager.lock()?;
+            let manager_guard = manager.lock().await;
             let current_env = manager_guard
                 .get_current()
                 .map_err(|e| AppError::Environment {
@@ -374,8 +374,8 @@ impl EnvironmentSwitcher {
         )?;
 
         let found_envs = {
-            let manager_guard = manager.lock()?;
-            manager_guard.scan().map_err(|e| AppError::Environment {
+            let manager_guard = manager.lock().await;
+            manager_guard.scan().await.map_err(|e| AppError::Environment {
                 message: format!("扫描环境失败: {e}"),
             })?
         };
@@ -417,10 +417,10 @@ impl EnvironmentSwitcher {
                     .cloned() // Clone to get owned SwitchHistory
                     .collect()
             } else {
-                // get_recent_history returns &[SwitchHistory]
+                // get_recent_history returns Vec<&SwitchHistory>
                 history_manager
                     .get_recent_history(limit)
-                    .iter()
+                    .into_iter()
                     .rev()
                     .cloned()
                     .collect()
@@ -453,7 +453,7 @@ impl EnvironmentSwitcher {
         )?;
 
         {
-            let manager = manager_entry.lock()?;
+            let manager = manager_entry.lock().await;
             if !manager
                 .is_available(name)
                 .map_err(|e| AppError::Environment {
@@ -605,7 +605,7 @@ impl EnvironmentSwitcher {
         })?;
 
         let (environments, current_env) = {
-            let manager_guard = manager.lock()?;
+            let manager_guard = manager.lock().await;
             let environments = manager_guard.list().map_err(|e| AppError::Environment {
                 message: format!("获取环境列表失败: {e}"),
             })?;

@@ -30,6 +30,7 @@ pub struct DynEnvironment {
 }
 
 /// 环境管理器抽象接口（对象安全版本）
+#[async_trait::async_trait]
 pub trait EnvironmentManager: Send + Sync {
     /// 获取环境类型
     fn environment_type(&self) -> EnvironmentType;
@@ -56,7 +57,7 @@ pub trait EnvironmentManager: Send + Sync {
     fn set_current(&mut self, name: &str) -> Result<(), String>;
 
     /// 扫描系统中的可用环境
-    fn scan(&self) -> Result<Vec<DynEnvironment>, String>;
+    async fn scan(&self) -> Result<Vec<DynEnvironment>, String>;
 
     /// 检查环境是否可用
     fn is_available(&self, name: &str) -> Result<bool, String>;

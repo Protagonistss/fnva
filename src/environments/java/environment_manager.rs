@@ -5,6 +5,7 @@ use crate::core::session::SessionManager;
 use crate::environments::java::scanner::JavaScanner;
 use crate::infrastructure::shell::ScriptGenerator;
 use crate::infrastructure::shell::ShellType;
+use crate::utils::path::normalize_path;
 use serde_json;
 use std::collections::HashMap;
 
@@ -35,11 +36,11 @@ impl JavaEnvironmentManager {
     }
 
     /// 创建新的 Java 环境管理器并进行系统扫描
-    pub fn new_with_scan() -> Self {
+    pub async fn new_with_scan() -> Self {
         let mut manager = Self::new();
 
         // 扫描系统中的 Java 环境，添加新发现的环境
-        if let Ok(installations) = JavaScanner::scan_system() {
+        if let Ok(installations) = JavaScanner::scan_system().await {
             for installation in installations {
                 let name = installation.name.clone();
                 // 只有当环境中不存在时才添加
@@ -59,9 +60,9 @@ impl JavaEnvironmentManager {
     }
 
     /// 扫描系统并更新环境列表
-    pub fn scan_and_update(&mut self) -> Result<(), String> {
+    pub async fn scan_and_update(&mut self) -> Result<(), String> {
         // 扫描系统中的 Java 环境
-        let installations = JavaScanner::scan_system()?;
+        let installations = JavaScanner::scan_system().await?;
 
         for installation in installations {
             let name = installation.name.clone();
@@ -220,81 +221,26 @@ impl JavaEnvironmentManager {
 
         Ok(())
     }
-
-    /// 检测 Java 版本（辅助方法）
-    fn detect_java_version(java_home: &str) -> Result<Option<String>, String> {
-        use std::process::Command;
-
-        let java_exe = if cfg!(target_os = "windows") {
-            format!("{java_home}\\bin\\java.exe")
-        } else {
-            format!("{java_home}/bin/java")
-        };
-
-        let output = Command::new(&java_exe)
-            .arg("-version")
-            .output()
-            .map_err(|e| format!("Failed to execute java -version: {e}"))?;
-
-        if output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let lines: Vec<&str> = stderr.lines().collect();
-            if let Some(first_line) = lines.first() {
-                // 解析版本信息，例如："openjdk version "17.0.2" 2022-01-18"
-                if let Some(start) = first_line.find('"') {
-                    if let Some(end) = first_line.rfind('"') {
-                        let version = &first_line[start + 1..end];
-                        return Ok(Some(version.to_string()));
-                    }
-                }
-            }
-        }
-
-        Ok(None)
-    }
-
-    /// 标准化路径格式（与 scanner 中的方法相同）
-    fn normalize_path_impl(path: &str) -> String {
-        use std::path::Path;
-
-        // 转换为 Path 对象来标准化路径分隔符
-        let path = Path::new(path);
-
-        // 获取规范化路径
-        match path.canonicalize() {
-            Ok(canonical_path) => {
-                // 转换回字符串，保持原始格式
-                canonical_path.to_string_lossy().to_string()
-            }
-            Err(_) => {
-                // 如果无法规范化，至少标准化分隔符
-                path.to_string_lossy().replace('\\', "/").to_lowercase()
-            }
-        }
-    }
 }
 
+#[async_trait::async_trait]
 impl EnvironmentManager for JavaEnvironmentManager {
     fn environment_type(&self) -> EnvironmentType {
         EnvironmentType::Java
     }
 
     fn list(&self) -> Result<Vec<DynEnvironment>, String> {
-        // 重新从配置文件加载最新数据，确保同步
-        let config = crate::infrastructure::config::Config::load().unwrap_or_else(|_| {
-            crate::cli::print::warn("Failed to load config");
-            crate::infrastructure::config::Config::new()
-        });
-
         let mut result = Vec::new();
+        let current_env = self.get_current().ok().flatten();
 
-        for env in &config.java_environments {
+        for (name, env) in &self.installations {
+            let is_active = current_env.as_ref() == Some(name);
             let environment = DynEnvironment {
                 name: env.name.clone(),
                 path: env.java_home.clone(),
                 version: None, // 版本信息在需要时动态检测
                 description: Some(env.description.clone()),
-                is_active: false, // 当前激活状态由会话管理处理
+                is_active,
             };
 
             result.push(environment);
@@ -389,8 +335,10 @@ impl EnvironmentManager for JavaEnvironmentManager {
             .get(name)
             .ok_or_else(|| {
                 let mut msg = format!("Java environment '{name}' not found.");
-                if std::path::Path::new(&dirs::home_dir().map_or(String::new(), |h| format!("{}/.fnva/packages/java/{name}", h.to_string_lossy()))).exists() {
-                    msg.push_str(&format!("\n  Hint: Java files exist at ~/.fnva/packages/java/{name}, but no config entry found."));
+                let pkg_dir = crate::infrastructure::paths::tool_packages_dir("java").unwrap_or_default();
+                if std::path::Path::new(&pkg_dir).join(name).exists() {
+                    let pkg_dir_str = pkg_dir.to_string_lossy();
+                    msg.push_str(&format!("\n  Hint: Java files exist at {pkg_dir_str}/{name}, but no config entry found."));
                     msg.push_str("\n  Try: fnva java scan  or  fnva java install <version>");
                 } else {
                     msg.push_str("\n  Available environments: fnva java list");
@@ -447,11 +395,11 @@ impl EnvironmentManager for JavaEnvironmentManager {
         // Check environment variable JAVA_HOME to determine current
         if let Ok(java_home) = std::env::var("JAVA_HOME") {
             // Normalize the JAVA_HOME path for comparison
-            let normalized_current = Self::normalize_path_impl(&java_home);
+            let normalized_current = normalize_path(&java_home);
 
             // Find which environment matches this JAVA_HOME
             for (name, installation) in &self.installations {
-                let normalized_installation = Self::normalize_path_impl(&installation.java_home);
+                let normalized_installation = normalize_path(&installation.java_home);
                 if normalized_installation == normalized_current {
                     return Ok(Some(name.clone()));
                 }
@@ -460,45 +408,50 @@ impl EnvironmentManager for JavaEnvironmentManager {
         Ok(None)
     }
 
-    fn scan(&self) -> Result<Vec<DynEnvironment>, String> {
-        let installations = JavaScanner::scan_system()?;
+    async fn scan(&self) -> Result<Vec<DynEnvironment>, String> {
+        let installations = JavaScanner::scan_system().await?;
         let mut result = Vec::new();
         let mut seen_paths = std::collections::HashSet::new();
 
+        let current_env = self.get_current().ok().flatten();
+
         // 首先添加已配置的环境（优先级更高）
         for (name, installation) in &self.installations {
-            let normalized_path = Self::normalize_path_impl(&installation.java_home);
+            let normalized_path = normalize_path(&installation.java_home);
             if !seen_paths.contains(&normalized_path) {
                 // 检测版本信息（如果还没有）
                 let version = if installation.version.is_none() {
-                    Self::detect_java_version(&installation.java_home)
+                    JavaScanner::detect_java_version(&installation.java_home)
                         .ok()
                         .flatten()
                 } else {
                     installation.version.clone()
                 };
 
+                let is_active = current_env.as_ref() == Some(name);
+
                 result.push(DynEnvironment {
                     name: name.clone(),
                     path: installation.java_home.clone(),
                     version,
                     description: Some(installation.description.clone()),
-                    is_active: installation.is_active(),
+                    is_active,
                 });
                 seen_paths.insert(normalized_path);
             }
         }
 
-        // 移除了移除名称检查，现在显示所有环境
+        // 添加扫描到的环境
         for installation in installations {
-            let normalized_path = Self::normalize_path_impl(&installation.java_home);
+            let normalized_path = normalize_path(&installation.java_home);
             if !seen_paths.contains(&normalized_path) {
+                let is_active = current_env.as_ref() == Some(&installation.name);
                 result.push(DynEnvironment {
                     name: installation.name.clone(),
                     path: installation.java_home.clone(),
                     version: installation.version.clone(),
                     description: Some(installation.description.clone()),
-                    is_active: installation.is_active(),
+                    is_active,
                 });
                 seen_paths.insert(normalized_path);
             }

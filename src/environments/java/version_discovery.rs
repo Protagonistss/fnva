@@ -141,15 +141,25 @@ impl AdoptiumDiscovery {
             "{MIRROR_BASE}/{major}/jdk/{}/{}/",
             self.platform.arch, self.platform.os
         );
-        let html = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| DiscoveryError::Network(e.to_string()))?
-            .text()
-            .await
-            .map_err(|e| DiscoveryError::Network(e.to_string()))?;
+        let mut attempts = 0;
+        let mut html = String::new();
+        while attempts < 3 {
+            attempts += 1;
+            match self.client.get(&url).timeout(std::time::Duration::from_secs(15)).send().await {
+                Ok(resp) => {
+                    if let Ok(text) = resp.text().await {
+                        html = text;
+                        break;
+                    }
+                }
+                Err(e) => {
+                    if attempts == 3 {
+                        return Err(DiscoveryError::Network(format!("Failed to fetch {} after 3 attempts: {}", url, e)));
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+                }
+            }
+        }
 
         let prefix = "href=\"";
         let mut out = Vec::new();

@@ -2,7 +2,6 @@
 //! 解析镜像 URL。Maven 是跨平台单包,`download`/`get_download_url` 忽略平台。
 
 use crate::infrastructure::config::MirrorConfig;
-use crate::infrastructure::remote::download::download_to_file;
 use crate::infrastructure::remote::java_downloader::{DownloadError, DownloadTarget};
 use crate::infrastructure::remote::platform::Platform;
 use crate::infrastructure::tool_protocol::{
@@ -82,60 +81,17 @@ impl ToolDownloader for MavenDownloader {
                 .resolve(&vars)
                 .await
                 .map_err(|e| DownloadError::from(e.to_string()))?;
-            crate::cli::print::step("Source", &url);
-
-            let cache_dir =
-                crate::infrastructure::paths::downloads_dir().map_err(DownloadError::Io)?;
-            tokio::fs::create_dir_all(&cache_dir)
-                .await
-                .map_err(|e| DownloadError::Io(format!("Failed to create cache directory: {e}")))?;
-
             let mirror_name = self.resolver.first_mirror_name().to_string();
             let file_name = format!("apache-maven-{version_str}-{mirror_name}.tar.gz");
-            let file_path = cache_dir.join(&file_name);
 
-            if let Ok(metadata) = tokio::fs::metadata(&file_path).await {
-                if metadata.len() > 0 {
-                    crate::cli::print::step(
-                        "Status",
-                        &format!("Using cached file ({} MB)", metadata.len() / (1024 * 1024)),
-                    );
-                    let canonical = file_path.canonicalize().map_err(|e| {
-                        DownloadError::Io(format!("Path canonicalization failed: {e}"))
-                    })?;
-                    return Ok(DownloadTarget::File(
-                        canonical
-                            .to_str()
-                            .ok_or_else(|| DownloadError::Io("Invalid path encoding".to_string()))?
-                            .to_string(),
-                    ));
-                }
-            }
-
-            download_to_file(self.resolver.client(), &url, &file_path, |c, t| {
-                progress_callback(c, t)
-            })
+            crate::infrastructure::remote::download::download_with_cache(
+                self.resolver.client(),
+                &url,
+                &file_name,
+                progress_callback,
+            )
             .await
-            .map_err(|e| DownloadError::from(format!("Download failed: {e}")))?;
-
-            let file_size = tokio::fs::metadata(&file_path)
-                .await
-                .map_err(|e| DownloadError::Io(format!("Failed to get file size: {e}")))?
-                .len();
-            crate::cli::print::step(
-                "Status",
-                &format!("Download complete ({} MB)", file_size / (1024 * 1024)),
-            );
-
-            let canonical = file_path
-                .canonicalize()
-                .map_err(|e| DownloadError::Io(format!("Path canonicalization failed: {e}")))?;
-            Ok(DownloadTarget::File(
-                canonical
-                    .to_str()
-                    .ok_or_else(|| DownloadError::Io("Invalid path encoding".to_string()))?
-                    .to_string(),
-            ))
+            .map_err(|e| DownloadError::from(e.to_string()))
         })
     }
 }

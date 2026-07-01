@@ -2,7 +2,7 @@ use crate::core::environment_manager::EnvironmentType;
 use crate::infrastructure::config::Config;
 use crate::infrastructure::shell::current_envs::CurrentEnvsFile;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fs;
 use std::path::PathBuf;
 
@@ -174,7 +174,7 @@ pub struct SwitchHistory {
 #[derive(Debug)]
 pub struct HistoryManager {
     /// 切换历史
-    history: Vec<SwitchHistory>,
+    history: VecDeque<SwitchHistory>,
     /// 最大历史记录数
     max_history: usize,
     /// 历史文件路径
@@ -192,7 +192,7 @@ impl HistoryManager {
         }
 
         let mut history_manager = Self {
-            history: Vec::new(),
+            history: VecDeque::new(),
             max_history,
             history_path,
         };
@@ -224,11 +224,17 @@ impl HistoryManager {
             .or_else(|_| toml::from_str::<Vec<SwitchHistory>>(&content))
             .map_err(|e| format!("Failed to parse history file: {e}"))?;
 
-        self.history = parsed_history;
+        self.history = parsed_history.into_iter().collect();
 
         // 限制历史记录数量
-        if self.history.len() > self.max_history {
-            self.history.truncate(self.max_history);
+        let mut needs_save = false;
+        while self.history.len() > self.max_history {
+            self.history.pop_front();
+            needs_save = true;
+        }
+
+        if needs_save {
+            let _ = self.save_history();
         }
 
         Ok(())
@@ -238,7 +244,7 @@ impl HistoryManager {
     fn save_history(&self) -> Result<(), String> {
         #[derive(Serialize)]
         struct HistoryFile<'a> {
-            history: &'a [SwitchHistory],
+            history: &'a VecDeque<SwitchHistory>,
         }
         // 尝试序列化历史记录，如果失败则跳过（为了向后兼容）
         let content = match toml::to_string_pretty(&HistoryFile {
@@ -275,11 +281,11 @@ impl HistoryManager {
             reason,
         };
 
-        self.history.push(record);
+        self.history.push_back(record);
 
         // 限制历史记录数量
         if self.history.len() > self.max_history {
-            self.history.remove(0);
+            self.history.pop_front();
         }
 
         // 尝试保存历史，但不影响主要功能
@@ -291,13 +297,13 @@ impl HistoryManager {
     }
 
     /// 获取最近的历史记录
-    pub fn get_recent_history(&self, limit: usize) -> &[SwitchHistory] {
+    pub fn get_recent_history(&self, limit: usize) -> Vec<&SwitchHistory> {
         let start = if self.history.len() > limit {
             self.history.len() - limit
         } else {
             0
         };
-        &self.history[start..]
+        self.history.iter().skip(start).collect()
     }
 
     /// 获取特定环境类型的历史
