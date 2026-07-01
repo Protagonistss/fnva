@@ -4,7 +4,7 @@ REM Add this to your startup script
 setlocal enabledelayedexpansion
 
 REM Auto-restore environments from current_envs.toml
-set "envs_file=%USERPROFILE%\.fnva\current_envs.toml"
+set "envs_file=%USERPROFILE%\.fnva\state\current_envs.toml"
 if exist "%envs_file%" (
     for /f "usebackq tokens=1,* delims==" %%a in ("%envs_file%") do (
         set "env_key=%%a"

@@ -3,46 +3,46 @@ use thiserror::Error;
 /// 应用程序错误类型
 #[derive(Error, Debug)]
 pub enum AppError {
-    #[error("IO 错误: {0}")]
+    #[error("IO error: {0}")]
     Io(String),
 
-    #[error("环境管理错误: {message}")]
+    #[error("Environment management error: {message}")]
     Environment { message: String },
 
-    #[error("配置错误: {message}")]
+    #[error("Config error: {message}")]
     Config { message: String },
 
-    #[error("网络错误: {message}")]
+    #[error("Network error: {message}")]
     Network { message: String },
 
-    #[error("序列化错误: {0}")]
+    #[error("Serialization error: {0}")]
     Serialization(String),
 
-    #[error("路径错误: {path} - {reason}")]
+    #[error("Path error: {path} - {reason}")]
     Path { path: String, reason: String },
 
-    #[error("线程锁定错误: {operation}")]
+    #[error("Thread lock error: {operation}")]
     LockError { operation: String },
 
-    #[error("版本解析错误: {version}")]
+    #[error("Version parse error: {version}")]
     VersionParse { version: String },
 
-    #[error("安装错误: {message}")]
+    #[error("Installation error: {message}")]
     Installation { message: String },
 
-    #[error("Shell 脚本生成错误: {shell_type} - {reason}")]
+    #[error("Shell script generation error: {shell_type} - {reason}")]
     ScriptGeneration { shell_type: String, reason: String },
 
-    #[error("未找到请求的资源: {resource}")]
+    #[error("Requested resource not found: {resource}")]
     NotFound { resource: String },
 
-    #[error("权限错误: {operation}")]
+    #[error("Permission error: {operation}")]
     Permission { operation: String },
 
-    #[error("验证错误: {field} - {reason}")]
+    #[error("Validation error: {field} - {reason}")]
     Validation { field: String, reason: String },
 
-    #[error("内部错误: {message}")]
+    #[error("Internal error: {message}")]
     Internal { message: String },
 }
 
@@ -70,7 +70,7 @@ impl AppError {
     /// 为错误添加建议
     pub fn with_suggestions(mut self, suggestions: Vec<&str>) -> Self {
         if let AppError::Environment { message } = &mut self {
-            *message = format!("{}\n建议: {}", message, suggestions.join(", "));
+            *message = format!("{}\nSuggestion: {}", message, suggestions.join(", "));
         }
         self
     }
@@ -88,7 +88,7 @@ impl std::fmt::Display for ContextualError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "操作失败: {}\n错误: {}",
+            "Operation failed: {}\nError: {}",
             self.context.operation, self.error
         )
     }
@@ -123,13 +123,13 @@ pub type ContextualResult<T> = Result<T, Box<ContextualError>>;
 impl AppError {
     pub fn env_not_found(name: &str) -> Self {
         Self::Environment {
-            message: format!("未找到环境: {name}"),
+            message: format!("Environment not found: {name}"),
         }
     }
 
     pub fn config_load_failed(path: &str, reason: &str) -> Self {
         Self::Config {
-            message: format!("无法加载配置文件 {path}: {reason}"),
+            message: format!("Failed to load config file {path}: {reason}"),
         }
     }
 
@@ -142,7 +142,7 @@ impl AppError {
     pub fn path_conversion_failed(path: &str) -> Self {
         Self::Path {
             path: path.to_string(),
-            reason: "路径包含无效字符".to_string(),
+            reason: "Path contains invalid characters".to_string(),
         }
     }
 
@@ -187,7 +187,7 @@ impl From<toml::ser::Error> for AppError {
 impl<T> From<std::sync::PoisonError<T>> for AppError {
     fn from(_error: std::sync::PoisonError<T>) -> Self {
         AppError::LockError {
-            operation: "线程锁定失败".to_string(),
+            operation: "Thread lock failed".to_string(),
         }
     }
 }
@@ -210,7 +210,7 @@ impl From<AppError> for ContextualError {
         Self {
             error,
             context: ErrorContext {
-                operation: "未知操作".to_string(),
+                operation: "Unknown operation".to_string(),
                 suggestions: Vec::new(),
                 help_url: None,
             },
@@ -222,11 +222,11 @@ impl<T> From<std::sync::PoisonError<T>> for ContextualError {
     fn from(_error: std::sync::PoisonError<T>) -> Self {
         Self {
             error: AppError::LockError {
-                operation: "线程锁定失败".to_string(),
+                operation: "Thread lock failed".to_string(),
             },
             context: ErrorContext {
-                operation: "锁定失败".to_string(),
-                suggestions: vec!["检查是否存在死锁".to_string()],
+                operation: "Lock failed".to_string(),
+                suggestions: vec!["Check for potential deadlock".to_string()],
                 help_url: None,
             },
         }

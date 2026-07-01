@@ -140,7 +140,8 @@ impl MavenInstaller {
             .ok_or_else(|| format!("Maven environment '{version_name}' not found"))?
             .clone();
 
-        if !maven_env.maven_home.contains(".fnva/packages/maven") {
+        let managed_dir = crate::infrastructure::paths::tool_packages_dir("maven")?;
+        if !std::path::Path::new(&maven_env.maven_home).starts_with(managed_dir) {
             return Err("Only fnva-managed Maven installations can be uninstalled".to_string());
         }
 

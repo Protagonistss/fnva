@@ -3,6 +3,7 @@ use crate::core::session::SessionManager;
 use crate::infrastructure::config::{Config, EnvironmentSource, MavenEnvironment};
 use crate::infrastructure::shell::platform::detect_shell;
 use crate::infrastructure::shell::{ScriptGenerator, ShellType};
+use crate::utils::path::normalize_path;
 use std::collections::HashMap;
 
 use super::validator::validate_maven_home;
@@ -24,7 +25,7 @@ impl MavenEnvironmentManager {
             installations: HashMap::new(),
         };
         if let Err(e) = manager.load_from_config() {
-            eprintln!("Failed to load Maven environments from config: {e}");
+            crate::cli::print::warn(&format!("Failed to load Maven environments from config: {e}"));
         }
         manager
     }
@@ -37,32 +38,28 @@ impl MavenEnvironmentManager {
         }
         Ok(())
     }
-
-    fn normalize_path(path: &str) -> String {
-        let p = std::path::Path::new(path);
-        match p.canonicalize() {
-            Ok(c) => c.to_string_lossy().to_string(),
-            Err(_) => p.to_string_lossy().replace('\\', "/").to_lowercase(),
-        }
-    }
 }
 
+#[async_trait::async_trait]
 impl EnvironmentManager for MavenEnvironmentManager {
     fn environment_type(&self) -> EnvironmentType {
         EnvironmentType::Maven
     }
 
     fn list(&self) -> Result<Vec<DynEnvironment>, String> {
-        let config = Config::load().unwrap_or_else(|_| Config::new());
-        let result = config
-            .maven_environments
-            .iter()
-            .map(|env| DynEnvironment {
-                name: env.name.clone(),
-                path: env.maven_home.clone(),
-                version: None,
-                description: Some(env.description.clone()),
-                is_active: false,
+        let current_env = self.get_current().ok().flatten();
+        let result = self
+            .installations
+            .values()
+            .map(|env| {
+                let is_active = current_env.as_ref() == Some(&env.name);
+                DynEnvironment {
+                    name: env.name.clone(),
+                    path: env.maven_home.clone(),
+                    version: None,
+                    description: Some(env.description.clone()),
+                    is_active,
+                }
             })
             .collect();
         Ok(result)
@@ -157,9 +154,9 @@ impl EnvironmentManager for MavenEnvironmentManager {
             }
         }
         if let Ok(maven_home) = std::env::var("MAVEN_HOME") {
-            let normalized = Self::normalize_path(&maven_home);
+            let normalized = normalize_path(&maven_home);
             for (name, env) in &self.installations {
-                if Self::normalize_path(&env.maven_home) == normalized {
+                if normalize_path(&env.maven_home) == normalized {
                     return Ok(Some(name.clone()));
                 }
             }
@@ -167,7 +164,7 @@ impl EnvironmentManager for MavenEnvironmentManager {
         Ok(None)
     }
 
-    fn scan(&self) -> Result<Vec<DynEnvironment>, String> {
+    async fn scan(&self) -> Result<Vec<DynEnvironment>, String> {
         // Maven 不做系统扫描,返回当前已配置的环境
         self.list()
     }

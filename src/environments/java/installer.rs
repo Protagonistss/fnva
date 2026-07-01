@@ -30,7 +30,7 @@ impl JavaInstaller {
     ) -> Result<String, String> {
         crate::cli::print::action(&format!("Installing java {version_spec}"));
 
-        if let Ok(java_home) = Self::check_local_java_package(version_spec, config) {
+        if let Ok(Some(java_home)) = Self::check_local_java_package(version_spec, config) {
             crate::cli::print::step("Source", "local package");
             return Self::complete_installation_simple(
                 version_spec,
@@ -129,9 +129,10 @@ impl JavaInstaller {
 
         if auto_switch {
             crate::cli::print::step("Auto-switch", &format!("to {version}..."));
-            if let Err(e) = Self::switch_to_java(&install_name, config) {
+            if let Err(e) = config.set_current_java_env(install_name.clone()) {
                 crate::cli::print::warn(&format!("Auto-switch failed: {e}"));
             } else {
+                config.save()?;
                 crate::cli::print::step("Status", &format!("Switched to java {version}"));
             }
         }
@@ -193,25 +194,7 @@ impl JavaInstaller {
         Err("No valid Java installation found".to_string())
     }
 
-    /// 切换到指定的 Java 版本
-    fn switch_to_java(version_name: &str, config: &Config) -> Result<(), String> {
-        let java_env = config
-            .get_java_env(version_name)
-            .ok_or_else(|| format!("Java environment '{version_name}' not found"))?;
 
-        // 验证 Java Home 路径
-        if !crate::utils::validate_java_home(&java_env.java_home) {
-            return Err(format!("Invalid JAVA_HOME: {}", java_env.java_home));
-        }
-
-        println!(
-            "Switching to Java: {} ({})",
-            version_name, java_env.java_home
-        );
-        println!("Run 'fnva java use {version_name}' in a new terminal to activate");
-
-        Ok(())
-    }
 
     /// 列出可安装的 Java 版本
     pub async fn list_installable_versions() -> Result<Vec<String>, String> {
@@ -286,7 +269,8 @@ impl JavaInstaller {
         let java_home = &java_env.java_home;
 
         // 检查是否是 fnva 管理的安装
-        if !java_home.contains(".fnva/packages/java") {
+        let managed_dir = crate::infrastructure::paths::tool_packages_dir("java")?;
+        if !Path::new(java_home).starts_with(managed_dir) {
             return Err("Only fnva-managed Java installations can be uninstalled".to_string());
         }
 
@@ -315,16 +299,16 @@ impl JavaInstaller {
     }
 
     /// 检查本地是否已有对应的Java包
-    fn check_local_java_package(version_spec: &str, config: &Config) -> Result<String, String> {
+    fn check_local_java_package(version_spec: &str, config: &Config) -> Result<Option<String>, String> {
         let fnva_dir = crate::infrastructure::paths::tool_packages_dir("java")?;
 
         if !fnva_dir.exists() {
-            return Err("Local Java packages directory not found. Install Java first".to_string());
+            return Ok(None);
         }
 
         // 如果在配置中已经存在该环境，则不认为是可用的本地包
         if config.get_java_env(version_spec).is_some() {
-            return Err(format!("Java {version_spec} already exists in config"));
+            return Ok(None);
         }
 
         let java_home = fnva_dir.join(version_spec);
@@ -333,10 +317,10 @@ impl JavaInstaller {
         if java_home.exists() {
             // 查找实际的Java安装目录（可能在其子目录中）
             let actual_java_home = Self::find_installed_java(&java_home)?;
-            return Ok(actual_java_home);
+            return Ok(Some(actual_java_home));
         }
 
-        Err(format!("Local Java package not found: {version_spec}"))
+        Ok(None)
     }
 }
 

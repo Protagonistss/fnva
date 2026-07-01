@@ -83,15 +83,25 @@ impl MirrorDirectoryDiscovery {
     /// 抓取目录并写缓存。网络错误向上传播(由 `load_versions` / `refresh`
     /// 决定是否回退);抓到内容但解析为空则回退嵌入式列表。
     async fn fetch_and_cache(&self) -> Result<Vec<String>, DiscoveryError> {
-        let html = self
-            .client
-            .get(self.discovery_url)
-            .send()
-            .await
-            .map_err(|e| DiscoveryError::Network(e.to_string()))?
-            .text()
-            .await
-            .map_err(|e| DiscoveryError::Network(e.to_string()))?;
+        let mut attempts = 0;
+        let mut html = String::new();
+        while attempts < 3 {
+            attempts += 1;
+            match self.client.get(self.discovery_url).timeout(std::time::Duration::from_secs(15)).send().await {
+                Ok(resp) => {
+                    if let Ok(text) = resp.text().await {
+                        html = text;
+                        break;
+                    }
+                }
+                Err(e) => {
+                    if attempts == 3 {
+                        return Err(DiscoveryError::Network(format!("Failed to fetch {} after 3 attempts: {}", self.discovery_url, e)));
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+                }
+            }
+        }
         let mut versions = Self::parse_directory_html(&html);
         if versions.is_empty() {
             return Self::embedded_versions();

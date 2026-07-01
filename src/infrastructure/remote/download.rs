@@ -452,3 +452,58 @@ async fn download_to_file_internal(
 
     Ok(())
 }
+
+pub async fn download_with_cache(
+    client: &Client,
+    url: &str,
+    file_name: &str,
+    progress_callback: Box<dyn Fn(u64, u64) + Send + Sync>,
+) -> Result<crate::infrastructure::remote::DownloadTarget, String> {
+    crate::cli::print::step("Source", url);
+
+    let cache_dir = crate::infrastructure::paths::downloads_dir()?;
+    tokio::fs::create_dir_all(&cache_dir)
+        .await
+        .map_err(|e| format!("Failed to create cache directory: {}", e))?;
+
+    let file_path = cache_dir.join(file_name);
+
+    if let Ok(metadata) = tokio::fs::metadata(&file_path).await {
+        if metadata.len() > 0 {
+            crate::cli::print::step(
+                "Status",
+                &format!("Using cached file ({} MB)", metadata.len() / (1024 * 1024)),
+            );
+            let canonical = file_path.canonicalize().map_err(|e| {
+                format!("Path canonicalization failed: {}", e)
+            })?;
+            return Ok(crate::infrastructure::remote::DownloadTarget::File(
+                canonical
+                    .to_str()
+                    .ok_or_else(|| "Invalid path encoding".to_string())?
+                    .to_string(),
+            ));
+        }
+    }
+
+    download_to_file(client, url, &file_path, progress_callback).await?;
+
+    let file_size = tokio::fs::metadata(&file_path)
+        .await
+        .map_err(|e| format!("Failed to get file size: {}", e))?
+        .len();
+    crate::cli::print::step(
+        "Status",
+        &format!("Download complete ({} MB)", file_size / (1024 * 1024)),
+    );
+
+    let canonical = file_path
+        .canonicalize()
+        .map_err(|e| format!("Path canonicalization failed: {}", e))?;
+    Ok(crate::infrastructure::remote::DownloadTarget::File(
+        canonical
+            .to_str()
+            .ok_or_else(|| "Invalid path encoding".to_string())?
+            .to_string(),
+    ))
+}
