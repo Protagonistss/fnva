@@ -173,12 +173,16 @@ async function checkFirstRun() {
         if (typeof installer.installPowershellWrapper === 'function') {
           installer.installPowershellWrapper();
         }
-        const success = installer.installShellIntegration();
+        const success = installer.installShellIntegration(true);
         if (success) {
-          console.log('✅ Shell integration has been successfully configured! We recommend restarting your terminal or refreshing it.');
+          console.log('\n✅ Shell integration has been successfully configured!');
+          console.log('💡 To apply the changes immediately, please run:\n');
+          console.log(`   source ${configPath}\n`);
+          console.log('   (Or simply close and reopen your terminal)');
         }
       } else {
-        console.log('Skipped automatic configuration. You can manually configure it anytime by running `fnva env --auto`.');
+        console.log('\n⏭️  Skipped automatic configuration.');
+        console.log("💡 You can manually configure it later. See the README or run 'fnva env --help' for instructions.");
       }
       fs.writeFileSync(setupMarker, answer);
       rl.close();

@@ -69,24 +69,25 @@ function isInstalled(configPath) {
   return content.includes('fnva env --shell');
 }
 
-function installShellIntegration() {
+function installShellIntegration(silent = false) {
+  const log = silent ? () => {} : console.log;
   const shell = detectShell();
   const configPath = getShellConfigPath(shell);
 
   if (!configPath) {
-    console.log(`Unsupported shell: ${shell}`);
-    console.log('Please configure fnva manually (see README).');
+    log(`Unsupported shell: ${shell}`);
+    log('Please configure fnva manually (see README).');
     return false;
   }
 
   if (isInstalled(configPath)) {
-    console.log(`fnva shell integration already present: ${configPath}`);
+    log(`fnva shell integration already present: ${configPath}`);
     return true;
   }
 
   const line = getIntegrationLine(shell);
   if (!line) {
-    console.log(`Unsupported shell: ${shell}`);
+    log(`Unsupported shell: ${shell}`);
     return false;
   }
 
@@ -105,12 +106,12 @@ function installShellIntegration() {
       fs.writeFileSync(configPath, marker);
     }
 
-    console.log(`fnva shell integration installed at: ${configPath}`);
-    console.log('Reload your shell config after install.');
+    log(`fnva shell integration installed at: ${configPath}`);
+    log('Reload your shell config after install.');
     return true;
   } catch (error) {
-    console.log(`Install failed: ${error.message}`);
-    console.log('Please configure fnva manually (see README).');
+    log(`Install failed: ${error.message}`);
+    log('Please configure fnva manually (see README).');
     return false;
   }
 }
