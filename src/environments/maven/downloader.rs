@@ -96,7 +96,10 @@ impl ToolDownloader for MavenDownloader {
 
             if let Ok(metadata) = tokio::fs::metadata(&file_path).await {
                 if metadata.len() > 0 {
-                    crate::cli::print::step("Status", &format!("Using cached file ({} MB)", metadata.len() / (1024 * 1024)));
+                    crate::cli::print::step(
+                        "Status",
+                        &format!("Using cached file ({} MB)", metadata.len() / (1024 * 1024)),
+                    );
                     let canonical = file_path.canonicalize().map_err(|e| {
                         DownloadError::Io(format!("Path canonicalization failed: {e}"))
                     })?;
@@ -119,7 +122,10 @@ impl ToolDownloader for MavenDownloader {
                 .await
                 .map_err(|e| DownloadError::Io(format!("Failed to get file size: {e}")))?
                 .len();
-            crate::cli::print::step("Status", &format!("Download complete ({} MB)", file_size / (1024 * 1024)));
+            crate::cli::print::step(
+                "Status",
+                &format!("Download complete ({} MB)", file_size / (1024 * 1024)),
+            );
 
             let canonical = file_path
                 .canonicalize()

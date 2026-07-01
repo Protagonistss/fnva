@@ -337,8 +337,20 @@ impl CommandHandler {
                 name,
                 home,
                 description: _,
+                maven_opts,
+                local_repo,
+                settings,
             } => {
-                let config_value = serde_json::json!({ "maven_home": home });
+                let mut config_value = serde_json::json!({ "maven_home": home });
+                if let Some(v) = maven_opts {
+                    config_value["maven_opts"] = serde_json::json!(v);
+                }
+                if let Some(v) = local_repo {
+                    config_value["local_repo"] = serde_json::json!(v);
+                }
+                if let Some(v) = settings {
+                    config_value["settings_file"] = serde_json::json!(v);
+                }
                 let output = self
                     .switcher
                     .add_environment(EnvironmentType::Maven, &name, config_value)
@@ -444,6 +456,44 @@ impl CommandHandler {
                         None => crate::cli::print::warn("No default maven environment set"),
                     }
                 }
+            }
+            MavenCommands::Set {
+                name,
+                maven_opts,
+                local_repo,
+                settings,
+                unset_maven_opts,
+                unset_local_repo,
+                unset_settings,
+            } => {
+                use crate::environments::maven::MavenEnvironmentManager;
+                let mut manager = MavenEnvironmentManager::new();
+
+                // Some(Some(value)) = 设置; Some(None) = 清除; None = 不变
+                let opts_arg = if unset_maven_opts {
+                    Some(None)
+                } else {
+                    maven_opts.map(Some)
+                };
+                let repo_arg = if unset_local_repo {
+                    Some(None)
+                } else {
+                    local_repo.map(Some)
+                };
+                let settings_arg = if unset_settings {
+                    Some(None)
+                } else {
+                    settings.map(Some)
+                };
+
+                manager.set_env_vars(&name, opts_arg, repo_arg, settings_arg)?;
+                crate::cli::print::success(&format!("Updated Maven environment: {name}"));
+            }
+            MavenCommands::Show { name } => {
+                use crate::environments::maven::MavenEnvironmentManager;
+                let manager = MavenEnvironmentManager::new();
+                let info = manager.show_env(&name)?;
+                println!("{info}");
             }
         }
         Ok(())

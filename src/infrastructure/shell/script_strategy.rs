@@ -7,6 +7,36 @@ use crate::core::environment_manager::EnvironmentType;
 use crate::error::AppError;
 use crate::infrastructure::shell::ShellType;
 
+/// 根据环境配置构建最终的 MAVEN_OPTS 字符串。
+/// 合并顺序：用户自定义 maven_opts → local_repo → settings_file。
+/// 若三项均未设置则返回空字符串（模板中不会 export MAVEN_OPTS）。
+fn build_maven_opts_value(config: &Value) -> String {
+    let mut parts: Vec<String> = Vec::new();
+
+    // 用户自定义 JVM 参数（原样保留）
+    if let Some(opts) = config.get("maven_opts").and_then(|v| v.as_str()) {
+        if !opts.is_empty() {
+            parts.push(opts.to_string());
+        }
+    }
+
+    // 自定义本地仓库路径 → -Dmaven.repo.local=...
+    if let Some(repo) = config.get("local_repo").and_then(|v| v.as_str()) {
+        if !repo.is_empty() {
+            parts.push(format!("-Dmaven.repo.local={repo}"));
+        }
+    }
+
+    // 自定义 settings.xml → -s ...
+    if let Some(settings) = config.get("settings_file").and_then(|v| v.as_str()) {
+        if !settings.is_empty() {
+            parts.push(format!("-s {settings}"));
+        }
+    }
+
+    parts.join(" ")
+}
+
 /// 脚本生成策略接口
 pub trait ScriptGenerationStrategy: Send + Sync {
     /// 生成环境切换脚本
@@ -142,6 +172,10 @@ impl ScriptGenerationStrategy for PowerShellStrategy {
                 data["maven_home"] = json!(maven_home);
                 data["maven_bin"] = json!(format!("{}\\bin", maven_home));
             }
+            // 构建最终的 MAVEN_OPTS（合并用户设置 + local_repo + settings_file）
+            let opts_value = build_maven_opts_value(config);
+            data["has_maven_opts"] = json!(!opts_value.is_empty());
+            data["maven_opts_value"] = json!(opts_value);
         }
 
         self.template_engine.render(template_name, &data)
@@ -206,6 +240,10 @@ impl ScriptGenerationStrategy for BashStrategy {
                 data["maven_home"] = json!(maven_home);
                 data["maven_bin"] = json!(format!("{}/bin", maven_home));
             }
+            // 构建最终的 MAVEN_OPTS（合并用户设置 + local_repo + settings_file）
+            let opts_value = build_maven_opts_value(config);
+            data["has_maven_opts"] = json!(!opts_value.is_empty());
+            data["maven_opts_value"] = json!(opts_value);
         }
 
         self.template_engine.render(template_name, &data)
@@ -270,6 +308,10 @@ impl ScriptGenerationStrategy for FishStrategy {
                 data["maven_home"] = json!(maven_home);
                 data["maven_bin"] = json!(format!("{}/bin", maven_home));
             }
+            // 构建最终的 MAVEN_OPTS（合并用户设置 + local_repo + settings_file）
+            let opts_value = build_maven_opts_value(config);
+            data["has_maven_opts"] = json!(!opts_value.is_empty());
+            data["maven_opts_value"] = json!(opts_value);
         }
 
         self.template_engine.render(template_name, &data)
@@ -334,6 +376,10 @@ impl ScriptGenerationStrategy for CmdStrategy {
                 data["maven_home"] = json!(maven_home);
                 data["maven_bin"] = json!(format!("{}\\bin", maven_home));
             }
+            // 构建最终的 MAVEN_OPTS（合并用户设置 + local_repo + settings_file）
+            let opts_value = build_maven_opts_value(config);
+            data["has_maven_opts"] = json!(!opts_value.is_empty());
+            data["maven_opts_value"] = json!(opts_value);
         }
 
         self.template_engine.render(template_name, &data)
@@ -933,6 +979,13 @@ $env:MAVEN_HOME = "{{escape_backslash maven_home}}"
 $env:M2_HOME = "{{escape_backslash maven_home}}"
 $env:PATH = "{{escape_backslash maven_bin}};" + $env:PATH
 
+# Set MAVEN_OPTS (clear previous then apply this environment's config)
+{{#if has_maven_opts}}
+$env:MAVEN_OPTS = "{{maven_opts_value}}"
+{{else}}
+Remove-Item Env:\MAVEN_OPTS -ErrorAction SilentlyContinue
+{{/if}}
+
 # Set fnva environment tracking
 $env:FNVA_CURRENT_MAVEN = "{{env_name}}"
 $env:FNVA_ENV_TYPE = "Maven"
@@ -941,6 +994,9 @@ $env:FNVA_ENV_TYPE = "Maven"
 if (-not $env:_FNVA_QUIET) {
     Write-Host "Switched to Maven environment: {{env_name}}" -ForegroundColor Green
     Write-Host "MAVEN_HOME: $env:MAVEN_HOME" -ForegroundColor Yellow
+{{#if has_maven_opts}}
+    Write-Host "MAVEN_OPTS: $env:MAVEN_OPTS" -ForegroundColor DarkYellow
+{{/if}}
     Write-Host "Maven Version:" -ForegroundColor Cyan
     try {
         & "{{escape_backslash maven_bin}}\\mvn.cmd" -v 2>&1 | ForEach-Object { Write-Host "   $_" -ForegroundColor Gray }
@@ -964,6 +1020,13 @@ export MAVEN_HOME="{{maven_home}}"
 export M2_HOME="{{maven_home}}"
 export PATH="$FNVA_MAVEN_BIN:$PATH"
 
+# Set MAVEN_OPTS (clear previous then apply this environment's config)
+{{#if has_maven_opts}}
+export MAVEN_OPTS="{{maven_opts_value}}"
+{{else}}
+unset MAVEN_OPTS
+{{/if}}
+
 # Set fnva environment tracking
 export FNVA_CURRENT_MAVEN="{{env_name}}"
 export FNVA_ENV_TYPE="Maven"
@@ -972,6 +1035,9 @@ export FNVA_ENV_TYPE="Maven"
 if [[ -z "$_FNVA_QUIET" ]]; then
     echo "Switched to Maven environment: {{env_name}}"
     echo "MAVEN_HOME: $MAVEN_HOME"
+{{#if has_maven_opts}}
+    echo "MAVEN_OPTS: $MAVEN_OPTS"
+{{/if}}
     echo "Maven Version:"
     if [ -x "{{maven_bin}}/mvn" ]; then
         "{{maven_bin}}/mvn" -v 2>&1 | head -n 1 | sed 's/^/   /'
@@ -995,6 +1061,13 @@ set -gx MAVEN_HOME "{{maven_home}}"
 set -gx M2_HOME "{{maven_home}}"
 set -gx PATH "{{maven_bin}}" $PATH
 
+# Set MAVEN_OPTS (clear previous then apply this environment's config)
+{{#if has_maven_opts}}
+set -gx MAVEN_OPTS "{{maven_opts_value}}"
+{{else}}
+set -e MAVEN_OPTS
+{{/if}}
+
 # Set fnva environment tracking
 set -gx FNVA_CURRENT_MAVEN "{{env_name}}"
 set -gx FNVA_ENV_TYPE "Maven"
@@ -1003,6 +1076,9 @@ set -gx FNVA_ENV_TYPE "Maven"
 if not set -q _FNVA_QUIET
     echo "Switched to Maven environment: {{env_name}}"
     echo "MAVEN_HOME: $MAVEN_HOME"
+{{#if has_maven_opts}}
+    echo "MAVEN_OPTS: $MAVEN_OPTS"
+{{/if}}
     echo "Maven Version:"
     if test -x "{{maven_bin}}/mvn"
         "{{maven_bin}}/mvn" -v 2>&1 | head -n 1 | sed 's/^/   /'
@@ -1031,9 +1107,19 @@ if defined FNVA_MAVEN_BIN call set "PATH=%%PATH:%FNVA_MAVEN_BIN%;=%%"
 set "FNVA_MAVEN_BIN={{escape_backslash maven_bin}}"
 set "PATH=%FNVA_MAVEN_BIN%;%PATH%"
 
+REM Set MAVEN_OPTS (clear previous then apply this environment's config)
+{{#if has_maven_opts}}
+set "MAVEN_OPTS={{maven_opts_value}}"
+{{else}}
+set "MAVEN_OPTS="
+{{/if}}
+
 REM Verify the switch
 echo Switched to Maven environment: {{env_name}}
 echo MAVEN_HOME: %MAVEN_HOME%
+{{#if has_maven_opts}}
+echo MAVEN_OPTS: %MAVEN_OPTS%
+{{/if}}
 echo Maven Version:
 if exist "{{escape_backslash maven_bin}}\mvn.cmd" (
     "{{escape_backslash maven_bin}}\mvn.cmd" -v 2>&1

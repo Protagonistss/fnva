@@ -219,6 +219,15 @@ pub struct MavenEnvironment {
     pub description: String,
     #[serde(default)]
     pub source: EnvironmentSource,
+    /// 自定义 MAVEN_OPTS（JVM 参数，如 -Xmx4g -Dfile.encoding=UTF-8）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub maven_opts: Option<String>,
+    /// 自定义本地仓库路径（替代默认 ~/.m2/repository）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_repo: Option<String>,
+    /// 自定义 settings.xml 路径
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings_file: Option<String>,
 }
 
 /// CC (Claude Code) 环境配置
@@ -630,6 +639,9 @@ mod tests {
             maven_home: "/home/user/.fnva/packages/maven/3.9.16".to_string(),
             description: "Maven 3.9.16".to_string(),
             source: EnvironmentSource::Manual,
+            maven_opts: None,
+            local_repo: None,
+            settings_file: None,
         };
         assert!(config.add_maven_env(env.clone()).is_ok());
         assert!(config.add_maven_env(env).is_err()); // 重复添加应该失败
@@ -660,6 +672,9 @@ mod tests {
                 maven_home: "/x/maven".to_string(),
                 description: "M".to_string(),
                 source: EnvironmentSource::Manual,
+                maven_opts: None,
+                local_repo: None,
+                settings_file: None,
             })
             .unwrap();
         let toml_str = toml::to_string_pretty(&config).expect("serialize");

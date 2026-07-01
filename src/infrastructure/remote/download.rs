@@ -168,7 +168,15 @@ pub async fn download_to_bytes_with_options(
             Ok(data) => {
                 if let Some(expected) = &options.expected_sha256 {
                     if let Err(e) = verify_sha256(&data, expected) {
-                        crate::cli::print::step("Error", &format!("Checksum verification failed (attempt {}/{}): {}", attempts, options.retry_count + 1, e));
+                        crate::cli::print::step(
+                            "Error",
+                            &format!(
+                                "Checksum verification failed (attempt {}/{}): {}",
+                                attempts,
+                                options.retry_count + 1,
+                                e
+                            ),
+                        );
                         if attempts > options.retry_count {
                             return Err(format!(
                                 "Checksum failed (retried {} times): {}",

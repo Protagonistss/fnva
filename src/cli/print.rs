@@ -95,7 +95,11 @@ pub fn format_envs(items: &[EnvItem]) -> String {
     let mut out = String::new();
     out.push_str(&format!("\n{} {}\n", dim("╭─"), bold("Environments")));
     if items.is_empty() {
-        out.push_str(&format!("{} {}\n", dim("│ "), dim("  (no environments found)")));
+        out.push_str(&format!(
+            "{} {}\n",
+            dim("│ "),
+            dim("  (no environments found)")
+        ));
     } else {
         let max_name = items.iter().map(|i| i.name.len()).max().unwrap_or(0);
         for item in items {
@@ -136,7 +140,10 @@ pub fn format_envs(items: &[EnvItem]) -> String {
             ));
         }
     }
-    out.push_str(&format!("{}\n", dim("╰────────────────────────────────────────")));
+    out.push_str(&format!(
+        "{}\n",
+        dim("╰────────────────────────────────────────")
+    ));
     out
 }
 
@@ -150,7 +157,11 @@ pub struct HistoryItem {
 
 pub fn format_history(items: &[HistoryItem]) -> String {
     let mut out = String::new();
-    out.push_str(&format!("\n{} {}\n", dim("╭─"), bold("Recent switch history")));
+    out.push_str(&format!(
+        "\n{} {}\n",
+        dim("╭─"),
+        bold("Recent switch history")
+    ));
     if items.is_empty() {
         out.push_str(&format!("{} {}\n", dim("│ "), dim("  (no history found)")));
     } else {
@@ -167,6 +178,9 @@ pub fn format_history(items: &[HistoryItem]) -> String {
             ));
         }
     }
-    out.push_str(&format!("{}\n", dim("╰────────────────────────────────────────")));
+    out.push_str(&format!(
+        "{}\n",
+        dim("╰────────────────────────────────────────")
+    ));
     out
 }

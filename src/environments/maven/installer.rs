@@ -55,7 +55,10 @@ impl MavenInstaller {
             .find_version_by_spec(version_spec)
             .await
             .map_err(|e| format!("{e:?}"))?;
-        crate::cli::print::step("Resolved", &format!("{} ({})", resolved.version, resolved.display));
+        crate::cli::print::step(
+            "Resolved",
+            &format!("{} ({})", resolved.version, resolved.display),
+        );
 
         let platform = Platform::current();
         let maven_home = generic::download_and_install(
@@ -97,6 +100,9 @@ impl MavenInstaller {
             maven_home: maven_home.to_string(),
             description,
             source: EnvironmentSource::Manual,
+            maven_opts: None,
+            local_repo: None,
+            settings_file: None,
         })?;
         config.save()?;
 

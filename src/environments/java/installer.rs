@@ -291,7 +291,7 @@ impl JavaInstaller {
         }
 
         crate::cli::print::action(&format!("Uninstalling java {version_name}"));
-        crate::cli::print::step("Removing", &java_home);
+        crate::cli::print::step("Removing", java_home);
 
         // 删除安装目录
         fs::remove_dir_all(java_home).map_err(|e| format!("Failed to remove install dir: {e}"))?;

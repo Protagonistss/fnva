@@ -187,6 +187,15 @@ pub enum MavenCommands {
         /// Description
         #[arg(short = 'd', long)]
         description: Option<String>,
+        /// Custom MAVEN_OPTS (JVM args, e.g. "-Xmx4g -Dfile.encoding=UTF-8")
+        #[arg(long)]
+        maven_opts: Option<String>,
+        /// Custom local repository path (instead of ~/.m2/repository)
+        #[arg(long)]
+        local_repo: Option<String>,
+        /// Custom settings.xml path
+        #[arg(long)]
+        settings: Option<String>,
     },
     /// Remove a Maven environment
     Remove {
@@ -233,6 +242,34 @@ pub enum MavenCommands {
         /// Output as JSON
         #[arg(long)]
         json: bool,
+    },
+    /// Set environment variables for an existing Maven environment
+    Set {
+        /// Environment name
+        name: String,
+        /// Set MAVEN_OPTS (JVM args)
+        #[arg(long)]
+        maven_opts: Option<String>,
+        /// Set custom local repository path
+        #[arg(long)]
+        local_repo: Option<String>,
+        /// Set custom settings.xml path
+        #[arg(long)]
+        settings: Option<String>,
+        /// Clear MAVEN_OPTS
+        #[arg(long)]
+        unset_maven_opts: bool,
+        /// Clear local_repo
+        #[arg(long)]
+        unset_local_repo: bool,
+        /// Clear settings
+        #[arg(long)]
+        unset_settings: bool,
+    },
+    /// Show full configuration of a Maven environment
+    Show {
+        /// Environment name
+        name: String,
     },
 }
 
