@@ -22,7 +22,7 @@ impl ShellIntegration {
             .join(".fnva");
 
         // 确保目录存在
-        std::fs::create_dir_all(&script_dir).map_err(|e| format!("创建脚本目录失败: {e}"))?;
+        std::fs::create_dir_all(&script_dir).map_err(|e| format!("Failed to create script directory: {e}"))?;
 
         let powershell_script = script_dir.join("fnva-env.ps1");
         let batch_script = script_dir.join("fnva-env.bat");
@@ -30,7 +30,7 @@ impl ShellIntegration {
         // 生成 PowerShell 脚本
         let ps1_content = Self::generate_powershell_script(config, env_name)?;
         std::fs::write(&powershell_script, ps1_content)
-            .map_err(|e| format!("写入 PowerShell 脚本失败: {e}"))?;
+            .map_err(|e| format!("Failed to write PowerShell script: {e}"))?;
 
         // 生成批处理脚本
         let bat_content = Self::generate_batch_script(config, env_name)?;

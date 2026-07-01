@@ -15,7 +15,7 @@ if /i "%ARCH%"=="AMD64" (
 ) else if /i "%ARCH%"=="ARM64" (
     set CPU=arm64
 ) else (
-    echo 警告: 未识别的架构 %ARCH%，使用 x64 >&2
+    echo Warning: Unrecognized architecture %ARCH%, falling back to x64 >&2
     set CPU=x64
 )
 
@@ -25,8 +25,8 @@ set BINARY_PATH=%PROJECT_ROOT%platforms\%PLATFORM_DIR%\fnva.exe
 
 REM 检查二进制文件是否存在
 if not exist "%BINARY_PATH%" (
-    echo 错误: 未找到二进制文件: %BINARY_PATH% >&2
-    echo 请运行 'npm run build' 构建二进制文件 >&2
+    echo Error: Binary file not found: %BINARY_PATH% >&2
+    echo Please run 'npm run build' to build the binary >&2
     exit /b 1
 )
 

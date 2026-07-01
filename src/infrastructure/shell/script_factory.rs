@@ -38,7 +38,7 @@ impl ScriptFactory {
             .cloned()
             .ok_or_else(|| AppError::ScriptGeneration {
                 shell_type: format!("{shell_type:?}"),
-                reason: "不支持的Shell类型".to_string(),
+                reason: "Unsupported shell type".to_string(),
             })
     }
 

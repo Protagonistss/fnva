@@ -294,9 +294,9 @@ impl Config {
         }
 
         let content =
-            fs::read_to_string(&config_path).map_err(|e| format!("无法读取配置文件: {e}"))?;
+            fs::read_to_string(&config_path).map_err(|e| format!("Failed to read config file: {e}"))?;
 
-        toml::from_str(&content).map_err(|e| format!("解析配置文件失败: {e}"))
+        toml::from_str(&content).map_err(|e| format!("Failed to parse config file: {e}"))
     }
 
     /// 保存配置到文件
@@ -305,13 +305,13 @@ impl Config {
 
         // 确保配置目录存在
         if let Some(parent) = config_path.parent() {
-            fs::create_dir_all(parent).map_err(|e| format!("无法创建配置目录: {e}"))?;
+            fs::create_dir_all(parent).map_err(|e| format!("Failed to create config directory: {e}"))?;
         }
 
         let toml_content =
-            toml::to_string_pretty(self).map_err(|e| format!("序列化配置失败: {e}"))?;
+            toml::to_string_pretty(self).map_err(|e| format!("Failed to serialize config: {e}"))?;
 
-        fs::write(&config_path, toml_content).map_err(|e| format!("写入配置文件失败: {e}"))?;
+        fs::write(&config_path, toml_content).map_err(|e| format!("Failed to write config file: {e}"))?;
 
         Ok(())
     }
@@ -320,7 +320,7 @@ impl Config {
     pub fn add_java_env(&mut self, env: JavaEnvironment) -> Result<(), String> {
         // 检查名称是否已存在
         if self.java_environments.iter().any(|e| e.name == env.name) {
-            return Err(format!("Java 环境 '{}' 已存在", env.name));
+            return Err(format!("Java environment '{}' already exists", env.name));
         }
         self.java_environments.push(env);
         Ok(())
@@ -331,7 +331,7 @@ impl Config {
         let original_len = self.java_environments.len();
         self.java_environments.retain(|e| e.name != name);
         if self.java_environments.len() == original_len {
-            return Err(format!("Java 环境 '{name}' 不存在"));
+            return Err(format!("Java environment '{name}' does not exist"));
         }
         Ok(())
     }
@@ -345,7 +345,7 @@ impl Config {
     pub fn set_current_java_env(&mut self, name: String) -> Result<(), String> {
         // 验证环境是否存在
         if !self.java_environments.iter().any(|e| e.name == name) {
-            return Err(format!("Java 环境 '{name}' 不存在"));
+            return Err(format!("Java environment '{name}' does not exist"));
         }
         self.current_java_env = Some(name);
         Ok(())
@@ -394,7 +394,7 @@ impl Config {
     /// 添加 Maven 环境
     pub fn add_maven_env(&mut self, env: MavenEnvironment) -> Result<(), String> {
         if self.maven_environments.iter().any(|e| e.name == env.name) {
-            return Err(format!("Maven 环境 '{}' 已存在", env.name));
+            return Err(format!("Maven environment '{}' already exists", env.name));
         }
         self.maven_environments.push(env);
         Ok(())
@@ -405,7 +405,7 @@ impl Config {
         let original_len = self.maven_environments.len();
         self.maven_environments.retain(|e| e.name != name);
         if self.maven_environments.len() == original_len {
-            return Err(format!("Maven 环境 '{name}' 不存在"));
+            return Err(format!("Maven environment '{name}' does not exist"));
         }
         Ok(())
     }
@@ -418,7 +418,7 @@ impl Config {
     /// 设置当前激活的 Maven 环境
     pub fn set_current_maven_env(&mut self, name: String) -> Result<(), String> {
         if !self.maven_environments.iter().any(|e| e.name == name) {
-            return Err(format!("Maven 环境 '{name}' 不存在"));
+            return Err(format!("Maven environment '{name}' does not exist"));
         }
         self.current_maven_env = Some(name);
         Ok(())
@@ -518,8 +518,8 @@ impl Config {
         let mut config = if existed {
             // 如果配置文件存在，加载现有配置
             let content =
-                fs::read_to_string(&config_path).map_err(|e| format!("无法读取配置文件: {e}"))?;
-            toml::from_str(&content).map_err(|e| format!("解析配置文件失败: {e}"))?
+                fs::read_to_string(&config_path).map_err(|e| format!("Failed to read config file: {e}"))?;
+            toml::from_str(&content).map_err(|e| format!("Failed to parse config file: {e}"))?
         } else {
             // 如果配置文件不存在，创建默认配置
             Config::new()
@@ -562,7 +562,7 @@ impl Config {
 
         // 序列化配置
         let serialized =
-            toml::to_string_pretty(&config).map_err(|e| format!("序列化配置失败: {e}"))?;
+            toml::to_string_pretty(&config).map_err(|e| format!("Failed to serialize config: {e}"))?;
 
         // 检查是否有变更
         if existed {

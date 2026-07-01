@@ -25,10 +25,10 @@ impl EnvironmentSwitcher {
     /// 创建新的环境切换器
     pub fn new() -> ContextualResult<Self> {
         let session_manager = SessionManager::new().map_err(|e| AppError::Config {
-            message: format!("创建会话管理器失败: {e}"),
+            message: format!("Failed to create session manager: {e}"),
         })?;
         let history_manager = HistoryManager::new(100).map_err(|e| AppError::Internal {
-            message: format!("创建历史管理器失败: {e}"),
+            message: format!("Failed to create history manager: {e}"),
         })?;
 
         Ok(Self {
@@ -59,7 +59,7 @@ impl EnvironmentSwitcher {
         let manager = option_with_context(
             self.managers.get(&env_type),
             AppError::env_not_found(&format!("{env_type:?}")),
-            "切换环境时查找环境管理器",
+            "finding environment manager when switching environment",
         )?;
 
         // 获取当前环境（不可变）
@@ -68,7 +68,7 @@ impl EnvironmentSwitcher {
             manager_guard
                 .get_current()
                 .map_err(|e| AppError::Environment {
-                    message: format!("获取当前环境失败: {e}"),
+                    message: format!("Failed to get current environment: {e}"),
                 })?
         };
 
@@ -76,7 +76,7 @@ impl EnvironmentSwitcher {
         let env_info = {
             let manager_guard = manager.lock().await;
             manager_guard.get(name).map_err(|e| AppError::Environment {
-                message: format!("查找环境 '{name}' 失败: {e}"),
+                message: format!("Failed to find environment '{name}': {e}"),
             })?
         };
 
@@ -146,13 +146,13 @@ impl EnvironmentSwitcher {
         let manager = option_with_context(
             self.managers.get(&env_type),
             AppError::env_not_found(&format!("{env_type:?}")),
-            "列出环境时查找环境管理器",
+            "finding environment manager when listing environments",
         )?;
 
         let environments = {
             let manager_guard = manager.lock().await;
             manager_guard.list().map_err(|e| AppError::Environment {
-                message: format!("获取环境列表失败: {e}"),
+                message: format!("Failed to get environment list: {e}"),
             })?
         };
 
@@ -203,7 +203,7 @@ impl EnvironmentSwitcher {
         let manager = option_with_context(
             self.managers.get(&env_type),
             AppError::env_not_found(&format!("{env_type:?}")),
-            "添加环境时查找环境管理器",
+            "finding environment manager when adding environment",
         )?;
 
         // 这里需要根据环境类型解析配置
@@ -218,7 +218,7 @@ impl EnvironmentSwitcher {
             manager_guard
                 .add(name, &config_str)
                 .map_err(|e| AppError::Environment {
-                    message: format!("添加环境失败: {e}"),
+                    message: format!("Failed to add environment: {e}"),
                 })?;
 
             format!("Successfully added {env_type} environment: {name}")
@@ -236,7 +236,7 @@ impl EnvironmentSwitcher {
         let manager = option_with_context(
             self.managers.get(&env_type),
             AppError::env_not_found(&format!("{env_type:?}")),
-            "删除环境时查找环境管理器",
+            "finding environment manager when removing environment",
         )?;
 
         {
@@ -279,7 +279,7 @@ impl EnvironmentSwitcher {
         let manager = option_with_context(
             self.managers.get(&env_type),
             AppError::env_not_found(&format!("{env_type:?}")),
-            "获取当前环境时查找环境管理器",
+            "finding environment manager when getting current environment",
         )?;
 
         let (current_env, manager_guard) = {
@@ -287,7 +287,7 @@ impl EnvironmentSwitcher {
             let current_env = manager_guard
                 .get_current()
                 .map_err(|e| AppError::Environment {
-                    message: format!("获取当前环境失败: {e}"),
+                    message: format!("Failed to get current environment: {e}"),
                 })?;
             (current_env, manager_guard)
         };
@@ -299,7 +299,7 @@ impl EnvironmentSwitcher {
                         manager_guard
                             .get(&env_name)
                             .map_err(|e| AppError::Environment {
-                                message: format!("获取环境信息失败: {e}"),
+                                message: format!("Failed to get environment info: {e}"),
                             })?
                     {
                         Ok(format!(
@@ -323,7 +323,7 @@ impl EnvironmentSwitcher {
                         manager_guard
                             .get(&env_name)
                             .map_err(|e| AppError::Environment {
-                                message: format!("获取环境信息失败: {e}"),
+                                message: format!("Failed to get environment info: {e}"),
                             })?
                     {
                         serde_json::json!({
@@ -370,13 +370,13 @@ impl EnvironmentSwitcher {
         let manager = option_with_context(
             self.managers.get(&env_type),
             AppError::env_not_found(&format!("{env_type:?}")),
-            "扫描环境时查找环境管理器",
+            "finding environment manager when scanning environments",
         )?;
 
         let found_envs = {
             let manager_guard = manager.lock().await;
             manager_guard.scan().await.map_err(|e| AppError::Environment {
-                message: format!("扫描环境失败: {e}"),
+                message: format!("Failed to scan environments: {e}"),
             })?
         };
 
@@ -449,7 +449,7 @@ impl EnvironmentSwitcher {
         let manager_entry = option_with_context(
             self.managers.get(&env_type),
             AppError::env_not_found(&format!("{env_type:?}")),
-            "设置默认环境时查找环境管理器",
+            "finding environment manager when setting default environment",
         )?;
 
         {
@@ -457,7 +457,7 @@ impl EnvironmentSwitcher {
             if !manager
                 .is_available(name)
                 .map_err(|e| AppError::Environment {
-                    message: format!("检查环境可用性失败: {e}"),
+                    message: format!("Failed to check environment availability: {e}"),
                 })?
             {
                 return Err(AppError::Environment {
@@ -467,9 +467,8 @@ impl EnvironmentSwitcher {
             }
         }
 
-        // 直接设置默认环境（不验证）
         let mut config = Config::load().map_err(|e| AppError::Config {
-            message: format!("加载配置失败: {e}"),
+            message: format!("Failed to load config: {e}"),
         })?;
 
         match env_type {
@@ -477,14 +476,14 @@ impl EnvironmentSwitcher {
                 config
                     .set_default_java_env(name.to_string())
                     .map_err(|e| AppError::Config {
-                        message: format!("设置默认Java环境失败: {e}"),
+                        message: format!("Failed to set default Java environment: {e}"),
                     })?
             }
             EnvironmentType::Cc => {
                 config
                     .set_default_cc_env(name.to_string())
                     .map_err(|e| AppError::Config {
-                        message: format!("设置默认CC环境失败: {e}"),
+                        message: format!("Failed to set default CC environment: {e}"),
                     })?
             }
             _ => {
@@ -499,7 +498,7 @@ impl EnvironmentSwitcher {
         }
 
         config.save().map_err(|e| AppError::Config {
-            message: format!("保存配置失败: {e}"),
+            message: format!("Failed to save config: {e}"),
         })?;
 
         Ok(format!("Set default {env_type} environment: {name}"))
@@ -511,7 +510,7 @@ impl EnvironmentSwitcher {
         env_type: EnvironmentType,
     ) -> ContextualResult<String> {
         let mut config = Config::load().map_err(|e| AppError::Config {
-            message: format!("加载配置失败: {e}"),
+            message: format!("Failed to load config: {e}"),
         })?;
 
         match env_type {
@@ -529,7 +528,7 @@ impl EnvironmentSwitcher {
         }
 
         config.save().map_err(|e| AppError::Config {
-            message: format!("保存配置失败: {e}"),
+            message: format!("Failed to save config: {e}"),
         })?;
 
         Ok(format!("Cleared default {env_type} environment"))
@@ -541,7 +540,7 @@ impl EnvironmentSwitcher {
         env_type: EnvironmentType,
     ) -> ContextualResult<Option<String>> {
         let config = Config::load().map_err(|e| AppError::Config {
-            message: format!("加载配置失败: {e}"),
+            message: format!("Failed to load config: {e}"),
         })?;
 
         let default_env = match env_type {
@@ -559,7 +558,7 @@ impl EnvironmentSwitcher {
         shell_type: Option<ShellType>,
     ) -> ContextualResult<SwitchResult> {
         let config = Config::load().map_err(|e| AppError::Config {
-            message: format!("加载配置失败: {e}"),
+            message: format!("Failed to load config: {e}"),
         })?;
 
         let default_env = match env_type {
@@ -596,18 +595,18 @@ impl EnvironmentSwitcher {
         let manager = option_with_context(
             self.managers.get(&env_type),
             AppError::env_not_found(&format!("{env_type:?}")),
-            "列出环境时查找环境管理器",
+            "finding environment manager when listing environments",
         )?;
 
         // 一次性加载配置，避免重复读取
         let config = Config::load().map_err(|e| AppError::Config {
-            message: format!("加载配置失败: {e}"),
+            message: format!("Failed to load config: {e}"),
         })?;
 
         let (environments, current_env) = {
             let manager_guard = manager.lock().await;
             let environments = manager_guard.list().map_err(|e| AppError::Environment {
-                message: format!("获取环境列表失败: {e}"),
+                message: format!("Failed to get environment list: {e}"),
             })?;
             let current_env = {
                 let session_manager = self.session_manager.lock()?;

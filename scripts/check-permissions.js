@@ -7,12 +7,12 @@ const path = require('path');
  * 检查 platforms 目录中二进制文件的权限
  */
 function checkPermissions() {
-  console.log('🔍 检查二进制文件权限...');
+  console.log('🔍 Checking binary file permissions...');
 
   const platformsDir = path.join(__dirname, '..', 'platforms');
 
   if (!fs.existsSync(platformsDir)) {
-    console.log('❌ platforms 目录不存在');
+    console.log('❌ platforms directory does not exist');
     process.exit(1);
   }
 
@@ -39,7 +39,7 @@ function checkPermissions() {
         allGood = false;
       }
     } else {
-      console.log(`   ${platform}/${binaryName}: ❌ 文件不存在`);
+      console.log(`   ${platform}/${binaryName}: ❌ File does not exist`);
       allGood = false;
     }
   }
@@ -60,11 +60,11 @@ function checkPermissions() {
     }
   }
 
-  console.log(`\n${allGood ? '✅' : '❌'} 权限检查${allGood ? '通过' : '失败'}`);
+  console.log(`\n${allGood ? '✅' : '❌'} Permission check ${allGood ? 'passed' : 'failed'}`);
 
   if (!allGood) {
-    console.log('\n修复建议:');
-    console.log('  运行以下命令设置权限:');
+    console.log('\nSuggested fix:');
+    console.log('  Run the following command to set permissions:');
     console.log('  find platforms -name "fnva" -type f -exec chmod 755 {} \\;');
   }
 }

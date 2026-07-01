@@ -20,7 +20,7 @@ case "$OS" in
     PLATFORM="linux"
     ;;
   *)
-    echo "错误: 不支持的操作系统: $OS" >&2
+    echo "Error: Unsupported OS: $OS" >&2
     exit 1
     ;;
 esac
@@ -34,7 +34,7 @@ case "$ARCH" in
     CPU="arm64"
     ;;
   *)
-    echo "警告: 未识别的架构 $ARCH，使用 x64" >&2
+    echo "Warning: Unrecognized architecture $ARCH, falling back to x64" >&2
     CPU="x64"
     ;;
 esac
@@ -45,16 +45,16 @@ BINARY_PATH="$PROJECT_ROOT/platforms/$PLATFORM_DIR/fnva"
 
 # 检查二进制文件是否存在
 if [ ! -f "$BINARY_PATH" ]; then
-  echo "错误: 未找到二进制文件: $BINARY_PATH" >&2
+  echo "Error: Binary file not found: $BINARY_PATH" >&2
   echo "" >&2
-  echo "请尝试以下解决方案:" >&2
-  echo "1. 运行 'npm run build' 构建当前平台二进制文件" >&2
-  echo "2. 运行 'npm run build:all' 构建所有平台二进制文件" >&2
-  echo "3. 或者从 GitHub Releases 下载预编译的二进制文件" >&2
+  echo "Please try the following solutions:" >&2
+  echo "1. Run 'npm run build' to build the binary for the current platform" >&2
+  echo "2. Run 'npm run build:all' to build binaries for all platforms" >&2
+  echo "3. Or download pre-compiled binaries from GitHub Releases" >&2
   echo "" >&2
-  echo "如果问题仍然存在，请确保:" >&2
-  echo "- 已安装 Rust 工具链" >&2
-  echo "- 平台目录结构正确: platforms/$PLATFORM_DIR/" >&2
+  echo "If the problem persists, please ensure:" >&2
+  echo "- Rust toolchain is installed" >&2
+  echo "- Platform directory structure is correct: platforms/$PLATFORM_DIR/" >&2
   exit 1
 fi
 

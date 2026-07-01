@@ -125,7 +125,7 @@ impl TemplateEngine {
     pub fn render(&self, template_name: &str, data: &Value) -> Result<String, AppError> {
         self.handlebars
             .render(template_name, data)
-            .map_err(|e| AppError::Serialization(format!("模板渲染失败: {e}")))
+            .map_err(|e| AppError::Serialization(format!("Template rendering failed: {e}")))
     }
 }
 

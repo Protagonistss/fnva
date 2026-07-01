@@ -189,11 +189,11 @@ function displaySuccessMessage(envType, envName, envVars) {
   }
 
   if (envVars.ANTHROPIC_AUTH_TOKEN) {
-    console.log(`[KEY] ANTHROPIC_AUTH_TOKEN: [已设置]`);
+    console.log(`[KEY] ANTHROPIC_AUTH_TOKEN: [Set]`);
   }
 
   if (envVars.OPENAI_API_KEY) {
-    console.log(`[KEY] OPENAI_API_KEY: [已设置]`);
+    console.log(`[KEY] OPENAI_API_KEY: [Set]`);
   }
 }
 
@@ -222,7 +222,7 @@ function generateSimpleScript(envVars, envType, envName) {
 
     if (envVars.ANTHROPIC_AUTH_TOKEN) {
       lines.push(`$env:ANTHROPIC_AUTH_TOKEN = "${envVars.ANTHROPIC_AUTH_TOKEN}"`);
-      lines.push(`Write-Host "ANTHROPIC_AUTH_TOKEN: [已设置]" -ForegroundColor Yellow`);
+      lines.push(`Write-Host "ANTHROPIC_AUTH_TOKEN: [Set]" -ForegroundColor Yellow`);
     }
 
     if (envVars.ANTHROPIC_BASE_URL) {
@@ -237,7 +237,7 @@ function generateSimpleScript(envVars, envType, envName) {
 
     if (envVars.OPENAI_API_KEY) {
       lines.push(`$env:OPENAI_API_KEY = "${envVars.OPENAI_API_KEY}"`);
-      lines.push(`Write-Host "OPENAI_API_KEY: [已设置]" -ForegroundColor Yellow`);
+      lines.push(`Write-Host "OPENAI_API_KEY: [Set]" -ForegroundColor Yellow`);
     }
   } else {
     // Unix-like systems
@@ -255,7 +255,7 @@ function generateSimpleScript(envVars, envType, envName) {
 
     if (envVars.ANTHROPIC_AUTH_TOKEN) {
       lines.push(`export ANTHROPIC_AUTH_TOKEN="${envVars.ANTHROPIC_AUTH_TOKEN}"`);
-      lines.push(`echo "ANTHROPIC_AUTH_TOKEN: [已设置]"`);
+      lines.push(`echo "ANTHROPIC_AUTH_TOKEN: [Set]"`);
     }
 
     if (envVars.ANTHROPIC_BASE_URL) {
@@ -270,7 +270,7 @@ function generateSimpleScript(envVars, envType, envName) {
 
     if (envVars.OPENAI_API_KEY) {
       lines.push(`export OPENAI_API_KEY="${envVars.OPENAI_API_KEY}"`);
-      lines.push(`echo "OPENAI_API_KEY: [已设置]"`);
+      lines.push(`echo "OPENAI_API_KEY: [Set]"`);
     }
   }
 
@@ -284,18 +284,18 @@ function handleNodeOnlyMode(args) {
 
   // 只支持基本帮助信息
   if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
-    console.log('fnva - 环境管理工具 (Node.js 降级模式)');
+    console.log('fnva - Environment Management Tool (Node.js Fallback Mode)');
     console.log('');
-    console.log('⚠️  当前运行在 Node.js 降级模式，功能有限');
+    console.log('⚠️  Currently running in Node.js fallback mode, functionality is limited');
     console.log('');
-    console.log('解决方法:');
-    console.log('1. 确保 npm 包包含平台二进制文件');
-    console.log('2. 重新安装: npm install -g fnva --force');
-    console.log('3. 或者直接下载原生二进制文件');
+    console.log('Solutions:');
+    console.log('1. Ensure the npm package contains platform binaries');
+    console.log('2. Reinstall: npm install -g fnva --force');
+    console.log('3. Or download native binaries directly');
     console.log('');
-    console.log('临时可用功能:');
-    console.log('  java list     - 列出 Java 环境');
-    console.log('  java use <n>  - 切换 Java 环境');
+    console.log('Temporarily available features:');
+    console.log('  java list     - List Java environments');
+    console.log('  java use <n>  - Switch Java environment');
     return;
   }
 
@@ -377,12 +377,12 @@ function handleNodeOnlyMode(args) {
   } else {
     console.error(`❌ Command '${args[0]}' requires native binary mode`);
     console.error('');
-    console.error('当前运行在 Node.js 降级模式，不支持此命令');
+    console.error('Currently running in Node.js fallback mode. This command is not supported.');
     console.error('');
-    console.error('解决方案:');
-    console.error('1. 重新安装 npm 包: npm install -g fnva --force');
-    console.error('2. 从 GitHub Release 下载原生二进制文件');
-    console.error('3. 或者设置 FNVA_SKIP_NATIVE=1 强制使用此模式（功能受限）');
+    console.error('Solutions:');
+    console.error('1. Reinstall npm package: npm install -g fnva --force');
+    console.error('2. Download native binary from GitHub Releases');
+    console.error('3. Or set FNVA_SKIP_NATIVE=1 to force fallback mode (limited features)');
     process.exit(1);
   }
 }
@@ -421,8 +421,8 @@ async function checkFirstRun() {
     return;
   }
 
-  console.log('🚀 欢迎使用 fnva！检测到这是您的首次运行。');
-  console.log(`为了让 fnva 能够自动管理终端环境变量，我们需要在您的终端配置文件 (${configPath}) 中添加一行加载代码。`);
+  console.log('🚀 Welcome to fnva! We detected that this is your first run.');
+  console.log(`To allow fnva to automatically manage shell environment variables, we need to append a line of code to your shell configuration file (${configPath}).`);
 
   return new Promise((resolve) => {
     const readline = require('readline');
@@ -431,7 +431,7 @@ async function checkFirstRun() {
       output: process.stdout,
     });
 
-    rl.question('? 是否允许自动配置终端集成？ (Y/n) ', (answer) => {
+    rl.question('? Do you allow automatic configuration of terminal integration? (Y/n) ', (answer) => {
       const normalized = answer.trim().toLowerCase();
       if (normalized === '' || normalized === 'y' || normalized === 'yes') {
         if (typeof installer.installPowershellWrapper === 'function') {
@@ -439,10 +439,10 @@ async function checkFirstRun() {
         }
         const success = installer.installShellIntegration();
         if (success) {
-          console.log('✅ 终端集成已成功配置！建议重新启动终端或执行刷新命令。');
+          console.log('✅ Shell integration has been successfully configured! We recommend restarting your terminal or refreshing it.');
         }
       } else {
-        console.log('已跳过自动配置。您可以随时通过运行 `fnva env --auto` 手动配置。');
+        console.log('Skipped automatic configuration. You can manually configure it anytime by running `fnva env --auto`.');
       }
       fs.writeFileSync(setupMarker, answer);
       rl.close();
@@ -690,10 +690,10 @@ async function run() {
                   try { fs.unlinkSync(tempFile); } catch (_) {}
                 });
 
-                console.log('[OK] 环境已自动切换');
+                console.log('[OK] Environment switched automatically');
                 return;
               } catch (error) {
-                console.warn('[WARN] 自动执行失败，回退到脚本输出');
+                console.warn('[WARN] Automatic execution failed, falling back to outputting the script');
               }
             }
 

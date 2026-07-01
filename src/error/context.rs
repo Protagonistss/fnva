@@ -19,12 +19,12 @@ impl<T> SafeMutex<T> {
     pub fn lock(&self) -> ContextualResult<std::sync::MutexGuard<'_, T>> {
         self.inner.lock().map_err(|_| {
             Box::new(ContextualError {
-                error: AppError::lock_failed(&format!("锁定失败: {}", self.name)),
+                error: AppError::lock_failed(&format!("Failed to lock: {}", self.name)),
                 context: ErrorContext {
-                    operation: format!("获取 {} 锁时发生死锁", self.name),
+                    operation: format!("Deadlock occurred when acquiring {} lock", self.name),
                     suggestions: vec![
-                        "检查是否存在死锁".to_string(),
-                        "确保其他线程正确释放锁".to_string(),
+                        "Check for potential deadlocks".to_string(),
+                        "Ensure other threads release the lock correctly".to_string(),
                     ],
                     help_url: None,
                 },
@@ -36,10 +36,10 @@ impl<T> SafeMutex<T> {
     pub fn try_lock(&self) -> ContextualResult<std::sync::MutexGuard<'_, T>> {
         self.inner.try_lock().map_err(|_| {
             Box::new(ContextualError {
-                error: AppError::lock_failed(&format!("无法获取锁: {}", self.name)),
+                error: AppError::lock_failed(&format!("Unable to acquire lock: {}", self.name)),
                 context: ErrorContext {
-                    operation: format!("尝试获取 {} 锁时被占用", self.name),
-                    suggestions: vec!["稍后重试".to_string(), "检查锁的持有者".to_string()],
+                    operation: format!("Acquiring {} lock failed because it is busy", self.name),
+                    suggestions: vec!["Try again later".to_string(), "Check the holder of the lock".to_string()],
                     help_url: None,
                 },
             })
