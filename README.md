@@ -51,6 +51,11 @@ Or download from [Releases](https://github.com/Protagonistss/fnva/releases) and 
 
 With shell integration, opening a new terminal restores your last active CC/Java/Maven environments automatically, and `fnva <type> use <name>` works directly without needing an `eval` wrapper. See [Shell Integration Guide](docs/user-guide/shell-integration.md) for details.
 
+```bash
+# Add to your shell profile (bash/zsh):
+eval "$(fnva env)"
+```
+
 ## Quick Start
 
 ### Java

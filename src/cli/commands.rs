@@ -47,10 +47,11 @@ pub enum Commands {
         #[command(subcommand)]
         action: CcCommands,
     },
-    /// Switch and manage environments
+    /// Generate shell integration script (eval "$(fnva env)")
     Env {
-        #[command(subcommand)]
-        action: EnvCommands,
+        /// Shell type (bash/zsh/fish/powershell/cmd, auto-detected if omitted)
+        #[arg(short, long)]
+        shell: Option<String>,
     },
     /// Manage configuration
     Config {
@@ -112,19 +113,12 @@ pub enum JavaCommands {
     },
     /// Query available remote versions
     LsRemote {
-        /// Query type
-        #[arg(default_value = "java")]
-        query_type: String,
-        /// Major Java version
+        /// Major version filter
         #[arg(long, short = 'v')]
         version: Option<u32>,
-        /// Repository URL
-        #[arg(long)]
-        repository: Option<String>,
-        /// Result limit
-        #[arg(short = 'n', long, default_value = "20")]
-        limit: u32,
     },
+    /// Refresh the remote version cache
+    Refresh,
     /// Install a Java version
     Install {
         /// Java version
@@ -180,6 +174,34 @@ pub enum MavenCommands {
         #[arg(long)]
         json: bool,
     },
+    /// Scan the system for Maven installations
+    Scan,
+    /// Add a Maven environment
+    Add {
+        /// Environment name
+        #[arg(short, long)]
+        name: String,
+        /// MAVEN_HOME path
+        #[arg(long)]
+        home: String,
+        /// Description
+        #[arg(short = 'd', long)]
+        description: Option<String>,
+        /// Custom MAVEN_OPTS (JVM args, e.g. "-Xmx4g -Dfile.encoding=UTF-8")
+        #[arg(long)]
+        maven_opts: Option<String>,
+        /// Custom local repository path (instead of ~/.m2/repository)
+        #[arg(long)]
+        local_repo: Option<String>,
+        /// Custom settings.xml path
+        #[arg(long)]
+        settings: Option<String>,
+    },
+    /// Remove a Maven environment
+    Remove {
+        /// Environment name
+        name: String,
+    },
     /// Install a Maven version
     Install {
         /// Version (e.g. 3.9.16 / latest / 3.9)
@@ -221,6 +243,34 @@ pub enum MavenCommands {
         #[arg(long)]
         json: bool,
     },
+    /// Set environment variables for an existing Maven environment
+    Set {
+        /// Environment name
+        name: String,
+        /// Set MAVEN_OPTS (JVM args)
+        #[arg(long)]
+        maven_opts: Option<String>,
+        /// Set custom local repository path
+        #[arg(long)]
+        local_repo: Option<String>,
+        /// Set custom settings.xml path
+        #[arg(long)]
+        settings: Option<String>,
+        /// Clear MAVEN_OPTS
+        #[arg(long)]
+        unset_maven_opts: bool,
+        /// Clear local_repo
+        #[arg(long)]
+        unset_local_repo: bool,
+        /// Clear settings
+        #[arg(long)]
+        unset_settings: bool,
+    },
+    /// Show full configuration of a Maven environment
+    Show {
+        /// Environment name
+        name: String,
+    },
 }
 
 /// CC (Claude Code) environment management commands
@@ -232,6 +282,8 @@ pub enum CcCommands {
         #[arg(long)]
         json: bool,
     },
+    /// Scan the system for CC environments
+    Scan,
     /// Switch to a CC environment
     Use {
         /// Environment name
@@ -288,60 +340,6 @@ pub enum CcCommands {
         /// Output as JSON
         #[arg(long)]
         json: bool,
-    },
-}
-
-/// Environment management commands
-#[derive(Subcommand)]
-pub enum EnvCommands {
-    /// Generate the environment switch script (like fnm env)
-    #[command(name = "env")]
-    GenerateEnv {
-        /// Shell type
-        #[arg(short, long)]
-        shell: Option<String>,
-    },
-    /// Switch environment
-    Switch {
-        /// Environment type
-        #[arg(short = 't', long)]
-        env_type: String,
-        /// Environment name
-        #[arg(short, long)]
-        name: String,
-        /// Shell type
-        #[arg(short, long)]
-        shell: Option<String>,
-        /// Switch reason
-        #[arg(long)]
-        reason: Option<String>,
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-    },
-    /// List environments
-    List {
-        /// Environment type
-        #[arg(short = 't', long)]
-        env_type: Option<String>,
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-    },
-    /// Show the current environment
-    Current {
-        /// Environment type
-        #[arg(short = 't', long)]
-        env_type: Option<String>,
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-    },
-    /// Generate the shell integration script
-    ShellIntegration {
-        /// Shell type
-        #[arg(short, long)]
-        shell: Option<String>,
     },
 }
 

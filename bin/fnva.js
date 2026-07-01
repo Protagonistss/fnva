@@ -387,7 +387,74 @@ function handleNodeOnlyMode(args) {
   }
 }
 
-function run() {
+async function checkFirstRun() {
+  const os = require('os');
+  const fs = require('fs');
+  const path = require('path');
+  const setupMarker = path.join(os.homedir(), '.fnva', '.shell_setup_done');
+
+  if (fs.existsSync(setupMarker) || process.env.FNVA_SKIP_SHELL_SETUP === '1') {
+    return;
+  }
+
+  const fnvaDir = path.join(os.homedir(), '.fnva');
+  if (!fs.existsSync(fnvaDir)) {
+    fs.mkdirSync(fnvaDir, { recursive: true });
+  }
+
+  const installerPath = path.join(__dirname, '..', 'scripts', 'install-shell-integration.js');
+  if (!fs.existsSync(installerPath)) {
+    return; // Script not shipped
+  }
+
+  const installer = require(installerPath);
+  const shell = installer.detectShell();
+  const configPath = installer.getShellConfigPath(shell);
+
+  if (!configPath) {
+    fs.writeFileSync(setupMarker, 'skipped');
+    return;
+  }
+
+  if (installer.isInstalled(configPath)) {
+    fs.writeFileSync(setupMarker, 'installed');
+    return;
+  }
+
+  console.log('🚀 欢迎使用 fnva！检测到这是您的首次运行。');
+  console.log(`为了让 fnva 能够自动管理终端环境变量，我们需要在您的终端配置文件 (${configPath}) 中添加一行加载代码。`);
+
+  return new Promise((resolve) => {
+    const readline = require('readline');
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+
+    rl.question('? 是否允许自动配置终端集成？ (Y/n) ', (answer) => {
+      const normalized = answer.trim().toLowerCase();
+      if (normalized === '' || normalized === 'y' || normalized === 'yes') {
+        if (typeof installer.installPowershellWrapper === 'function') {
+          installer.installPowershellWrapper();
+        }
+        const success = installer.installShellIntegration();
+        if (success) {
+          console.log('✅ 终端集成已成功配置！建议重新启动终端或执行刷新命令。');
+        }
+      } else {
+        console.log('已跳过自动配置。您可以随时通过运行 `fnva env --auto` 手动配置。');
+      }
+      fs.writeFileSync(setupMarker, answer);
+      rl.close();
+      console.log('');
+      resolve();
+    });
+  });
+}
+
+async function run() {
+  await checkFirstRun();
+
   // 设置Windows控制台编码
   EncodingUtils.setWindowsConsoleEncoding();
 
@@ -410,6 +477,19 @@ function run() {
   }
 
   const binaryPath = buildBinaryPath();
+
+  if (binaryPath && process.platform !== 'win32') {
+    try {
+      const fs = require('fs');
+      const stats = fs.statSync(binaryPath);
+      const hasExec = (stats.mode & 0o111) !== 0;
+      if (!hasExec) {
+        fs.chmodSync(binaryPath, 0o755);
+      }
+    } catch (e) {
+      // ignore errors, let spawnSync handle it
+    }
+  }
 
   if (showDebug) {
     console.log('=== BINARY SEARCH RESULTS ===');

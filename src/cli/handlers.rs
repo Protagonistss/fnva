@@ -45,7 +45,18 @@ impl CommandHandler {
             Commands::Java { action } => self.handle_java_command(action).await,
             Commands::Cc { action } => self.handle_cc_command(action).await,
             Commands::Maven { action } => self.handle_maven_command(action).await,
-            Commands::Env { action } => self.handle_env_command(action).await,
+            Commands::Env { shell } => {
+                let shell_type = match shell {
+                    Some(s) => Some(parse_shell_type(&s)?),
+                    None => Some(detect_shell()),
+                };
+                let script = self
+                    .switcher
+                    .generate_shell_integration(shell_type.unwrap())
+                    .await?;
+                print!("{script}");
+                Ok(())
+            }
             Commands::Config { action } => self.handle_config_command(action).await,
             Commands::History {
                 env_type,
@@ -98,13 +109,13 @@ impl CommandHandler {
                         print!("{}", result.script);
                     } else {
                         // 如果没有脚本，显示成功消息
-                        println!("Switched to Java environment: {name}");
+                        crate::cli::print::success(&format!("{name}  [java]"));
                     }
                 } else {
                     // 如果切换失败，显示错误信息
-                    eprintln!(
-                        "Failed to switch Java environment: {}",
-                        result.error.unwrap_or_else(|| "Unknown error".to_string())
+                    crate::cli::print::failure(
+                        "Failed to switch java environment",
+                        Some(result.error.as_deref().unwrap_or("Unknown error")),
                     );
                     return Err("Environment switch failed".to_string());
                 }
@@ -130,19 +141,17 @@ impl CommandHandler {
                     .await?;
                 print!("{output}");
             }
-            JavaCommands::LsRemote {
-                query_type,
-                version,
-                repository,
-                limit: _,
-            } => {
-                if query_type == "java" {
-                    // 使用新的版本管理器查询 Java 版本
-                    let output = self.handle_java_ls_remote(version, repository).await?;
-                    print!("{output}");
-                } else {
-                    return Err(format!("Query type '{query_type}' not supported"));
-                }
+            JavaCommands::LsRemote { version } => {
+                let output = self.handle_java_ls_remote(version).await?;
+                print!("{output}");
+            }
+            JavaCommands::Refresh => {
+                use crate::environments::java::downloader::JavaDownloader;
+                use crate::infrastructure::config::Config;
+                let config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
+                let downloader = JavaDownloader::new(config.mirrors.java);
+                downloader.refresh().await.map_err(|e| format!("{e:?}"))?;
+                crate::cli::print::success("Java version cache refreshed");
             }
             JavaCommands::Install {
                 version,
@@ -151,11 +160,12 @@ impl CommandHandler {
                 use crate::environments::java::installer::JavaInstaller;
                 use crate::infrastructure::config::Config;
 
-                let mut config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
+                let mut config =
+                    Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
                 match JavaInstaller::install_java(&version, &mut config, auto_switch).await {
                     Ok(java_home) => {
-                        println!("Java {version} installed");
-                        println!("Path: {java_home}");
+                        crate::cli::print::success(&format!("java {version} installed"));
+                        crate::cli::print::detail("Path", &java_home);
                     }
                     Err(e) => {
                         return Err(format!("Install failed: {e}"));
@@ -187,7 +197,8 @@ impl CommandHandler {
                 use crate::environments::java::installer::JavaInstaller;
                 use crate::infrastructure::config::Config;
 
-                let mut config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
+                let mut config =
+                    Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
                 JavaInstaller::uninstall_java(&name, &mut config)?;
             }
             JavaCommands::Default {
@@ -243,10 +254,12 @@ impl CommandHandler {
                                     Err(e) => return Err(e),
                                 }
                             } else {
-                                println!("Default Java environment: {env_name}");
+                                crate::cli::print::success(&format!(
+                                    "{env_name}  [java] (default)"
+                                ));
                             }
                         }
-                        None => println!("No default Java environment set"),
+                        None => crate::cli::print::warn("No default java environment set"),
                     }
                 }
             }
@@ -295,20 +308,61 @@ impl CommandHandler {
                     if !result.script.is_empty() {
                         print!("{}", result.script);
                     } else {
-                        println!("Switched to Maven environment: {name}");
+                        crate::cli::print::success(&format!("{name}  [maven]"));
                     }
                 } else {
-                    eprintln!(
-                        "Failed to switch Maven environment: {}",
-                        result.error.unwrap_or_else(|| "Unknown error".to_string())
+                    crate::cli::print::failure(
+                        "Failed to switch maven environment",
+                        Some(result.error.as_deref().unwrap_or("Unknown error")),
                     );
                     return Err("Environment switch failed".to_string());
                 }
             }
-            MavenCommands::Install { version, auto_switch } => {
+            MavenCommands::Install {
+                version,
+                auto_switch,
+            } => {
                 let mut config = crate::infrastructure::config::Config::load()
                     .map_err(|e| format!("Failed to load config: {e}"))?;
                 MavenInstaller::install_maven(&version, &mut config, auto_switch).await?;
+            }
+            MavenCommands::Scan => {
+                let output = self
+                    .switcher
+                    .scan_environments(EnvironmentType::Maven)
+                    .await?;
+                print!("{output}");
+            }
+            MavenCommands::Add {
+                name,
+                home,
+                description: _,
+                maven_opts,
+                local_repo,
+                settings,
+            } => {
+                let mut config_value = serde_json::json!({ "maven_home": home });
+                if let Some(v) = maven_opts {
+                    config_value["maven_opts"] = serde_json::json!(v);
+                }
+                if let Some(v) = local_repo {
+                    config_value["local_repo"] = serde_json::json!(v);
+                }
+                if let Some(v) = settings {
+                    config_value["settings_file"] = serde_json::json!(v);
+                }
+                let output = self
+                    .switcher
+                    .add_environment(EnvironmentType::Maven, &name, config_value)
+                    .await?;
+                print!("{output}");
+            }
+            MavenCommands::Remove { name } => {
+                let output = self
+                    .switcher
+                    .remove_environment(EnvironmentType::Maven, &name)
+                    .await?;
+                print!("{output}");
             }
             MavenCommands::Uninstall { name } => {
                 let mut config = crate::infrastructure::config::Config::load()
@@ -318,12 +372,12 @@ impl CommandHandler {
             MavenCommands::Refresh => {
                 let discovery = MirrorDirectoryDiscovery::new();
                 discovery.refresh().await.map_err(|e| format!("{e:?}"))?;
-                println!("Maven version cache refreshed.");
+                crate::cli::print::success("Maven version cache refreshed");
             }
             MavenCommands::LsRemote { version } => {
                 let discovery = MirrorDirectoryDiscovery::new();
                 let versions = discovery.list().await.map_err(|e| format!("{e:?}"))?;
-                println!("Available Maven versions:");
+                crate::cli::print::step("Status", "Available Maven versions:");
                 let mut shown = 0;
                 for v in versions.iter().take(30) {
                     if let Some(f) = version.as_deref() {
@@ -331,10 +385,10 @@ impl CommandHandler {
                             continue;
                         }
                     }
-                    println!("  {}", v.version);
+                    crate::cli::print::step("version", &v.version);
                     shown += 1;
                 }
-                println!("({shown} versions shown)");
+                crate::cli::print::step("Status", &format!("({shown} versions shown)"));
             }
             MavenCommands::Current { json } => {
                 let output = self
@@ -350,7 +404,12 @@ impl CommandHandler {
                     .await?;
                 print!("{output}");
             }
-            MavenCommands::Default { name, unset, shell, json } => {
+            MavenCommands::Default {
+                name,
+                unset,
+                shell,
+                json,
+            } => {
                 if unset {
                     let output = self
                         .switcher
@@ -382,19 +441,59 @@ impl CommandHandler {
                                     )
                                     .await?;
                                 if json {
-                                    let output =
-                                        FORMATTER.format_switch_result(&result, OutputFormat::Json)?;
+                                    let output = FORMATTER
+                                        .format_switch_result(&result, OutputFormat::Json)?;
                                     print!("{output}");
                                 } else if result.success && !result.script.is_empty() {
                                     print!("{}", result.script);
                                 }
                             } else {
-                                println!("Default Maven environment: {env_name}");
+                                crate::cli::print::success(&format!(
+                                    "{env_name}  [maven] (default)"
+                                ));
                             }
                         }
-                        None => println!("No default Maven environment set"),
+                        None => crate::cli::print::warn("No default maven environment set"),
                     }
                 }
+            }
+            MavenCommands::Set {
+                name,
+                maven_opts,
+                local_repo,
+                settings,
+                unset_maven_opts,
+                unset_local_repo,
+                unset_settings,
+            } => {
+                use crate::environments::maven::MavenEnvironmentManager;
+                let mut manager = MavenEnvironmentManager::new();
+
+                // Some(Some(value)) = 设置; Some(None) = 清除; None = 不变
+                let opts_arg = if unset_maven_opts {
+                    Some(None)
+                } else {
+                    maven_opts.map(Some)
+                };
+                let repo_arg = if unset_local_repo {
+                    Some(None)
+                } else {
+                    local_repo.map(Some)
+                };
+                let settings_arg = if unset_settings {
+                    Some(None)
+                } else {
+                    settings.map(Some)
+                };
+
+                manager.set_env_vars(&name, opts_arg, repo_arg, settings_arg)?;
+                crate::cli::print::success(&format!("Updated Maven environment: {name}"));
+            }
+            MavenCommands::Show { name } => {
+                use crate::environments::maven::MavenEnvironmentManager;
+                let manager = MavenEnvironmentManager::new();
+                let info = manager.show_env(&name)?;
+                println!("{info}");
             }
         }
         Ok(())
@@ -415,6 +514,10 @@ impl CommandHandler {
                         },
                     )
                     .await?;
+                print!("{output}");
+            }
+            CcCommands::Scan => {
+                let output = self.switcher.scan_environments(EnvironmentType::Cc).await?;
                 print!("{output}");
             }
             CcCommands::Use { name, shell, json } => {
@@ -442,13 +545,13 @@ impl CommandHandler {
                         print!("{}", result.script);
                     } else {
                         // 如果没有脚本，显示成功消息
-                        println!("Switched to CC environment: {name}");
+                        crate::cli::print::success(&format!("{name}  [cc]"));
                     }
                 } else {
                     // 如果切换失败，显示错误信息
-                    eprintln!(
-                        "Failed to switch CC environment: {}",
-                        result.error.unwrap_or_else(|| "Unknown error".to_string())
+                    crate::cli::print::failure(
+                        "Failed to switch cc environment",
+                        Some(result.error.as_deref().unwrap_or("Unknown error")),
                     );
                     return Err("Environment switch failed".to_string());
                 }
@@ -503,10 +606,10 @@ impl CommandHandler {
                                     Err(e) => return Err(e),
                                 }
                             } else {
-                                println!("Default CC environment: {env_name}");
+                                crate::cli::print::success(&format!("{env_name}  [cc] (default)"));
                             }
                         }
-                        None => println!("No default CC environment set"),
+                        None => crate::cli::print::warn("No default cc environment set"),
                     }
                 }
             }
@@ -532,127 +635,36 @@ impl CommandHandler {
                 model,
                 description,
             } => {
-                use crate::infrastructure::config::{CcEnvironment, Config};
-
-                let mut config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
-                let env = CcEnvironment {
-                    name: name.clone(),
-                    provider: provider.clone(),
-                    api_key: api_key.unwrap_or_default(),
-                    base_url: base_url.unwrap_or_default(),
-                    sonnet_model: model.unwrap_or_else(|| "claude-sonnet-4-5".to_string()),
-                    opus_model: None,
-                    haiku_model: None,
-                    description: description.unwrap_or_default(),
-                };
-                // Check duplicate
-                if config.cc_environments.iter().any(|e| e.name == env.name) {
-                    return Err(format!("CC environment '{}' already exists", env.name));
+                let base_url_val = base_url.unwrap_or_default();
+                if base_url_val.is_empty() {
+                    return Err("Missing required argument: --base-url <URL>\n\
+                         Example: fnva cc add --name my-cc --provider anthropic \
+                         --base-url https://api.anthropic.com --api-key ${ANTHROPIC_API_KEY}"
+                        .to_string());
                 }
-                config.cc_environments.push(env);
-                config.save()?;
-                println!("CC environment '{name}' added ({provider})");
+                let mut json = serde_json::json!({
+                    "provider": provider,
+                    "base_url": base_url_val,
+                });
+                if let Some(k) = api_key {
+                    json["api_key"] = serde_json::Value::String(k);
+                }
+                if let Some(m) = model {
+                    json["sonnet_model"] = serde_json::Value::String(m);
+                }
+                if let Some(d) = description {
+                    json["description"] = serde_json::Value::String(d);
+                }
+                let output = self
+                    .switcher
+                    .add_environment(EnvironmentType::Cc, &name, json)
+                    .await?;
+                print!("{output}");
             }
             CcCommands::Remove { name } => {
                 let output = self
                     .switcher
                     .remove_environment(EnvironmentType::Cc, &name)
-                    .await?;
-                print!("{output}");
-            }
-        }
-        Ok(())
-    }
-
-    /// 处理环境管理命令
-    async fn handle_env_command(&mut self, action: EnvCommands) -> Result<(), String> {
-        match action {
-            EnvCommands::GenerateEnv {
-                shell,
-            } => {
-                let shell_type = match shell {
-                    Some(s) => Some(parse_shell_type(&s)?),
-                    None => Some(detect_shell()),
-                };
-
-                // 生成完整的环境设置脚本（autoload + wrapper）
-                let script = self
-                    .switcher
-                    .generate_shell_integration(shell_type.unwrap())
-                    .await?;
-                print!("{script}");
-            }
-            EnvCommands::Switch {
-                env_type,
-                name,
-                shell,
-                reason,
-                json,
-            } => {
-                let env_type = parse_environment_type(&env_type)?;
-                let shell_type = match shell {
-                    Some(s) => Some(parse_shell_type(&s)?),
-                    None => None,
-                };
-                let result = self
-                    .switcher
-                    .switch_environment(env_type, &name, shell_type, reason)
-                    .await?;
-
-                let output = FORMATTER.format_switch_result(
-                    &result,
-                    if json {
-                        OutputFormat::Json
-                    } else {
-                        OutputFormat::Text
-                    },
-                );
-                print!("{}", output?);
-            }
-            EnvCommands::List { env_type, json } => {
-                let env_type = match env_type {
-                    Some(t) => parse_environment_type(&t)?,
-                    None => EnvironmentType::Java,
-                };
-                let output = self
-                    .switcher
-                    .list_environments(
-                        env_type,
-                        if json {
-                            OutputFormat::Json
-                        } else {
-                            OutputFormat::Text
-                        },
-                    )
-                    .await?;
-                print!("{output}");
-            }
-            EnvCommands::Current { env_type, json } => {
-                let env_type = match env_type {
-                    Some(t) => parse_environment_type(&t)?,
-                    None => EnvironmentType::Java,
-                };
-                let output = self
-                    .switcher
-                    .get_current_environment(
-                        env_type,
-                        if json {
-                            OutputFormat::Json
-                        } else {
-                            OutputFormat::Text
-                        },
-                    )
-                    .await?;
-                print!("{output}");
-            }
-            EnvCommands::ShellIntegration { shell } => {
-                let shell_type = match shell {
-                    Some(s) => Some(parse_shell_type(&s)?),
-                    None => Some(crate::infrastructure::shell::platform::detect_shell()),
-                };
-                let output = self
-                    .switcher
-                    .generate_shell_integration(shell_type.unwrap())
                     .await?;
                 print!("{output}");
             }
@@ -667,56 +679,44 @@ impl CommandHandler {
                 use crate::infrastructure::config::Config;
                 let updated = Config::sync()?;
                 if updated {
-                    println!("Configuration synced");
+                    crate::cli::print::success("Configuration synced");
                 } else {
-                    println!("Configuration is up to date");
+                    crate::cli::print::success("Configuration is up to date");
                 }
             }
         }
         Ok(())
     }
 
-    /// 处理 Java 远程查询（简化版本）
-    async fn handle_java_ls_remote(
-        &self,
-        java_version: Option<u32>,
-        _repository: Option<String>,
-    ) -> Result<String, String> {
+    /// Handle Java remote version listing.
+    async fn handle_java_ls_remote(&self, version: Option<u32>) -> Result<String, String> {
         use crate::environments::java::installer::JavaInstaller;
 
-        println!("Querying available Java versions...");
+        crate::cli::print::action("Querying available Java versions...");
 
-        // 暂时使用旧的实现，确保基本功能可用
         match JavaInstaller::list_installable_versions().await {
             Ok(versions) => {
                 let mut output = String::new();
-                output.push_str("Available Java versions:\n\n");
 
-                if let Some(major) = java_version {
-                    let filtered_versions: Vec<String> = versions
+                if let Some(major) = version {
+                    let filtered: Vec<String> = versions
                         .into_iter()
                         .filter(|v| v.contains(&major.to_string()))
                         .collect();
-
-                    if filtered_versions.is_empty() {
+                    if filtered.is_empty() {
                         output.push_str(&format!("No Java {major} versions found\n"));
                     } else {
                         output.push_str(&format!("Available Java {major} versions:\n"));
-                        for version in filtered_versions {
-                            output.push_str(&format!("  {version}\n"));
+                        for v in filtered {
+                            output.push_str(&format!("  {v}\n"));
                         }
                     }
                 } else {
-                    output.push_str("All available versions:\n");
-                    for version in versions {
-                        output.push_str(&format!("  {version}\n"));
+                    output.push_str("Available Java versions:\n");
+                    for v in versions {
+                        output.push_str(&format!("  {v}\n"));
                     }
                 }
-
-                output.push_str("\nUsage:\n");
-                output.push_str("  fnva java install 21        # Install Java 21\n");
-                output.push_str("  fnva java install lts        # Install latest LTS\n");
-                output.push_str("  fnva java install latest     # Install latest version\n");
 
                 Ok(output)
             }

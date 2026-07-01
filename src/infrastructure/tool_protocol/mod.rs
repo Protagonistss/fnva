@@ -18,6 +18,4 @@ pub use descriptor::{AssetModel, ToolDescriptor, ToolId};
 pub use downloader::ToolDownloader;
 pub use mirror_resolver::{MirrorResolver, ResolveError};
 pub use template_vars::TemplateVars;
-pub use version_discovery::{
-    DiscoveryError, ResolvedVersion, VersionDiscovery,
-};
+pub use version_discovery::{DiscoveryError, ResolvedVersion, VersionDiscovery};

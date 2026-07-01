@@ -7,6 +7,36 @@ use crate::core::environment_manager::EnvironmentType;
 use crate::error::AppError;
 use crate::infrastructure::shell::ShellType;
 
+/// 根据环境配置构建最终的 MAVEN_OPTS 字符串。
+/// 合并顺序：用户自定义 maven_opts → local_repo → settings_file。
+/// 若三项均未设置则返回空字符串（模板中不会 export MAVEN_OPTS）。
+fn build_maven_opts_value(config: &Value) -> String {
+    let mut parts: Vec<String> = Vec::new();
+
+    // 用户自定义 JVM 参数（原样保留）
+    if let Some(opts) = config.get("maven_opts").and_then(|v| v.as_str()) {
+        if !opts.is_empty() {
+            parts.push(opts.to_string());
+        }
+    }
+
+    // 自定义本地仓库路径 → -Dmaven.repo.local=...
+    if let Some(repo) = config.get("local_repo").and_then(|v| v.as_str()) {
+        if !repo.is_empty() {
+            parts.push(format!("-Dmaven.repo.local={repo}"));
+        }
+    }
+
+    // 自定义 settings.xml → -s ...
+    if let Some(settings) = config.get("settings_file").and_then(|v| v.as_str()) {
+        if !settings.is_empty() {
+            parts.push(format!("-s {settings}"));
+        }
+    }
+
+    parts.join(" ")
+}
+
 /// 脚本生成策略接口
 pub trait ScriptGenerationStrategy: Send + Sync {
     /// 生成环境切换脚本
@@ -80,8 +110,10 @@ impl TemplateEngine {
         handlebars.register_template_string("cmd_integration", CMD_INTEGRATION_TEMPLATE)?;
 
         // Maven 模板（各 shell）
-        handlebars
-            .register_template_string("powershell_maven_switch", POWERSHELL_MAVEN_SWITCH_TEMPLATE)?;
+        handlebars.register_template_string(
+            "powershell_maven_switch",
+            POWERSHELL_MAVEN_SWITCH_TEMPLATE,
+        )?;
         handlebars.register_template_string("bash_maven_switch", BASH_MAVEN_SWITCH_TEMPLATE)?;
         handlebars.register_template_string("fish_maven_switch", FISH_MAVEN_SWITCH_TEMPLATE)?;
         handlebars.register_template_string("cmd_maven_switch", CMD_MAVEN_SWITCH_TEMPLATE)?;
@@ -140,6 +172,10 @@ impl ScriptGenerationStrategy for PowerShellStrategy {
                 data["maven_home"] = json!(maven_home);
                 data["maven_bin"] = json!(format!("{}\\bin", maven_home));
             }
+            // 构建最终的 MAVEN_OPTS（合并用户设置 + local_repo + settings_file）
+            let opts_value = build_maven_opts_value(config);
+            data["has_maven_opts"] = json!(!opts_value.is_empty());
+            data["maven_opts_value"] = json!(opts_value);
         }
 
         self.template_engine.render(template_name, &data)
@@ -204,6 +240,10 @@ impl ScriptGenerationStrategy for BashStrategy {
                 data["maven_home"] = json!(maven_home);
                 data["maven_bin"] = json!(format!("{}/bin", maven_home));
             }
+            // 构建最终的 MAVEN_OPTS（合并用户设置 + local_repo + settings_file）
+            let opts_value = build_maven_opts_value(config);
+            data["has_maven_opts"] = json!(!opts_value.is_empty());
+            data["maven_opts_value"] = json!(opts_value);
         }
 
         self.template_engine.render(template_name, &data)
@@ -268,6 +308,10 @@ impl ScriptGenerationStrategy for FishStrategy {
                 data["maven_home"] = json!(maven_home);
                 data["maven_bin"] = json!(format!("{}/bin", maven_home));
             }
+            // 构建最终的 MAVEN_OPTS（合并用户设置 + local_repo + settings_file）
+            let opts_value = build_maven_opts_value(config);
+            data["has_maven_opts"] = json!(!opts_value.is_empty());
+            data["maven_opts_value"] = json!(opts_value);
         }
 
         self.template_engine.render(template_name, &data)
@@ -332,6 +376,10 @@ impl ScriptGenerationStrategy for CmdStrategy {
                 data["maven_home"] = json!(maven_home);
                 data["maven_bin"] = json!(format!("{}\\bin", maven_home));
             }
+            // 构建最终的 MAVEN_OPTS（合并用户设置 + local_repo + settings_file）
+            let opts_value = build_maven_opts_value(config);
+            data["has_maven_opts"] = json!(!opts_value.is_empty());
+            data["maven_opts_value"] = json!(opts_value);
         }
 
         self.template_engine.render(template_name, &data)
@@ -450,7 +498,7 @@ if (-not $env:_FNVA_QUIET) {
 "#;
 
 const POWERSHELL_INTEGRATION_TEMPLATE: &str = r#"
-# fnva environment setup (fnva env env --shell powershell | Out-String | Invoke-Expression)
+# fnva environment setup (fnva env --shell powershell | Out-String | Invoke-Expression)
 
 # --- Auto-restore on startup ---
 $fnvaAutoLoadDone = $false
@@ -469,11 +517,12 @@ function fnva-AutoLoadDefault {
             if ([string]::IsNullOrWhiteSpace($value)) { continue }
             $env:_FNVA_QUIET = "1"
             $envScript = (& fnva.cmd $key use $value 2>$null) -join "`n"
-            if ($envScript) { Invoke-Expression $envScript; $restored += $value }
+            if ($envScript) { Invoke-Expression $envScript; $restored += "$key $value" }
             Remove-Item Env:\_FNVA_QUIET
         }
         if ($restored.Count -gt 0) {
-            Write-Host "[fnva] restored: $($restored -join ' ')" -ForegroundColor DarkGray
+            Write-Host -NoNewline "✓ " -ForegroundColor Green
+            Write-Host "fnva active: $($restored -join ', ')"
         }
     }
 }
@@ -534,7 +583,7 @@ fi
 
 const BASH_INTEGRATION_TEMPLATE: &str = r#"
 #!/bin/bash
-# fnva environment setup (eval "$(fnva env env --shell bash)")
+# fnva environment setup (eval "$(fnva env --shell bash)")
 
 # --- Auto-restore on startup ---
 _fnva_autoload_done=false
@@ -551,10 +600,14 @@ fnva_autoload_default() {
             [[ -z "$value" ]] && continue
             _FNVA_QUIET=1 eval "$(command fnva "$key" use "$value" 2>/dev/null)" >/dev/null 2>&1
             unset _FNVA_QUIET
-            _restored="$_restored $value"
+            if [[ -z "$_restored" ]]; then
+                _restored="${key} ${value}"
+            else
+                _restored="$_restored, ${key} ${value}"
+            fi
         done < "$envs_file"
         if [[ -n "$_restored" ]]; then
-            echo "[fnva] restored:$_restored"
+            printf '\033[32m✓\033[0m fnva active: %s\n' "$_restored"
         fi
     fi
 }
@@ -612,7 +665,7 @@ $env:FNVA_ENV_TYPE = "CC"
 # Claude Code specific settings
 {{#if config.anthropic_auth_token}}
 $env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"
-$env:API_TIMEOUT_MS = "30000"
+$env:API_TIMEOUT_MS = "{{config.api_timeout_ms}}"
 {{/if}}
 
 # Verify the switch
@@ -662,7 +715,7 @@ export FNVA_ENV_TYPE="CC"
 # Claude Code specific settings
 {{#if config.anthropic_auth_token}}
 export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"
-export API_TIMEOUT_MS="30000"
+export API_TIMEOUT_MS="{{config.api_timeout_ms}}"
 {{/if}}
 
 # Verify the switch
@@ -710,7 +763,7 @@ end
 "#;
 
 const FISH_INTEGRATION_TEMPLATE: &str = r#"
-# fnva environment setup (fnva env env --shell fish | source)
+# fnva environment setup (fnva env --shell fish | source)
 
 # --- Auto-restore on startup ---
 set -g _fnva_autoload_done false
@@ -732,10 +785,10 @@ function fnva_autoload_default
             source $_t >/dev/null 2>&1
             rm -f $_t
             set -e _FNVA_QUIET
-            set -a _restored $value
+            set -a _restored "$key $value"
         end
-        if test (count $_restored) -gt 0
-            echo "[fnva] restored: "(string join ' ' $_restored)
+        if set -q _restored[1]
+            printf '\033[32m✓\033[0m fnva active: %s\n' (string join ', ' $_restored)
         end
     end
 end
@@ -787,7 +840,7 @@ set -gx FNVA_ENV_TYPE "CC"
 # Claude Code specific settings
 {{#if config.anthropic_auth_token}}
 set -gx CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC "1"
-set -gx API_TIMEOUT_MS "30000"
+set -gx API_TIMEOUT_MS "{{config.api_timeout_ms}}"
 {{/if}}
 
 # Verify the switch
@@ -893,7 +946,7 @@ set "FNVA_ENV_TYPE=CC"
 REM Claude Code specific settings
 {{#if config.anthropic_auth_token}}
 set "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1"
-set "API_TIMEOUT_MS=30000"
+set "API_TIMEOUT_MS={{config.api_timeout_ms}}"
 {{/if}}
 
 REM Verify the switch
@@ -926,6 +979,13 @@ $env:MAVEN_HOME = "{{escape_backslash maven_home}}"
 $env:M2_HOME = "{{escape_backslash maven_home}}"
 $env:PATH = "{{escape_backslash maven_bin}};" + $env:PATH
 
+# Set MAVEN_OPTS (clear previous then apply this environment's config)
+{{#if has_maven_opts}}
+$env:MAVEN_OPTS = "{{maven_opts_value}}"
+{{else}}
+Remove-Item Env:\MAVEN_OPTS -ErrorAction SilentlyContinue
+{{/if}}
+
 # Set fnva environment tracking
 $env:FNVA_CURRENT_MAVEN = "{{env_name}}"
 $env:FNVA_ENV_TYPE = "Maven"
@@ -934,6 +994,9 @@ $env:FNVA_ENV_TYPE = "Maven"
 if (-not $env:_FNVA_QUIET) {
     Write-Host "Switched to Maven environment: {{env_name}}" -ForegroundColor Green
     Write-Host "MAVEN_HOME: $env:MAVEN_HOME" -ForegroundColor Yellow
+{{#if has_maven_opts}}
+    Write-Host "MAVEN_OPTS: $env:MAVEN_OPTS" -ForegroundColor DarkYellow
+{{/if}}
     Write-Host "Maven Version:" -ForegroundColor Cyan
     try {
         & "{{escape_backslash maven_bin}}\\mvn.cmd" -v 2>&1 | ForEach-Object { Write-Host "   $_" -ForegroundColor Gray }
@@ -957,6 +1020,13 @@ export MAVEN_HOME="{{maven_home}}"
 export M2_HOME="{{maven_home}}"
 export PATH="$FNVA_MAVEN_BIN:$PATH"
 
+# Set MAVEN_OPTS (clear previous then apply this environment's config)
+{{#if has_maven_opts}}
+export MAVEN_OPTS="{{maven_opts_value}}"
+{{else}}
+unset MAVEN_OPTS
+{{/if}}
+
 # Set fnva environment tracking
 export FNVA_CURRENT_MAVEN="{{env_name}}"
 export FNVA_ENV_TYPE="Maven"
@@ -965,6 +1035,9 @@ export FNVA_ENV_TYPE="Maven"
 if [[ -z "$_FNVA_QUIET" ]]; then
     echo "Switched to Maven environment: {{env_name}}"
     echo "MAVEN_HOME: $MAVEN_HOME"
+{{#if has_maven_opts}}
+    echo "MAVEN_OPTS: $MAVEN_OPTS"
+{{/if}}
     echo "Maven Version:"
     if [ -x "{{maven_bin}}/mvn" ]; then
         "{{maven_bin}}/mvn" -v 2>&1 | head -n 1 | sed 's/^/   /'
@@ -988,6 +1061,13 @@ set -gx MAVEN_HOME "{{maven_home}}"
 set -gx M2_HOME "{{maven_home}}"
 set -gx PATH "{{maven_bin}}" $PATH
 
+# Set MAVEN_OPTS (clear previous then apply this environment's config)
+{{#if has_maven_opts}}
+set -gx MAVEN_OPTS "{{maven_opts_value}}"
+{{else}}
+set -e MAVEN_OPTS
+{{/if}}
+
 # Set fnva environment tracking
 set -gx FNVA_CURRENT_MAVEN "{{env_name}}"
 set -gx FNVA_ENV_TYPE "Maven"
@@ -996,6 +1076,9 @@ set -gx FNVA_ENV_TYPE "Maven"
 if not set -q _FNVA_QUIET
     echo "Switched to Maven environment: {{env_name}}"
     echo "MAVEN_HOME: $MAVEN_HOME"
+{{#if has_maven_opts}}
+    echo "MAVEN_OPTS: $MAVEN_OPTS"
+{{/if}}
     echo "Maven Version:"
     if test -x "{{maven_bin}}/mvn"
         "{{maven_bin}}/mvn" -v 2>&1 | head -n 1 | sed 's/^/   /'
@@ -1024,9 +1107,19 @@ if defined FNVA_MAVEN_BIN call set "PATH=%%PATH:%FNVA_MAVEN_BIN%;=%%"
 set "FNVA_MAVEN_BIN={{escape_backslash maven_bin}}"
 set "PATH=%FNVA_MAVEN_BIN%;%PATH%"
 
+REM Set MAVEN_OPTS (clear previous then apply this environment's config)
+{{#if has_maven_opts}}
+set "MAVEN_OPTS={{maven_opts_value}}"
+{{else}}
+set "MAVEN_OPTS="
+{{/if}}
+
 REM Verify the switch
 echo Switched to Maven environment: {{env_name}}
 echo MAVEN_HOME: %MAVEN_HOME%
+{{#if has_maven_opts}}
+echo MAVEN_OPTS: %MAVEN_OPTS%
+{{/if}}
 echo Maven Version:
 if exist "{{escape_backslash maven_bin}}\mvn.cmd" (
     "{{escape_backslash maven_bin}}\mvn.cmd" -v 2>&1
@@ -1083,11 +1176,19 @@ mod tests {
         let generator = ScriptGenerator::new().unwrap();
         let config = json!({"java_home": "C:\\Program Files\\Java\\jdk17", "java_bin": "C:\\Program Files\\Java\\jdk17\\bin", "env_name": "jdk17"});
         let script = generator
-            .generate_switch_script(EnvironmentType::Java, "jdk17", &config, Some(ShellType::PowerShell))
+            .generate_switch_script(
+                EnvironmentType::Java,
+                "jdk17",
+                &config,
+                Some(ShellType::PowerShell),
+            )
             .unwrap();
 
         // escape_backslash 应将单反斜杠替换为双反斜杠
-        assert!(script.contains("C:\\\\Program Files\\\\Java\\\\jdk17"), "escape_backslash helper should escape backslashes: {script}");
+        assert!(
+            script.contains("C:\\\\Program Files\\\\Java\\\\jdk17"),
+            "escape_backslash helper should escape backslashes: {script}"
+        );
     }
 
     #[test]
@@ -1097,9 +1198,15 @@ mod tests {
         let script = strategy
             .generate_switch_script(EnvironmentType::Maven, "mvn39", &config)
             .unwrap();
-        assert!(script.contains("MAVEN_HOME"), "should set MAVEN_HOME: {script}");
+        assert!(
+            script.contains("MAVEN_HOME"),
+            "should set MAVEN_HOME: {script}"
+        );
         assert!(script.contains("M2_HOME"), "should set M2_HOME: {script}");
-        assert!(script.contains("mvn39"), "should include env name: {script}");
+        assert!(
+            script.contains("mvn39"),
+            "should include env name: {script}"
+        );
         assert!(
             script.contains("packages/maven/3.9.16/bin"),
             "should derive maven_bin: {script}"

@@ -1,4 +1,4 @@
-# fnva environment setup (fnva env env --shell powershell | Out-String | Invoke-Expression)
+# fnva environment setup (fnva env --shell powershell | Out-String | Invoke-Expression)
 
 # --- Auto-restore on startup ---
 $fnvaAutoLoadDone = $false
@@ -6,16 +6,23 @@ function fnva-AutoLoadDefault {
     if ($fnvaAutoLoadDone) { return }
     $fnvaAutoLoadDone = $true
 
-    $envsFile = "$env:USERPROFILE\.fnva\current_envs.toml"
+    $envsFile = "$env:USERPROFILE\.fnva\state\current_envs.toml"
     if ((Test-Path $envsFile) -and (Get-Command fnva -ErrorAction SilentlyContinue)) {
+        $restored = @()
         $lines = Get-Content $envsFile -ErrorAction SilentlyContinue
         foreach ($line in $lines) {
             if ($line -notmatch '^\s*(\w+)\s*=\s*"([^"]*)"') { continue }
             $key = $Matches[1]
             $value = $Matches[2]
             if ([string]::IsNullOrWhiteSpace($value)) { continue }
-            $envScript = & fnva $key use $value 2>$null
-            if ($envScript) { Invoke-Expression $envScript }
+            $env:_FNVA_QUIET = "1"
+            $envScript = (& fnva.cmd $key use $value 2>$null) -join "`n"
+            if ($envScript) { Invoke-Expression $envScript; $restored += "$key $value" }
+            Remove-Item Env:\_FNVA_QUIET
+        }
+        if ($restored.Count -gt 0) {
+            Write-Host -NoNewline "✓ " -ForegroundColor Green
+            Write-Host "fnva active: $($restored -join ', ')"
         }
     }
 }

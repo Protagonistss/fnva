@@ -27,14 +27,17 @@ impl MavenInstaller {
         config: &mut Config,
         auto_switch: bool,
     ) -> Result<String, String> {
-        println!("Installing Maven {version_spec}...");
+        crate::cli::print::action(&format!("Installing maven {version_spec}"));
 
         // 检查本地是否已存在解压好的包
         if let Some(home) = Self::check_local(version_spec, config)? {
-            println!("Found local Maven package: {version_spec}");
-            println!("Using local install: {home}");
+            crate::cli::print::step("Source", "local package");
             return Self::complete_installation(
-                version_spec, config, auto_switch, &home, version_spec,
+                version_spec,
+                config,
+                auto_switch,
+                &home,
+                version_spec,
             )
             .await;
         }
@@ -45,16 +48,16 @@ impl MavenInstaller {
             .filter(|m| m.enabled)
             .map(|m| m.name.as_str())
             .collect();
-        println!("Mirrors: {}", mirror_names.join(" -> "));
+        crate::cli::print::step("Mirrors", &mirror_names.join(" -> "));
 
         let downloader = MavenDownloader::new(mirrors);
         let resolved = downloader
             .find_version_by_spec(version_spec)
             .await
             .map_err(|e| format!("{e:?}"))?;
-        println!(
-            "Resolved version: {} ({})",
-            resolved.version, resolved.display
+        crate::cli::print::step(
+            "Resolved",
+            &format!("{} ({})", resolved.version, resolved.display),
         );
 
         let platform = Platform::current();
@@ -87,8 +90,7 @@ impl MavenInstaller {
         version: &str,
     ) -> Result<String, String> {
         if let Some(existing) = config.get_maven_env(install_name) {
-            println!("Maven {version} is already installed");
-            println!("Path: {}", existing.maven_home);
+            crate::cli::print::step("Status", "Already installed");
             return Ok(existing.maven_home.clone());
         }
 
@@ -98,17 +100,20 @@ impl MavenInstaller {
             maven_home: maven_home.to_string(),
             description,
             source: EnvironmentSource::Manual,
+            maven_opts: None,
+            local_repo: None,
+            settings_file: None,
         })?;
         config.save()?;
 
-        println!("Maven {version} installed");
-        println!("Path: {maven_home}");
-
         if auto_switch {
-            let _ = config.set_current_maven_env(install_name.to_string());
-            config.save()?;
-            println!("Set current Maven to {version}");
-            println!("Run 'fnva maven use {install_name}' in a new terminal to activate");
+            crate::cli::print::step("Auto-switch", &format!("to {version}..."));
+            if let Err(e) = config.set_current_maven_env(install_name.to_string()) {
+                crate::cli::print::warn(&format!("Auto-switch failed: {e}"));
+            } else {
+                config.save()?;
+                crate::cli::print::step("Status", &format!("Switched to maven {version}"));
+            }
         }
 
         Ok(maven_home.to_string())
@@ -139,8 +144,8 @@ impl MavenInstaller {
             return Err("Only fnva-managed Maven installations can be uninstalled".to_string());
         }
 
-        println!("Uninstalling Maven {version_name}...");
-        println!("Removing: {}", maven_env.maven_home);
+        crate::cli::print::action(&format!("Uninstalling maven {version_name}"));
+        crate::cli::print::step("Removing", &maven_env.maven_home);
         fs::remove_dir_all(&maven_env.maven_home)
             .map_err(|e| format!("Failed to remove install dir: {e}"))?;
         config.remove_maven_env(version_name)?;
@@ -160,7 +165,7 @@ impl MavenInstaller {
             config.current_maven_env = None;
         }
         config.save()?;
-        println!("Maven {version_name} uninstalled");
+        crate::cli::print::success(&format!("maven {version_name} uninstalled"));
         Ok(())
     }
 }

@@ -88,12 +88,27 @@ impl EnvironmentManager for MavenEnvironmentManager {
         if !validate_maven_home(maven_home) {
             return Err("Invalid Maven installation".to_string());
         }
+        let maven_opts = cfg
+            .get("maven_opts")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        let local_repo = cfg
+            .get("local_repo")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        let settings_file = cfg
+            .get("settings_file")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
         let mut config = Config::load()?;
         config.add_maven_env(MavenEnvironment {
             name: name.to_string(),
             maven_home: maven_home.to_string(),
             description: format!("Maven ({maven_home})"),
             source: EnvironmentSource::Manual,
+            maven_opts,
+            local_repo,
+            settings_file,
         })?;
         config.save()?;
         self.load_from_config()?;
@@ -123,7 +138,12 @@ impl EnvironmentManager for MavenEnvironmentManager {
             return Err(format!("Invalid MAVEN_HOME: {}", env.maven_home));
         }
         let shell_type = shell_type.unwrap_or_else(detect_shell);
-        let config = serde_json::json!({ "maven_home": env.maven_home });
+        let config = serde_json::json!({
+            "maven_home": env.maven_home,
+            "maven_opts": env.maven_opts,
+            "local_repo": env.local_repo,
+            "settings_file": env.settings_file,
+        });
         let generator = ScriptGenerator::new().map_err(|e| e.to_string())?;
         generator
             .generate_switch_script(EnvironmentType::Maven, name, &config, Some(shell_type))
@@ -162,5 +182,66 @@ impl EnvironmentManager for MavenEnvironmentManager {
 
     fn get_details(&self, name: &str) -> Result<Option<DynEnvironment>, String> {
         self.get(name)
+    }
+}
+
+impl MavenEnvironmentManager {
+    /// 修改已有 Maven 环境的可选变量配置。
+    /// 传 `Some("")` 表示清除该字段，`None` 表示保持不变。
+    pub fn set_env_vars(
+        &mut self,
+        name: &str,
+        maven_opts: Option<Option<String>>,
+        local_repo: Option<Option<String>>,
+        settings_file: Option<Option<String>>,
+    ) -> Result<(), String> {
+        let mut config = Config::load()?;
+        let env = config
+            .maven_environments
+            .iter_mut()
+            .find(|e| e.name == name)
+            .ok_or_else(|| format!("Maven environment '{name}' not found"))?;
+
+        if let Some(v) = maven_opts {
+            env.maven_opts = v.filter(|s| !s.is_empty());
+        }
+        if let Some(v) = local_repo {
+            env.local_repo = v.filter(|s| !s.is_empty());
+        }
+        if let Some(v) = settings_file {
+            env.settings_file = v.filter(|s| !s.is_empty());
+        }
+        config.save()?;
+        self.load_from_config()?;
+        Ok(())
+    }
+
+    /// 以可读格式输出某个 Maven 环境的完整配置。
+    pub fn show_env(&self, name: &str) -> Result<String, String> {
+        let config = Config::load()?;
+        let env = config
+            .maven_environments
+            .iter()
+            .find(|e| e.name == name)
+            .ok_or_else(|| format!("Maven environment '{name}' not found"))?;
+
+        let mut lines = vec![
+            format!("Name        : {}", env.name),
+            format!("MAVEN_HOME  : {}", env.maven_home),
+            format!("Description : {}", env.description),
+        ];
+        match &env.maven_opts {
+            Some(v) => lines.push(format!("MAVEN_OPTS  : {v}")),
+            None => lines.push("MAVEN_OPTS  : (not set)".to_string()),
+        }
+        match &env.local_repo {
+            Some(v) => lines.push(format!("local_repo  : {v}")),
+            None => lines.push("local_repo  : (not set, uses ~/.m2/repository)".to_string()),
+        }
+        match &env.settings_file {
+            Some(v) => lines.push(format!("settings    : {v}")),
+            None => lines.push("settings    : (not set, uses default)".to_string()),
+        }
+        Ok(lines.join("\n"))
     }
 }

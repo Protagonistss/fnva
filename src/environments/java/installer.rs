@@ -1,8 +1,10 @@
+use super::downloader::JavaDownloader;
 use crate::config::Config;
 use crate::infrastructure::installer::generic;
 use crate::infrastructure::remote::platform::Platform;
-use super::downloader::JavaDownloader;
-use crate::infrastructure::tool_protocol::{AssetModel, ResolvedVersion, ToolDescriptor, ToolDownloader};
+use crate::infrastructure::tool_protocol::{
+    AssetModel, ResolvedVersion, ToolDescriptor, ToolDownloader,
+};
 use std::fs;
 use std::path::Path;
 
@@ -26,24 +28,32 @@ impl JavaInstaller {
         config: &mut Config,
         auto_switch: bool,
     ) -> Result<String, String> {
-        println!("Installing Java {version_spec}...");
+        crate::cli::print::action(&format!("Installing java {version_spec}"));
 
         if let Ok(java_home) = Self::check_local_java_package(version_spec, config) {
-            println!("Found local Java package: {version_spec}");
-            println!("Using local install: {java_home}");
+            crate::cli::print::step("Source", "local package");
             return Self::complete_installation_simple(
-                version_spec, config, auto_switch, &java_home, "local", "local",
-            ).await;
+                version_spec,
+                config,
+                auto_switch,
+                &java_home,
+                "local",
+                "local",
+            )
+            .await;
         }
 
         let mirrors = config.mirrors.java.clone();
-        let mirror_names: Vec<&str> = mirrors.iter().filter(|m| m.enabled).map(|m| m.name.as_str()).collect();
-        println!("Mirrors: {}", mirror_names.join(" -> "));
+        let mirror_names: Vec<&str> = mirrors
+            .iter()
+            .filter(|m| m.enabled)
+            .map(|m| m.name.as_str())
+            .collect();
+        crate::cli::print::step("Mirrors", &mirror_names.join(" -> "));
 
         let downloader = JavaDownloader::new(mirrors);
-        let res = Self::install_with_downloader(
-            &downloader, version_spec, config, auto_switch,
-        ).await;
+        let res =
+            Self::install_with_downloader(&downloader, version_spec, config, auto_switch).await;
 
         match res {
             Ok(java_home) => Ok(java_home),
@@ -59,12 +69,17 @@ impl JavaInstaller {
     ) -> Result<String, String> {
         let resolved = match downloader.find_version_by_spec(version_spec).await {
             Ok(version) => {
-                println!("Resolved version: {} ({})", version.version, version.display);
+                crate::cli::print::step(
+                    "Resolved",
+                    &format!("{} ({})", version.version, version.display),
+                );
                 version
             }
             Err(_) => {
-                println!("Cannot resolve '{version_spec}', using latest...");
-                downloader.list_available_versions().await
+                crate::cli::print::step("Resolved", "using latest...");
+                downloader
+                    .list_available_versions()
+                    .await
                     .map_err(|e| format!("{e:?}"))?
                     .into_iter()
                     .next()
@@ -73,10 +88,17 @@ impl JavaInstaller {
         };
 
         let platform = Platform::current();
-        let java_home = Self::download_and_install(downloader, &resolved, &platform, version_spec).await?;
+        let java_home =
+            Self::download_and_install(downloader, &resolved, &platform, version_spec).await?;
         Self::complete_installation_simple(
-            version_spec, config, auto_switch, &java_home, &resolved.version, &resolved.display,
-        ).await
+            version_spec,
+            config,
+            auto_switch,
+            &java_home,
+            &resolved.version,
+            &resolved.display,
+        )
+        .await
     }
 
     /// 完成安装流程（简单下载器）
@@ -92,8 +114,7 @@ impl JavaInstaller {
 
         // Already installed - return success with info message
         if let Some(existing) = config.get_java_env(&install_name) {
-            println!("Java {version} is already installed");
-            println!("Path: {}", existing.java_home);
+            crate::cli::print::step("Status", "Already installed");
             return Ok(existing.java_home.clone());
         }
 
@@ -106,15 +127,12 @@ impl JavaInstaller {
         })?;
         config.save()?;
 
-        println!("Java {version} installed");
-        println!("Path: {java_home}");
-
         if auto_switch {
-            println!("Auto-switching to Java {version}...");
+            crate::cli::print::step("Auto-switch", &format!("to {version}..."));
             if let Err(e) = Self::switch_to_java(&install_name, config) {
-                println!("Auto-switch failed: {e}");
+                crate::cli::print::warn(&format!("Auto-switch failed: {e}"));
             } else {
-                println!("Switched to Java {version}");
+                crate::cli::print::step("Status", &format!("Switched to java {version}"));
             }
         }
 
@@ -127,7 +145,8 @@ impl JavaInstaller {
         platform: &Platform,
         env_name: &str,
     ) -> Result<String, String> {
-        generic::download_and_install(downloader, version, platform, env_name, &JAVA_DESCRIPTOR).await
+        generic::download_and_install(downloader, version, platform, env_name, &JAVA_DESCRIPTOR)
+            .await
     }
 
     /// 查找已安装的 Java 目录
@@ -147,7 +166,8 @@ impl JavaInstaller {
         }
 
         // 搜索子目录（Windows .zip 和 Linux tar.gz 均可能有子目录）
-        for entry in fs::read_dir(install_dir).map_err(|e| format!("Failed to read install dir: {e}"))?
+        for entry in
+            fs::read_dir(install_dir).map_err(|e| format!("Failed to read install dir: {e}"))?
         {
             let entry = entry.map_err(|e| format!("Failed to read dir entry: {e}"))?;
             let path = entry.path();
@@ -184,7 +204,10 @@ impl JavaInstaller {
             return Err(format!("Invalid JAVA_HOME: {}", java_env.java_home));
         }
 
-        println!("Switching to Java: {} ({})", version_name, java_env.java_home);
+        println!(
+            "Switching to Java: {} ({})",
+            version_name, java_env.java_home
+        );
         println!("Run 'fnva java use {version_name}' in a new terminal to activate");
 
         Ok(())
@@ -249,9 +272,7 @@ impl JavaInstaller {
         let total_versions: usize = versions.len();
         let lts_count: usize = versions.iter().filter(|v| v.is_lts).count();
         result.push("".to_string());
-        result.push(format!(
-            "Total: {total_versions} versions, {lts_count} LTS"
-        ));
+        result.push(format!("Total: {total_versions} versions, {lts_count} LTS"));
 
         Ok(result)
     }
@@ -269,8 +290,8 @@ impl JavaInstaller {
             return Err("Only fnva-managed Java installations can be uninstalled".to_string());
         }
 
-        println!("Uninstalling Java {version_name}...");
-        println!("Removing: {java_home}");
+        crate::cli::print::action(&format!("Uninstalling java {version_name}"));
+        crate::cli::print::step("Removing", java_home);
 
         // 删除安装目录
         fs::remove_dir_all(java_home).map_err(|e| format!("Failed to remove install dir: {e}"))?;
@@ -289,7 +310,7 @@ impl JavaInstaller {
 
         config.save()?;
 
-        println!("Java {version_name} uninstalled");
+        crate::cli::print::success(&format!("java {version_name} uninstalled"));
         Ok(())
     }
 

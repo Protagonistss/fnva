@@ -68,7 +68,9 @@ fn classify_error(error: &str, status_code: Option<u16>) -> ErrorType {
     if let Some(code) = status_code {
         match code {
             404 | 403 | 401 => {
-                return ErrorType::Permanent(format!("Resource not found or access denied (HTTP {code})"))
+                return ErrorType::Permanent(format!(
+                    "Resource not found or access denied (HTTP {code})"
+                ))
             }
             500..=599 => return ErrorType::Transient(format!("Server error (HTTP {code})")),
             _ => {}
@@ -166,11 +168,14 @@ pub async fn download_to_bytes_with_options(
             Ok(data) => {
                 if let Some(expected) = &options.expected_sha256 {
                     if let Err(e) = verify_sha256(&data, expected) {
-                        println!(
-                            "Checksum verification failed (attempt {}/{}): {}",
-                            attempts,
-                            options.retry_count + 1,
-                            e
+                        crate::cli::print::step(
+                            "Error",
+                            &format!(
+                                "Checksum verification failed (attempt {}/{}): {}",
+                                attempts,
+                                options.retry_count + 1,
+                                e
+                            ),
                         );
                         if attempts > options.retry_count {
                             return Err(format!(
@@ -182,7 +187,7 @@ pub async fn download_to_bytes_with_options(
                         tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
                         continue;
                     }
-                    println!("SHA256 checksum verified");
+                    crate::cli::print::step("Status", "SHA256 checksum verified");
                 }
                 return Ok(data);
             }
@@ -260,7 +265,9 @@ async fn download_to_bytes_internal(
 
     let status = response.status();
     if !status.is_success() {
-        return Err(format!("Server returned status code: {status} (URL: {url})"));
+        return Err(format!(
+            "Server returned status code: {status} (URL: {url})"
+        ));
     }
 
     let total_size = response.content_length().unwrap_or(0);
@@ -323,7 +330,7 @@ pub async fn download_to_file_with_options(
                         tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
                         continue;
                     }
-                    println!("File SHA256 checksum verified");
+                    crate::cli::print::step("Status", "File SHA256 checksum verified");
                 }
                 return Ok(());
             }
@@ -409,7 +416,9 @@ async fn download_to_file_internal(
 
     let status = response.status();
     if !status.is_success() {
-        return Err(format!("Server returned status code: {status} (URL: {url})"));
+        return Err(format!(
+            "Server returned status code: {status} (URL: {url})"
+        ));
     }
 
     let total_size = response.content_length().unwrap_or(0);

@@ -10,13 +10,13 @@ async fn main() {
     let mut handler = match CommandHandler::new() {
         Ok(handler) => handler,
         Err(e) => {
-            eprintln!("{e}");
+            fnva::cli::print::failure("Initialization failed", Some(&e));
             process::exit(1);
         }
     };
 
     if let Err(e) = handler.handle_command(cli.command).await {
-        eprintln!("{e}");
+        fnva::cli::print::failure("Command failed", Some(&e));
         process::exit(1);
     }
 }

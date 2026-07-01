@@ -26,7 +26,7 @@ impl CcEnvironmentManager {
 
         // 从配置文件加载 CC 环境
         if let Err(e) = manager.load_from_config() {
-            eprintln!("Warning: Failed to load CC environments from config: {e}");
+            crate::cli::print::warn(&format!("Failed to load CC environments from config: {e}"));
         }
 
         manager
@@ -47,6 +47,8 @@ impl CcEnvironmentManager {
                 opus_model: env.opus_model.clone(),
                 haiku_model: env.haiku_model.clone(),
                 description: env.description.clone(),
+                api_timeout_ms: env.api_timeout_ms.clone(),
+                extra_env: env.extra_env.clone(),
             };
 
             self.environments.insert(env.name.clone(), cc_env);
@@ -111,7 +113,7 @@ impl EnvironmentManager for CcEnvironmentManager {
             .get("sonnet_model")
             .or_else(|| config.get("model"))
             .and_then(|v| v.as_str())
-            .unwrap_or("claude-3-sonnet-20240229");
+            .unwrap_or("claude-sonnet-4-5");
 
         let opus_model = config.get("opus_model").and_then(|v| v.as_str());
         let haiku_model = config.get("haiku_model").and_then(|v| v.as_str());
@@ -132,6 +134,11 @@ impl EnvironmentManager for CcEnvironmentManager {
             sonnet_model: sonnet_model.to_string(),
             opus_model: opus_model.map(String::from),
             haiku_model: haiku_model.map(String::from),
+            api_timeout_ms: config
+                .get("api_timeout_ms")
+                .and_then(|v| v.as_str())
+                .map(String::from),
+            extra_env: std::collections::HashMap::new(),
         };
 
         // 持久化到配置文件
@@ -148,6 +155,11 @@ impl EnvironmentManager for CcEnvironmentManager {
             existing.description = description.to_string();
             existing.opus_model = opus_model.map(String::from);
             existing.haiku_model = haiku_model.map(String::from);
+            existing.api_timeout_ms = config
+                .get("api_timeout_ms")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            // extra_env is preserved as-is; CLI add/update does not touch it
         } else {
             file_config.cc_environments.push(cc_environment.clone());
         }
@@ -181,7 +193,7 @@ impl EnvironmentManager for CcEnvironmentManager {
     fn use_env(&mut self, name: &str, shell_type: Option<ShellType>) -> Result<String, String> {
         // 重新加载配置以获取最新的设置
         if let Err(e) = self.load_from_config() {
-            eprintln!("Warning: Failed to reload CC config: {e}");
+            crate::cli::print::warn(&format!("Failed to reload CC config: {e}"));
         }
 
         let cc_env = self
@@ -201,22 +213,28 @@ impl EnvironmentManager for CcEnvironmentManager {
 
         // Add CC-specific environment variables
         if cc_env.provider == "anthropic" {
-            // For CC environments, always use Anthropic variables
-            let auth_token = if cc_env.api_key.starts_with("${") {
-                cc_env.resolve_env_var(&cc_env.api_key)
-            } else {
-                cc_env.api_key.clone()
-            };
-
-            let base_url = if cc_env.base_url.starts_with("${") {
+            // Preserve ${VAR} references as-is so the shell expands them at runtime.
+            // Only resolve when the value is a literal (no ${...} wrapper) to set
+            // ANTHROPIC_BASE_URL correctly while keeping the API key unexpanded.
+            let auth_token_raw = &cc_env.api_key;
+            let base_url_resolved = if cc_env.base_url.starts_with("${") {
                 cc_env.resolve_env_var(&cc_env.base_url)
             } else {
                 cc_env.base_url.clone()
             };
 
-            config["anthropic_auth_token"] = serde_json::Value::String(auth_token);
-            config["anthropic_base_url"] = serde_json::Value::String(base_url);
-            config["api_timeout_ms"] = serde_json::Value::String("3000000".to_string());
+            // Pass the raw (possibly ${VAR}) token so templates emit the reference,
+            // not the plaintext secret.
+            config["anthropic_auth_token"] = serde_json::Value::String(auth_token_raw.clone());
+            config["anthropic_base_url"] = serde_json::Value::String(base_url_resolved);
+
+            // Use configured timeout or default 3000000 ms (50 min) for long CC requests
+            let timeout_ms = cc_env
+                .api_timeout_ms
+                .as_deref()
+                .unwrap_or("3000000")
+                .to_string();
+            config["api_timeout_ms"] = serde_json::Value::String(timeout_ms);
             config["claude_code_disable_nonessential_traffic"] =
                 serde_json::Value::Number(serde_json::Number::from(1));
 
@@ -232,6 +250,12 @@ impl EnvironmentManager for CcEnvironmentManager {
 
                 // Add default_model for template compatibility
                 config["default_model"] = serde_json::Value::String(sonnet_model.clone());
+            }
+
+            // Merge extra_env entries into config so templates can render them
+            for (k, v) in &cc_env.extra_env {
+                // Use lowercase key for template lookup consistency
+                config[k.to_lowercase()] = serde_json::Value::String(v.clone());
             }
         }
 
@@ -283,10 +307,12 @@ impl EnvironmentManager for CcEnvironmentManager {
                 description: "Detected CC environment from system variables".to_string(),
                 api_key: auth_token,
                 base_url,
-                sonnet_model: std::env::var("ANTHROPIC_MODEL")
-                    .unwrap_or_else(|_| "claude-3-sonnet-20240229".to_string()),
+                sonnet_model: std::env::var("ANTHROPIC_DEFAULT_SONNET_MODEL")
+                    .unwrap_or_else(|_| "claude-sonnet-4-5".to_string()),
                 opus_model: None,
                 haiku_model: None,
+                api_timeout_ms: None,
+                extra_env: std::collections::HashMap::new(),
             };
             result.push(DynEnvironment {
                 name: cc_env.name.clone(),

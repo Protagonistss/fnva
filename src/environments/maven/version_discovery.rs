@@ -42,8 +42,7 @@ impl MirrorDirectoryDiscovery {
     }
 
     fn cache_path() -> Result<std::path::PathBuf, DiscoveryError> {
-        crate::infrastructure::paths::maven_versions_path()
-            .map_err(DiscoveryError::Io)
+        crate::infrastructure::paths::maven_versions_path().map_err(DiscoveryError::Io)
     }
 
     /// 手写扫描目录 HTML,提取 `href="X.Y.Z/"` 形态的纯数字版本号。
@@ -54,10 +53,8 @@ impl MirrorDirectoryDiscovery {
         let mut rest = html;
         while let Some(pos) = rest.find("href=\"") {
             rest = &rest[pos + 6..]; // skip `href="`
-            // 候选版本号:读到 `"` 或 `/`
-            let end = rest
-                .find(['"', '/'])
-                .unwrap_or(rest.len());
+                                     // 候选版本号:读到 `"` 或 `/`
+            let end = rest.find(['"', '/']).unwrap_or(rest.len());
             let candidate = &rest[..end];
             if Self::is_numeric_version(candidate) {
                 let c = candidate.to_string();
@@ -141,7 +138,9 @@ impl MirrorDirectoryDiscovery {
         let arr = parsed
             .get("versions")
             .and_then(|v| v.as_array())
-            .ok_or_else(|| DiscoveryError::Parse("no versions array in maven_versions.toml".into()))?;
+            .ok_or_else(|| {
+                DiscoveryError::Parse("no versions array in maven_versions.toml".into())
+            })?;
         let mut vs: Vec<String> = arr
             .iter()
             .filter_map(|v| v.as_str().map(String::from))
@@ -180,7 +179,8 @@ fn make_resolved(version: &str) -> ResolvedVersion {
 impl VersionDiscovery for MirrorDirectoryDiscovery {
     fn list(
         &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<ResolvedVersion>, DiscoveryError>> + Send + '_>> {
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<ResolvedVersion>, DiscoveryError>> + Send + '_>>
+    {
         Box::pin(async {
             let versions = self.load_versions().await?;
             Ok(versions.iter().map(|v| make_resolved(v)).collect())
@@ -218,9 +218,7 @@ impl VersionDiscovery for MirrorDirectoryDiscovery {
     }
 
     fn refresh(&self) -> Pin<Box<dyn Future<Output = Result<(), DiscoveryError>> + Send + '_>> {
-        Box::pin(async {
-            self.fetch_and_cache().await.map(|_| ())
-        })
+        Box::pin(async { self.fetch_and_cache().await.map(|_| ()) })
     }
 }
 

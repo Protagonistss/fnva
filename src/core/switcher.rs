@@ -114,7 +114,7 @@ impl EnvironmentSwitcher {
         // Persist to current_envs.toml for shell hook auto-restore
         {
             if let Err(e) = CurrentEnvsFile::write(env_type, name) {
-                eprintln!("Warning: Failed to update current_envs.toml: {e}");
+                crate::cli::print::warn(&format!("Failed to update current_envs.toml: {e}"));
             }
         }
 
@@ -165,20 +165,22 @@ impl EnvironmentSwitcher {
         // 格式化输出
         match output_format {
             OutputFormat::Text => {
-                let mut output = String::new();
-                if environments.is_empty() {
-                    output.push_str(&format!("No {env_type} environments found\n"));
-                } else {
-                    output.push_str(&format!("Available {env_type} environments:\n"));
-                    for env in environments {
-                        let name = env.name.clone();
-                        let description = env.description.clone().unwrap_or_default();
-                        let is_current = current_env.as_ref() == Some(&name);
-                        let marker = if is_current { " (current)" } else { "" };
-                        output.push_str(&format!("  {name}{marker}: {description}\n"));
-                    }
+                use crate::cli::print::{format_envs, EnvItem};
+                let mut items = Vec::new();
+                for env in environments {
+                    let name = env.name.clone();
+                    let description = env.description.clone().unwrap_or_default();
+                    let is_current = current_env.as_ref() == Some(&name);
+
+                    items.push(EnvItem {
+                        name,
+                        description,
+                        extra: None, // Simplified for list_environments
+                        is_current,
+                        is_default: false,
+                    });
                 }
-                Ok(output)
+                Ok(format_envs(&items))
             }
             OutputFormat::Json => {
                 let json_output = serde_json::json!({
@@ -257,7 +259,7 @@ impl EnvironmentSwitcher {
                             message: format!("Failed to clear current environment: {e}"),
                         })?;
                     if let Err(e) = CurrentEnvsFile::clear(env_type) {
-                        eprintln!("Warning: Failed to clear current_envs.toml: {e}");
+                        crate::cli::print::warn(&format!("Failed to clear current_envs.toml: {e}"));
                     }
                 }
             }
@@ -425,23 +427,17 @@ impl EnvironmentSwitcher {
             }
         };
 
-        let mut output = String::new();
-        if history.is_empty() {
-            output.push_str("No switch history found\n");
-        } else {
-            output.push_str("Recent environment switches:\n");
-            for record in history {
-                output.push_str(&format!(
-                    "{} {} -> {} ({})\n",
-                    record.timestamp.format("%Y-%m-%d %H:%M:%S"),
-                    record.old_env.as_deref().unwrap_or("None"),
-                    record.new_env,
-                    record.env_type
-                ));
-            }
+        use crate::cli::print::{format_history, HistoryItem};
+        let mut items = Vec::new();
+        for record in history {
+            items.push(HistoryItem {
+                timestamp: record.timestamp.format("%Y-%m-%d %H:%M").to_string(),
+                env_type: format!("{}", record.env_type),
+                from: record.old_env.clone(),
+                to: record.new_env.clone(),
+            });
         }
-
-        Ok(output)
+        Ok(format_history(&items))
     }
 
     /// 设置默认环境
@@ -628,50 +624,38 @@ impl EnvironmentSwitcher {
         // 格式化输出
         match output_format {
             OutputFormat::Text => {
-                let mut output = String::new();
-                if environments.is_empty() {
-                    output.push_str(&format!("No {env_type} environments found\n"));
-                } else {
-                    output.push_str(&format!("Available {env_type} environments:\n"));
-                    for env in environments {
-                        let name = env.name.clone();
-                        let description = env.description.clone().unwrap_or_default();
-                        let is_current = current_env.as_ref() == Some(&name);
-                        let is_default = default_env.as_ref() == Some(&name);
+                use crate::cli::print::{format_envs, EnvItem};
+                let mut items = Vec::new();
+                for env in environments {
+                    let name = env.name.clone();
+                    let description = env.description.clone().unwrap_or_default();
+                    let is_current = current_env.as_ref() == Some(&name);
+                    let is_default = default_env.as_ref() == Some(&name);
 
-                        let mut markers = Vec::new();
-                        if is_current {
-                            markers.push("current");
-                        }
-                        if is_default {
-                            markers.push("default");
-                        }
-                        let marker_str = if markers.is_empty() {
-                            String::new()
-                        } else {
-                            format!(" ({})", markers.join(", "))
-                        };
-
-                        // 显示环境信息，对于 CC 环境显示模型
-                        let env_info = if env_type == EnvironmentType::Cc {
-                            if let Some(model) = &env.version {
-                                if !model.is_empty() {
-                                    format!(" - {model}")
-                                } else {
-                                    String::new()
-                                }
+                    // 显示环境信息，对于 CC 环境显示模型
+                    let extra = if env_type == EnvironmentType::Cc {
+                        if let Some(model) = &env.version {
+                            if !model.is_empty() {
+                                Some(model.clone())
                             } else {
-                                String::new()
+                                None
                             }
                         } else {
-                            String::new()
-                        };
+                            None
+                        }
+                    } else {
+                        None
+                    };
 
-                        output
-                            .push_str(&format!("  {name}{marker_str}: {description}{env_info}\n"));
-                    }
+                    items.push(EnvItem {
+                        name,
+                        description,
+                        extra,
+                        is_current,
+                        is_default,
+                    });
                 }
-                Ok(output)
+                Ok(format_envs(&items))
             }
             OutputFormat::Json => {
                 use serde_json;
@@ -681,7 +665,7 @@ impl EnvironmentSwitcher {
                     "default": default_env,
                     "environments": environments
                 });
-                Ok(safe_to_json_pretty(&json_output)?)
+                Ok(crate::error::safe_to_json_pretty(&json_output)?)
             }
         }
     }

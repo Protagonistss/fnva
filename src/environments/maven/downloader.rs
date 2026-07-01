@@ -31,7 +31,8 @@ impl MavenDownloader {
 impl ToolDownloader for MavenDownloader {
     fn list_available_versions(
         &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<ResolvedVersion>, DownloadError>> + Send + '_>> {
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<ResolvedVersion>, DownloadError>> + Send + '_>>
+    {
         Box::pin(async {
             self.discovery
                 .list()
@@ -81,11 +82,10 @@ impl ToolDownloader for MavenDownloader {
                 .resolve(&vars)
                 .await
                 .map_err(|e| DownloadError::from(e.to_string()))?;
-            println!("Downloading Maven {version_str}...");
-            println!("URL: {url}");
+            crate::cli::print::step("Source", &url);
 
-            let cache_dir = crate::infrastructure::paths::downloads_dir()
-                .map_err(DownloadError::Io)?;
+            let cache_dir =
+                crate::infrastructure::paths::downloads_dir().map_err(DownloadError::Io)?;
             tokio::fs::create_dir_all(&cache_dir)
                 .await
                 .map_err(|e| DownloadError::Io(format!("Failed to create cache directory: {e}")))?;
@@ -96,10 +96,13 @@ impl ToolDownloader for MavenDownloader {
 
             if let Ok(metadata) = tokio::fs::metadata(&file_path).await {
                 if metadata.len() > 0 {
-                    println!("Using cached file ({} MB)", metadata.len() / (1024 * 1024));
-                    let canonical = file_path
-                        .canonicalize()
-                        .map_err(|e| DownloadError::Io(format!("Path canonicalization failed: {e}")))?;
+                    crate::cli::print::step(
+                        "Status",
+                        &format!("Using cached file ({} MB)", metadata.len() / (1024 * 1024)),
+                    );
+                    let canonical = file_path.canonicalize().map_err(|e| {
+                        DownloadError::Io(format!("Path canonicalization failed: {e}"))
+                    })?;
                     return Ok(DownloadTarget::File(
                         canonical
                             .to_str()
@@ -119,7 +122,10 @@ impl ToolDownloader for MavenDownloader {
                 .await
                 .map_err(|e| DownloadError::Io(format!("Failed to get file size: {e}")))?
                 .len();
-            println!("Download complete ({} MB)", file_size / (1024 * 1024));
+            crate::cli::print::step(
+                "Status",
+                &format!("Download complete ({} MB)", file_size / (1024 * 1024)),
+            );
 
             let canonical = file_path
                 .canonicalize()

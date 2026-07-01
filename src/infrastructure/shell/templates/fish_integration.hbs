@@ -1,4 +1,4 @@
-# fnva environment setup (fnva env env --shell fish | source)
+# fnva environment setup (fnva env --shell fish | source)
 
 # --- Auto-restore on startup ---
 set -g _fnva_autoload_done false
@@ -6,7 +6,7 @@ function fnva_autoload_default
     if test $_fnva_autoload_done = true; return; end
     set -g _fnva_autoload_done true
 
-    set envs_file "$HOME/.fnva/current_envs.toml"
+    set envs_file "$HOME/.fnva/state/current_envs.toml"
     if test -f "$envs_file"; and command -v fnva >/dev/null 2>&1
         set _restored ""
         for line in (cat "$envs_file")
@@ -20,10 +20,11 @@ function fnva_autoload_default
             source $_t >/dev/null 2>&1
             rm -f $_t
             set -e _FNVA_QUIET
-            set _restored "$_restored $value"
+            set -a _restored "$key $value"
         end
-        if test -n "$_restored"
-            echo "[fnva] restored:$_restored"
+        if set -q _restored[1]
+            printf '\033[32m✓\033[0m fnva active: %s\n' (string join ', ' $_restored)
+        end
         end
     end
 end

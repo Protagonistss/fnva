@@ -79,8 +79,7 @@ fn install_archive(
     env_name: &str,
     descriptor: &ToolDescriptor,
 ) -> Result<String, String> {
-    let fnva_dir = crate::infrastructure::paths::fnva_dir()?
-        .join(descriptor.install_subdir);
+    let fnva_dir = crate::infrastructure::paths::fnva_dir()?.join(descriptor.install_subdir);
 
     fs::create_dir_all(&fnva_dir).map_err(|e| format!("Failed to create install dir: {e}"))?;
 

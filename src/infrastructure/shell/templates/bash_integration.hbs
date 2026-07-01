@@ -1,5 +1,5 @@
 #!/bin/bash
-# fnva environment setup (eval "$(fnva env env --shell bash)")
+# fnva environment setup (eval "$(fnva env --shell bash)")
 
 # --- Auto-restore on startup ---
 _fnva_autoload_done=false
@@ -7,7 +7,7 @@ fnva_autoload_default() {
     if [[ $_fnva_autoload_done == "true" ]]; then return; fi
     _fnva_autoload_done=true
 
-    local envs_file="$HOME/.fnva/current_envs.toml"
+    local envs_file="$HOME/.fnva/state/current_envs.toml"
     if [[ -f "$envs_file" ]] && command -v fnva >/dev/null 2>&1; then
         local _restored=""
         while IFS='=' read -r key value; do
@@ -16,10 +16,14 @@ fnva_autoload_default() {
             [[ -z "$value" ]] && continue
             _FNVA_QUIET=1 eval "$(command fnva "$key" use "$value" 2>/dev/null)" >/dev/null 2>&1
             unset _FNVA_QUIET
-            _restored="$_restored $value"
+            if [[ -z "$_restored" ]]; then
+                _restored="${key} ${value}"
+            else
+                _restored="$_restored, ${key} ${value}"
+            fi
         done < "$envs_file"
         if [[ -n "$_restored" ]]; then
-            echo "[fnva] restored:$_restored"
+            printf '\033[32m✓\033[0m fnva active: %s\n' "$_restored"
         fi
     fi
 }

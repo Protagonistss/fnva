@@ -47,7 +47,7 @@ impl ShellIntegration {
             CMD: fnva-env.bat {}\n\
             \n\
             Tip: install shell integration for a better experience:\n\
-            fnva env shell-integration",
+            fnva env",
             powershell_script.display(),
             batch_script.display(),
             env_name,
@@ -274,7 +274,7 @@ if (Test-Path $fnvaScript) {
     Write-Host "fnva environment switching loaded" -ForegroundColor Green
     Write-Host "Use 'fnva java use jdk21' to switch Java environments" -ForegroundColor Cyan
 } else {
-    Write-Warning "fnva environment script not found; run: fnva env shell-integration"
+    Write-Warning "fnva environment script not found; run: fnva env"
 }"#
         .to_string();
 
@@ -299,7 +299,7 @@ if exist "%fnvaScript%" (
     echo fnva environment switching loaded
     echo Use 'fnva java use jdk21' to switch Java environments
 ) else (
-    echo Warning: fnva environment script not found; run: fnva env shell-integration
+    echo Warning: fnva environment script not found; run: fnva env
 )"#
         .to_string();
 

@@ -35,12 +35,21 @@ impl JavaDownloader {
             "tar.gz"
         }
     }
+
+    /// Force re-fetch the remote version cache.
+    pub async fn refresh(&self) -> Result<(), DownloadError> {
+        self.discovery
+            .refresh()
+            .await
+            .map_err(|e| DownloadError::from(format!("{e}")))
+    }
 }
 
 impl ToolDownloader for JavaDownloader {
     fn list_available_versions(
         &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<ResolvedVersion>, DownloadError>> + Send + '_>> {
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<ResolvedVersion>, DownloadError>> + Send + '_>>
+    {
         Box::pin(async {
             self.discovery
                 .list()
@@ -93,8 +102,7 @@ impl ToolDownloader for JavaDownloader {
                 .resolve(&vars)
                 .await
                 .map_err(|e| DownloadError::from(e.to_string()))?;
-            println!("Downloading Java {version_str}...");
-            println!("URL: {url}");
+            crate::cli::print::step("Source", &url);
 
             let cache_dir = crate::infrastructure::paths::downloads_dir()
                 .map_err(|e| DownloadError::Io(format!("Cannot get downloads dir: {e}")))?;
@@ -108,10 +116,13 @@ impl ToolDownloader for JavaDownloader {
 
             if let Ok(metadata) = tokio::fs::metadata(&file_path).await {
                 if metadata.len() > 0 {
-                    println!("Using cached file ({} MB)", metadata.len() / (1024 * 1024));
-                    let canonical = file_path
-                        .canonicalize()
-                        .map_err(|e| DownloadError::Io(format!("Path canonicalization failed: {e}")))?;
+                    crate::cli::print::step(
+                        "Status",
+                        &format!("Using cached file ({} MB)", metadata.len() / (1024 * 1024)),
+                    );
+                    let canonical = file_path.canonicalize().map_err(|e| {
+                        DownloadError::Io(format!("Path canonicalization failed: {e}"))
+                    })?;
                     return Ok(DownloadTarget::File(
                         canonical
                             .to_str()
@@ -131,7 +142,10 @@ impl ToolDownloader for JavaDownloader {
                 .await
                 .map_err(|e| DownloadError::Io(format!("Failed to get file size: {e}")))?
                 .len();
-            println!("Download complete ({} MB)", file_size / (1024 * 1024));
+            crate::cli::print::step(
+                "Status",
+                &format!("Download complete ({} MB)", file_size / (1024 * 1024)),
+            );
 
             let canonical = file_path
                 .canonicalize()
