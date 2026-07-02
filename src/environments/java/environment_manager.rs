@@ -3,6 +3,7 @@ use crate::core::environment_manager::{
 };
 use crate::core::session::SessionManager;
 use crate::environments::java::scanner::JavaScanner;
+use crate::error::AppError;
 use crate::infrastructure::shell::ScriptGenerator;
 use crate::infrastructure::shell::ShellType;
 use crate::utils::path::normalize_path;
@@ -36,10 +37,10 @@ impl JavaEnvironmentManager {
     }
 
     /// 从配置文件加载 Java 环境
-    fn load_from_config(&mut self) -> Result<(), String> {
+    fn load_from_config(&mut self) -> Result<(), AppError> {
         use crate::infrastructure::config::Config;
 
-        let config = Config::load()?;
+        let config = Config::load().map_err(|e| AppError::config_error(&e))?;
 
         // 清除旧的环境数据，确保重新加载最新的配置
         self.installations.clear();
@@ -63,10 +64,10 @@ impl JavaEnvironmentManager {
     }
 
     /// 保存环境到配置文件
-    fn save_to_config_impl(name: &str, java_home: &str, description: &str) -> Result<(), String> {
+    fn save_to_config_impl(name: &str, java_home: &str, description: &str) -> Result<(), AppError> {
         use crate::infrastructure::config::{Config, JavaEnvironment};
 
-        let mut config = Config::load()?;
+        let mut config = Config::load().map_err(|e| AppError::config_error(&e))?;
 
         // Check if environment already exists and update it (overwrite)
         if let Some(existing_env) = config
@@ -89,33 +90,35 @@ impl JavaEnvironmentManager {
             config.java_environments.push(new_env);
         }
 
-        config.save()?;
+        config.save().map_err(|e| AppError::config_error(&e))?;
 
         Ok(())
     }
 
     /// 从移除列表中移除名称（允许重新添加）
-    fn remove_name_from_removed_list(name: &str) -> Result<(), String> {
+    fn remove_name_from_removed_list(name: &str) -> Result<(), AppError> {
         use crate::infrastructure::config::Config;
 
-        let mut config = Config::load()?;
+        let mut config = Config::load().map_err(|e| AppError::config_error(&e))?;
         config.remove_java_name_from_removed_list(name);
-        config.save()?;
+        config.save().map_err(|e| AppError::config_error(&e))?;
         Ok(())
     }
 
     /// 从配置文件中删除环境
-    fn remove_from_config(name: &str) -> Result<(), String> {
+    fn remove_from_config(name: &str) -> Result<(), AppError> {
         use crate::infrastructure::config::Config;
 
-        let mut config = Config::load()?;
+        let mut config = Config::load().map_err(|e| AppError::config_error(&e))?;
 
         // 查找并删除指定的环境
         let original_len = config.java_environments.len();
         config.java_environments.retain(|env| env.name != name);
 
         if config.java_environments.len() == original_len {
-            return Err(format!("Java environment '{name}' not found in config"));
+            return Err(AppError::not_found(&format!(
+                "Java environment '{name}' not found in config"
+            )));
         }
 
         // 如果删除的是默认环境，清理默认环境设置
@@ -131,7 +134,7 @@ impl JavaEnvironmentManager {
         // 移除了：config.add_removed_java_name(name);
 
         // 保存配置文件
-        config.save()?;
+        config.save().map_err(|e| AppError::config_error(&e))?;
 
         Ok(())
     }
@@ -143,7 +146,7 @@ impl EnvironmentManager for JavaEnvironmentManager {
         EnvironmentType::Java
     }
 
-    fn list(&self) -> Result<Vec<DynEnvironment>, String> {
+    fn list(&self) -> Result<Vec<DynEnvironment>, AppError> {
         let mut result = Vec::new();
         let current_env = self.get_current().ok().flatten();
 
@@ -163,7 +166,7 @@ impl EnvironmentManager for JavaEnvironmentManager {
         Ok(result)
     }
 
-    fn get(&self, name: &str) -> Result<Option<DynEnvironment>, String> {
+    fn get(&self, name: &str) -> Result<Option<DynEnvironment>, AppError> {
         if let Some(installation) = self.installations.get(name) {
             Ok(Some(DynEnvironment {
                 name: installation.name.clone(),
@@ -177,19 +180,21 @@ impl EnvironmentManager for JavaEnvironmentManager {
         }
     }
 
-    fn add(&mut self, name: &str, config_str: &str) -> Result<(), String> {
+    fn add(&mut self, name: &str, config_str: &str) -> Result<(), AppError> {
         // Parse config as JSON to extract java_home
-        let config: serde_json::Value =
-            serde_json::from_str(config_str).map_err(|e| format!("Failed to parse config: {e}"))?;
+        let config: serde_json::Value = serde_json::from_str(config_str)?;
 
         let java_home = config
             .get("java_home")
             .and_then(|v| v.as_str())
-            .ok_or("Missing java_home in config")?;
+            .ok_or_else(|| AppError::validation("java_home", "missing in config"))?;
 
         // Validate that it's a valid Java installation
         if !crate::environments::java::scanner::JavaScanner::is_valid_java_installation(java_home) {
-            return Err("Invalid Java installation".to_string());
+            return Err(AppError::validation(
+                "java_home",
+                "Invalid Java installation",
+            ));
         }
 
         // Create installation from path
@@ -197,7 +202,12 @@ impl EnvironmentManager for JavaEnvironmentManager {
             crate::environments::java::scanner::JavaScanner::create_installation_from_path(
                 java_home,
             )
-            .map_err(|e| format!("Failed to create Java installation: {e}"))?;
+            .map_err(|e| {
+                AppError::validation(
+                    "java_home",
+                    &format!("Failed to create Java installation: {e}"),
+                )
+            })?;
 
         // Extract version info before moving
         let version_info = installation.version.as_deref().unwrap_or("unknown");
@@ -228,7 +238,7 @@ impl EnvironmentManager for JavaEnvironmentManager {
         Ok(())
     }
 
-    fn remove(&mut self, name: &str) -> Result<(), String> {
+    fn remove(&mut self, name: &str) -> Result<(), AppError> {
         // 首先从内存中移除
         if self.installations.remove(name).is_some() {
             // 尝试从配置文件中删除（如果存在的话）
@@ -239,44 +249,26 @@ impl EnvironmentManager for JavaEnvironmentManager {
             }
             Ok(())
         } else {
-            Err(format!("Java environment '{name}' not found"))
+            Err(AppError::not_found(&format!("Java environment '{name}'")))
         }
     }
 
-    fn use_env(&mut self, name: &str, shell_type: Option<ShellType>) -> Result<String, String> {
+    fn use_env(&mut self, name: &str, shell_type: Option<ShellType>) -> Result<String, AppError> {
         let java_installation = self
             .installations
             .get(name)
-            .ok_or_else(|| {
-                let mut msg = format!("Java environment '{name}' not found.");
-                let pkg_dir = crate::infrastructure::paths::tool_packages_dir("java").unwrap_or_default();
-                if std::path::Path::new(&pkg_dir).join(name).exists() {
-                    let pkg_dir_str = pkg_dir.to_string_lossy();
-                    msg.push_str(&format!("\n  Hint: Java files exist at {pkg_dir_str}/{name}, but no config entry found."));
-                    msg.push_str("\n  Try: fnva java scan  or  fnva java install <version>");
-                } else {
-                    msg.push_str("\n  Available environments: fnva java list");
-                    msg.push_str("\n  Install a new one: fnva java install <version>");
-                }
-                msg
-            })?;
+            .ok_or_else(|| AppError::not_found(&format!("Java environment '{name}'")))?;
 
         // 验证 java_home 路径是否真实存在且包含有效的 Java 安装
         if !crate::utils::validate_java_home(&java_installation.java_home) {
             let java_home = &java_installation.java_home;
             let path_exists = std::path::Path::new(java_home).exists();
-
-            let mut msg = if path_exists {
-                format!("Java installation at '{java_home}' is incomplete or corrupted.")
+            let reason = if path_exists {
+                format!("Java installation at '{java_home}' is incomplete or corrupted")
             } else {
                 format!("Java installation path does not exist: {java_home}")
             };
-            msg.push_str("\n  The configured path is invalid. Possible causes:");
-            msg.push_str("\n    - Installation was moved or deleted");
-            msg.push_str("\n    - Download was incomplete");
-            msg.push_str("\n  Fix: fnva java install <version> to reinstall");
-
-            return Err(msg);
+            return Err(AppError::validation("java_home", &reason));
         }
 
         let shell_type =
@@ -286,19 +278,11 @@ impl EnvironmentManager for JavaEnvironmentManager {
             "java_home": java_installation.java_home,
         });
 
-        let generator = ScriptGenerator::new().map_err(|e| e.to_string())?;
-        match generator.generate_switch_script(
-            EnvironmentType::Java,
-            name,
-            &config,
-            Some(shell_type),
-        ) {
-            Ok(script) => Ok(script),
-            Err(e) => Err(format!("Failed to generate script: {e}")),
-        }
+        let generator = ScriptGenerator::new()?;
+        generator.generate_switch_script(EnvironmentType::Java, name, &config, Some(shell_type))
     }
 
-    fn get_current(&self) -> Result<Option<String>, String> {
+    fn get_current(&self) -> Result<Option<String>, AppError> {
         // Session 优先
         if let Ok(session) = SessionManager::new() {
             if let Some(current) = session.get_current_environment(EnvironmentType::Java) {
@@ -322,8 +306,10 @@ impl EnvironmentManager for JavaEnvironmentManager {
         Ok(None)
     }
 
-    async fn scan(&self) -> Result<Vec<DynEnvironment>, String> {
-        let installations = JavaScanner::scan_system().await?;
+    async fn scan(&self) -> Result<Vec<DynEnvironment>, AppError> {
+        let installations = JavaScanner::scan_system()
+            .await
+            .map_err(|e| AppError::config_error(&e))?;
         let mut result = Vec::new();
         let mut seen_paths = std::collections::HashSet::new();
 
@@ -377,18 +363,18 @@ impl EnvironmentManager for JavaEnvironmentManager {
         Ok(result)
     }
 
-    fn set_current(&mut self, _name: &str) -> Result<(), String> {
+    fn set_current(&mut self, _name: &str) -> Result<(), AppError> {
         // This would set the current environment, but for Java this is typically
         // handled by setting JAVA_HOME environment variable
         // For now, this is a no-op
         Ok(())
     }
 
-    fn is_available(&self, name: &str) -> Result<bool, String> {
+    fn is_available(&self, name: &str) -> Result<bool, AppError> {
         Ok(self.installations.contains_key(name))
     }
 
-    fn get_details(&self, name: &str) -> Result<Option<DynEnvironment>, String> {
+    fn get_details(&self, name: &str) -> Result<Option<DynEnvironment>, AppError> {
         self.get(name)
     }
 }

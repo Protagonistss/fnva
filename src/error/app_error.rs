@@ -157,6 +157,39 @@ impl AppError {
             operation: operation.to_string(),
         }
     }
+
+    pub fn not_found(resource: &str) -> Self {
+        Self::NotFound {
+            resource: resource.to_string(),
+        }
+    }
+
+    pub fn validation(field: &str, reason: &str) -> Self {
+        Self::Validation {
+            field: field.to_string(),
+            reason: reason.to_string(),
+        }
+    }
+
+    pub fn config_error(message: &str) -> Self {
+        Self::Config {
+            message: message.to_string(),
+        }
+    }
+
+    pub fn script_generation(shell_type: &str, reason: &str) -> Self {
+        Self::ScriptGeneration {
+            shell_type: shell_type.to_string(),
+            reason: reason.to_string(),
+        }
+    }
+
+    /// infra 层 String 错误的兜底转换（优先用具体变体）
+    pub fn from_string(s: &str) -> Self {
+        Self::Internal {
+            message: s.to_string(),
+        }
+    }
 }
 
 // 转换trait实现

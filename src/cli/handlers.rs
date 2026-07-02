@@ -2,6 +2,7 @@ use crate::cli::commands::*;
 use crate::cli::output::{OutputFormat, FORMATTER};
 use crate::core::environment_manager::EnvironmentType;
 use crate::core::switcher::EnvironmentSwitcher;
+use crate::error::AppError;
 use crate::infrastructure::shell::platform::detect_shell;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -170,39 +171,42 @@ impl CommandHandler {
                     .await
                 {
                     Ok(res) => res,
-                    Err(e) => {
-                        let err_str = e.to_string();
-                        if err_str.contains("Invalid JAVA_HOME") {
-                            crate::cli::print::warn(&format!(
-                                "The configured Java path for '{}' is invalid or missing.",
-                                name
-                            ));
-                            crate::cli::print::warn(
-                                "Would you like to remove it from fnva configuration? [y/N]",
-                            );
+                    Err(ctx_err) => {
+                        // java_home 失效时交互式询问是否从配置中删除该环境
+                        match &ctx_err.error {
+                            AppError::Validation { field, .. } if field == "java_home" => {
+                                crate::cli::print::warn(&format!(
+                                    "The configured Java path for '{}' is invalid or missing.",
+                                    name
+                                ));
+                                crate::cli::print::warn(
+                                    "Would you like to remove it from fnva configuration? [y/N]",
+                                );
 
-                            let mut input = String::new();
-                            if std::io::stdin().read_line(&mut input).is_ok()
-                                && input.trim().eq_ignore_ascii_case("y")
-                            {
-                                if let Err(remove_err) = self
-                                    .switcher
-                                    .remove_environment(EnvironmentType::Java, &name)
-                                    .await
+                                let mut input = String::new();
+                                if std::io::stdin().read_line(&mut input).is_ok()
+                                    && input.trim().eq_ignore_ascii_case("y")
                                 {
-                                    crate::cli::print::warn(&format!(
-                                        "Failed to remove environment: {}",
-                                        remove_err
-                                    ));
-                                } else {
-                                    crate::cli::print::success(&format!(
-                                        "Successfully removed stale environment '{}'",
-                                        name
-                                    ));
+                                    if let Err(remove_err) = self
+                                        .switcher
+                                        .remove_environment(EnvironmentType::Java, &name)
+                                        .await
+                                    {
+                                        crate::cli::print::warn(&format!(
+                                            "Failed to remove environment: {}",
+                                            remove_err
+                                        ));
+                                    } else {
+                                        crate::cli::print::success(&format!(
+                                            "Successfully removed stale environment '{}'",
+                                            name
+                                        ));
+                                    }
                                 }
                             }
+                            _ => {}
                         }
-                        return Err(err_str);
+                        return Err(ctx_err.to_string());
                     }
                 };
 
@@ -481,13 +485,15 @@ impl CommandHandler {
                     settings.map(Some)
                 };
 
-                manager.set_env_vars(&name, opts_arg, repo_arg, settings_arg)?;
+                manager
+                    .set_env_vars(&name, opts_arg, repo_arg, settings_arg)
+                    .map_err(|e| e.to_string())?;
                 crate::cli::print::success(&format!("Updated Maven environment: {name}"));
             }
             MavenCommands::Show { name } => {
                 use crate::environments::maven::MavenEnvironmentManager;
                 let manager = MavenEnvironmentManager::new();
-                let info = manager.show_env(&name)?;
+                let info = manager.show_env(&name).map_err(|e| e.to_string())?;
                 println!("{info}");
             }
         }

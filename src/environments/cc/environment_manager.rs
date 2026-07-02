@@ -1,5 +1,6 @@
 use crate::core::environment_manager::{DynEnvironment, EnvironmentManager, EnvironmentType};
 use crate::core::session::SessionManager;
+use crate::error::AppError;
 use crate::infrastructure::config::{CcEnvironment as ConfigCcEnvironment, Config};
 use crate::infrastructure::shell::ScriptGenerator;
 use crate::infrastructure::shell::ShellType;
@@ -33,8 +34,8 @@ impl CcEnvironmentManager {
     }
 
     /// 从配置文件加载 CC 环境
-    fn load_from_config(&mut self) -> Result<(), String> {
-        let config = Config::load()?;
+    fn load_from_config(&mut self) -> Result<(), AppError> {
+        let config = Config::load().map_err(|e| AppError::config_error(&e))?;
 
         self.environments.clear();
         for env in &config.cc_environments {
@@ -64,7 +65,7 @@ impl EnvironmentManager for CcEnvironmentManager {
         EnvironmentType::Cc
     }
 
-    fn list(&self) -> Result<Vec<DynEnvironment>, String> {
+    fn list(&self) -> Result<Vec<DynEnvironment>, AppError> {
         let mut result = Vec::new();
         for env in self.environments.values() {
             result.push(DynEnvironment {
@@ -78,7 +79,7 @@ impl EnvironmentManager for CcEnvironmentManager {
         Ok(result)
     }
 
-    fn get(&self, name: &str) -> Result<Option<DynEnvironment>, String> {
+    fn get(&self, name: &str) -> Result<Option<DynEnvironment>, AppError> {
         if let Some(env) = self.environments.get(name) {
             Ok(Some(DynEnvironment {
                 name: env.name.clone(),
@@ -92,10 +93,9 @@ impl EnvironmentManager for CcEnvironmentManager {
         }
     }
 
-    fn add(&mut self, name: &str, config_str: &str) -> Result<(), String> {
+    fn add(&mut self, name: &str, config_str: &str) -> Result<(), AppError> {
         // Parse config as JSON
-        let config: serde_json::Value =
-            serde_json::from_str(config_str).map_err(|e| format!("Failed to parse config: {e}"))?;
+        let config: serde_json::Value = serde_json::from_str(config_str)?;
 
         let provider = config
             .get("provider")
@@ -107,7 +107,7 @@ impl EnvironmentManager for CcEnvironmentManager {
         let base_url = config
             .get("base_url")
             .and_then(|v| v.as_str())
-            .ok_or("Missing base_url in config")?;
+            .ok_or_else(|| AppError::validation("base_url", "missing in config"))?;
 
         // Support both "model" (legacy) and "sonnet_model" (new)
         let sonnet_model = config
@@ -143,7 +143,7 @@ impl EnvironmentManager for CcEnvironmentManager {
         };
 
         // 持久化到配置文件
-        let mut file_config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
+        let mut file_config = Config::load().map_err(|e| AppError::config_error(&e))?;
         if let Some(existing) = file_config
             .cc_environments
             .iter_mut()
@@ -164,38 +164,34 @@ impl EnvironmentManager for CcEnvironmentManager {
         } else {
             file_config.cc_environments.push(cc_environment.clone());
         }
-        file_config
-            .save()
-            .map_err(|e| format!("Failed to save config: {e}"))?;
+        file_config.save().map_err(|e| AppError::config_error(&e))?;
 
         self.environments.insert(name.to_string(), cc_environment);
         Ok(())
     }
 
-    fn remove(&mut self, name: &str) -> Result<(), String> {
+    fn remove(&mut self, name: &str) -> Result<(), AppError> {
         if self.environments.remove(name).is_none() {
-            return Err(format!("CC environment '{name}' not found"));
+            return Err(AppError::not_found(&format!("CC environment '{name}'")));
         }
 
-        let mut config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
+        let mut config = Config::load().map_err(|e| AppError::config_error(&e))?;
         let original_len = config.cc_environments.len();
         config.cc_environments.retain(|env| env.name != name);
         if config.cc_environments.len() == original_len {
-            return Err(format!("CC environment '{name}' not found"));
+            return Err(AppError::not_found(&format!("CC environment '{name}'")));
         }
 
-        config
-            .save()
-            .map_err(|e| format!("Failed to save config: {e}"))?;
+        config.save().map_err(|e| AppError::config_error(&e))?;
 
         Ok(())
     }
 
-    fn use_env(&mut self, name: &str, shell_type: Option<ShellType>) -> Result<String, String> {
+    fn use_env(&mut self, name: &str, shell_type: Option<ShellType>) -> Result<String, AppError> {
         let cc_env = self
             .environments
             .get(name)
-            .ok_or_else(|| format!("CC environment '{name}' not found"))?;
+            .ok_or_else(|| AppError::not_found(&format!("CC environment '{name}'")))?;
 
         let shell_type =
             shell_type.unwrap_or_else(crate::infrastructure::shell::platform::detect_shell);
@@ -211,15 +207,11 @@ impl EnvironmentManager for CcEnvironmentManager {
         let provider = crate::environments::cc::provider::get_provider(&cc_env.provider);
         provider.setup_config(cc_env, &mut config);
 
-        let generator = ScriptGenerator::new().map_err(|e| e.to_string())?;
-        match generator.generate_switch_script(EnvironmentType::Cc, name, &config, Some(shell_type))
-        {
-            Ok(script) => Ok(script),
-            Err(e) => Err(format!("Failed to generate script: {e}")),
-        }
+        let generator = ScriptGenerator::new()?;
+        generator.generate_switch_script(EnvironmentType::Cc, name, &config, Some(shell_type))
     }
 
-    fn get_current(&self) -> Result<Option<String>, String> {
+    fn get_current(&self) -> Result<Option<String>, AppError> {
         // Session 优先
         if let Ok(session) = SessionManager::new() {
             if let Some(current) = session.get_current_environment(EnvironmentType::Cc) {
@@ -245,7 +237,7 @@ impl EnvironmentManager for CcEnvironmentManager {
         Ok(None)
     }
 
-    async fn scan(&self) -> Result<Vec<DynEnvironment>, String> {
+    async fn scan(&self) -> Result<Vec<DynEnvironment>, AppError> {
         let mut result = Vec::new();
         let existing_config = crate::infrastructure::config::Config::load().unwrap_or_default();
         let existing_names: std::collections::HashSet<String> = existing_config
@@ -343,17 +335,17 @@ impl EnvironmentManager for CcEnvironmentManager {
         Ok(result)
     }
 
-    fn set_current(&mut self, _name: &str) -> Result<(), String> {
+    fn set_current(&mut self, _name: &str) -> Result<(), AppError> {
         // This would set the current environment by updating environment variables
         // For now, this is a no-op - the actual switching is handled by use_env
         Ok(())
     }
 
-    fn is_available(&self, name: &str) -> Result<bool, String> {
+    fn is_available(&self, name: &str) -> Result<bool, AppError> {
         Ok(self.environments.contains_key(name))
     }
 
-    fn get_details(&self, name: &str) -> Result<Option<DynEnvironment>, String> {
+    fn get_details(&self, name: &str) -> Result<Option<DynEnvironment>, AppError> {
         self.get(name)
     }
 }

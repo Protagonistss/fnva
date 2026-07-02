@@ -1,3 +1,4 @@
+use crate::error::AppError;
 use crate::infrastructure::shell::ShellType;
 use serde::{Deserialize, Serialize};
 
@@ -36,34 +37,34 @@ pub trait EnvironmentManager: Send + Sync {
     fn environment_type(&self) -> EnvironmentType;
 
     /// 列出所有环境
-    fn list(&self) -> Result<Vec<DynEnvironment>, String>;
+    fn list(&self) -> Result<Vec<DynEnvironment>, AppError>;
 
     /// 根据名称获取环境
-    fn get(&self, name: &str) -> Result<Option<DynEnvironment>, String>;
+    fn get(&self, name: &str) -> Result<Option<DynEnvironment>, AppError>;
 
     /// 添加环境（使用字符串配置以保持对象安全）
-    fn add(&mut self, name: &str, config_str: &str) -> Result<(), String>;
+    fn add(&mut self, name: &str, config_str: &str) -> Result<(), AppError>;
 
     /// 删除环境
-    fn remove(&mut self, name: &str) -> Result<(), String>;
+    fn remove(&mut self, name: &str) -> Result<(), AppError>;
 
     /// 使用环境（生成 shell 脚本）
-    fn use_env(&mut self, name: &str, shell_type: Option<ShellType>) -> Result<String, String>;
+    fn use_env(&mut self, name: &str, shell_type: Option<ShellType>) -> Result<String, AppError>;
 
     /// 获取当前环境名称
-    fn get_current(&self) -> Result<Option<String>, String>;
+    fn get_current(&self) -> Result<Option<String>, AppError>;
 
     /// 设置当前环境
-    fn set_current(&mut self, name: &str) -> Result<(), String>;
+    fn set_current(&mut self, name: &str) -> Result<(), AppError>;
 
     /// 扫描系统中的可用环境
-    async fn scan(&self) -> Result<Vec<DynEnvironment>, String>;
+    async fn scan(&self) -> Result<Vec<DynEnvironment>, AppError>;
 
     /// 检查环境是否可用
-    fn is_available(&self, name: &str) -> Result<bool, String>;
+    fn is_available(&self, name: &str) -> Result<bool, AppError>;
 
     /// 获取环境的详细信息
-    fn get_details(&self, name: &str) -> Result<Option<DynEnvironment>, String>;
+    fn get_details(&self, name: &str) -> Result<Option<DynEnvironment>, AppError>;
 }
 
 /// 环境信息的通用接口

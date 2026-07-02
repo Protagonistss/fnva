@@ -1,5 +1,6 @@
 use crate::core::environment_manager::{DynEnvironment, EnvironmentManager, EnvironmentType};
 use crate::core::session::SessionManager;
+use crate::error::AppError;
 use crate::infrastructure::config::{Config, EnvironmentSource, MavenEnvironment};
 use crate::infrastructure::shell::platform::detect_shell;
 use crate::infrastructure::shell::{ScriptGenerator, ShellType};
@@ -32,8 +33,8 @@ impl MavenEnvironmentManager {
         manager
     }
 
-    fn load_from_config(&mut self) -> Result<(), String> {
-        let config = Config::load()?;
+    fn load_from_config(&mut self) -> Result<(), AppError> {
+        let config = Config::load().map_err(|e| AppError::config_error(&e))?;
         self.installations.clear();
         for env in &config.maven_environments {
             self.installations.insert(env.name.clone(), env.clone());
@@ -48,7 +49,7 @@ impl EnvironmentManager for MavenEnvironmentManager {
         EnvironmentType::Maven
     }
 
-    fn list(&self) -> Result<Vec<DynEnvironment>, String> {
+    fn list(&self) -> Result<Vec<DynEnvironment>, AppError> {
         let current_env = self.get_current().ok().flatten();
         let result = self
             .installations
@@ -67,7 +68,7 @@ impl EnvironmentManager for MavenEnvironmentManager {
         Ok(result)
     }
 
-    fn get(&self, name: &str) -> Result<Option<DynEnvironment>, String> {
+    fn get(&self, name: &str) -> Result<Option<DynEnvironment>, AppError> {
         Ok(self.installations.get(name).map(|env| DynEnvironment {
             name: env.name.clone(),
             path: env.maven_home.clone(),
@@ -77,15 +78,17 @@ impl EnvironmentManager for MavenEnvironmentManager {
         }))
     }
 
-    fn add(&mut self, name: &str, config_str: &str) -> Result<(), String> {
-        let cfg: serde_json::Value =
-            serde_json::from_str(config_str).map_err(|e| format!("Failed to parse config: {e}"))?;
+    fn add(&mut self, name: &str, config_str: &str) -> Result<(), AppError> {
+        let cfg: serde_json::Value = serde_json::from_str(config_str)?;
         let maven_home = cfg
             .get("maven_home")
             .and_then(|v| v.as_str())
-            .ok_or("Missing maven_home in config")?;
+            .ok_or_else(|| AppError::validation("maven_home", "missing in config"))?;
         if !validate_maven_home(maven_home) {
-            return Err("Invalid Maven installation".to_string());
+            return Err(AppError::validation(
+                "maven_home",
+                "Invalid Maven installation",
+            ));
         }
         let maven_opts = cfg
             .get("maven_opts")
@@ -99,42 +102,49 @@ impl EnvironmentManager for MavenEnvironmentManager {
             .get("settings_file")
             .and_then(|v| v.as_str())
             .map(str::to_string);
-        let mut config = Config::load()?;
-        config.add_maven_env(MavenEnvironment {
-            name: name.to_string(),
-            maven_home: maven_home.to_string(),
-            description: format!("Maven ({maven_home})"),
-            source: EnvironmentSource::Manual,
-            maven_opts,
-            local_repo,
-            settings_file,
-        })?;
-        config.save()?;
+        let mut config = Config::load().map_err(|e| AppError::config_error(&e))?;
+        config
+            .add_maven_env(MavenEnvironment {
+                name: name.to_string(),
+                maven_home: maven_home.to_string(),
+                description: format!("Maven ({maven_home})"),
+                source: EnvironmentSource::Manual,
+                maven_opts,
+                local_repo,
+                settings_file,
+            })
+            .map_err(|e| AppError::config_error(&e))?;
+        config.save().map_err(|e| AppError::config_error(&e))?;
         self.load_from_config()?;
         Ok(())
     }
 
-    fn remove(&mut self, name: &str) -> Result<(), String> {
-        let mut config = Config::load()?;
-        config.remove_maven_env(name)?;
+    fn remove(&mut self, name: &str) -> Result<(), AppError> {
+        let mut config = Config::load().map_err(|e| AppError::config_error(&e))?;
+        config
+            .remove_maven_env(name)
+            .map_err(|e| AppError::config_error(&e))?;
         if config.default_maven_env.as_deref() == Some(name) {
             config.default_maven_env = None;
         }
         if config.current_maven_env.as_deref() == Some(name) {
             config.current_maven_env = None;
         }
-        config.save()?;
+        config.save().map_err(|e| AppError::config_error(&e))?;
         self.installations.remove(name);
         Ok(())
     }
 
-    fn use_env(&mut self, name: &str, shell_type: Option<ShellType>) -> Result<String, String> {
+    fn use_env(&mut self, name: &str, shell_type: Option<ShellType>) -> Result<String, AppError> {
         let env = self
             .installations
             .get(name)
-            .ok_or_else(|| format!("Maven environment '{name}' not found"))?;
+            .ok_or_else(|| AppError::not_found(&format!("Maven environment '{name}'")))?;
         if !validate_maven_home(&env.maven_home) {
-            return Err(format!("Invalid MAVEN_HOME: {}", env.maven_home));
+            return Err(AppError::validation(
+                "maven_home",
+                &format!("Invalid MAVEN_HOME: {}", env.maven_home),
+            ));
         }
         let shell_type = shell_type.unwrap_or_else(detect_shell);
         let config = serde_json::json!({
@@ -143,13 +153,11 @@ impl EnvironmentManager for MavenEnvironmentManager {
             "local_repo": env.local_repo,
             "settings_file": env.settings_file,
         });
-        let generator = ScriptGenerator::new().map_err(|e| e.to_string())?;
-        generator
-            .generate_switch_script(EnvironmentType::Maven, name, &config, Some(shell_type))
-            .map_err(|e| format!("Failed to generate script: {e}"))
+        let generator = ScriptGenerator::new()?;
+        generator.generate_switch_script(EnvironmentType::Maven, name, &config, Some(shell_type))
     }
 
-    fn get_current(&self) -> Result<Option<String>, String> {
+    fn get_current(&self) -> Result<Option<String>, AppError> {
         if let Ok(session) = SessionManager::new() {
             if let Some(current) = session.get_current_environment(EnvironmentType::Maven) {
                 return Ok(Some(current.clone()));
@@ -166,20 +174,20 @@ impl EnvironmentManager for MavenEnvironmentManager {
         Ok(None)
     }
 
-    async fn scan(&self) -> Result<Vec<DynEnvironment>, String> {
+    async fn scan(&self) -> Result<Vec<DynEnvironment>, AppError> {
         // Maven 不做系统扫描,返回当前已配置的环境
         self.list()
     }
 
-    fn set_current(&mut self, _name: &str) -> Result<(), String> {
+    fn set_current(&mut self, _name: &str) -> Result<(), AppError> {
         Ok(())
     }
 
-    fn is_available(&self, name: &str) -> Result<bool, String> {
+    fn is_available(&self, name: &str) -> Result<bool, AppError> {
         Ok(self.installations.contains_key(name))
     }
 
-    fn get_details(&self, name: &str) -> Result<Option<DynEnvironment>, String> {
+    fn get_details(&self, name: &str) -> Result<Option<DynEnvironment>, AppError> {
         self.get(name)
     }
 }
@@ -193,13 +201,13 @@ impl MavenEnvironmentManager {
         maven_opts: Option<Option<String>>,
         local_repo: Option<Option<String>>,
         settings_file: Option<Option<String>>,
-    ) -> Result<(), String> {
-        let mut config = Config::load()?;
+    ) -> Result<(), AppError> {
+        let mut config = Config::load().map_err(|e| AppError::config_error(&e))?;
         let env = config
             .maven_environments
             .iter_mut()
             .find(|e| e.name == name)
-            .ok_or_else(|| format!("Maven environment '{name}' not found"))?;
+            .ok_or_else(|| AppError::not_found(&format!("Maven environment '{name}'")))?;
 
         if let Some(v) = maven_opts {
             env.maven_opts = v.filter(|s| !s.is_empty());
@@ -210,19 +218,19 @@ impl MavenEnvironmentManager {
         if let Some(v) = settings_file {
             env.settings_file = v.filter(|s| !s.is_empty());
         }
-        config.save()?;
+        config.save().map_err(|e| AppError::config_error(&e))?;
         self.load_from_config()?;
         Ok(())
     }
 
     /// 以可读格式输出某个 Maven 环境的完整配置。
-    pub fn show_env(&self, name: &str) -> Result<String, String> {
-        let config = Config::load()?;
+    pub fn show_env(&self, name: &str) -> Result<String, AppError> {
+        let config = Config::load().map_err(|e| AppError::config_error(&e))?;
         let env = config
             .maven_environments
             .iter()
             .find(|e| e.name == name)
-            .ok_or_else(|| format!("Maven environment '{name}' not found"))?;
+            .ok_or_else(|| AppError::not_found(&format!("Maven environment '{name}'")))?;
 
         let mut lines = vec![
             format!("Name        : {}", env.name),

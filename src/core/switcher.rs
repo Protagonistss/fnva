@@ -2,7 +2,8 @@ use crate::cli::output::OutputFormat;
 use crate::core::environment_manager::{EnvironmentManager, EnvironmentType, SwitchResult};
 use crate::core::session::{HistoryManager, SessionManager, SwitchHistory};
 use crate::error::{
-    option_with_context, safe_to_json, safe_to_json_pretty, AppError, ContextualResult, SafeMutex,
+    option_with_context, safe_to_json, safe_to_json_pretty, AppError, ContextualResult, ResultExt,
+    SafeMutex,
 };
 use crate::infrastructure::config::Config;
 use crate::infrastructure::shell::current_envs::CurrentEnvsFile;
@@ -67,17 +68,15 @@ impl EnvironmentSwitcher {
             let manager_guard = manager.lock().await;
             manager_guard
                 .get_current()
-                .map_err(|e| AppError::Environment {
-                    message: format!("Failed to get current environment: {e}"),
-                })?
+                .with_context("getting current environment")?
         };
 
         // 验证环境是否存在
         let env_info = {
             let manager_guard = manager.lock().await;
-            manager_guard.get(name).map_err(|e| AppError::Environment {
-                message: format!("Failed to find environment '{name}': {e}"),
-            })?
+            manager_guard
+                .get(name)
+                .with_context(&format!("looking up {env_type} environment '{name}'"))?
         };
 
         if env_info.is_none() {
@@ -95,10 +94,7 @@ impl EnvironmentSwitcher {
             let mut manager_guard = manager.lock().await;
             manager_guard
                 .use_env(name, shell_type)
-                .map_err(|e| AppError::ScriptGeneration {
-                    shell_type: format!("{:?}", shell_type.unwrap_or(ShellType::Bash)),
-                    reason: e,
-                })?
+                .with_context(&format!("switching to {env_type} environment '{name}'"))?
         };
 
         // 更新会话状态
@@ -161,9 +157,7 @@ impl EnvironmentSwitcher {
 
             manager_guard
                 .add(name, &config_str)
-                .map_err(|e| AppError::Environment {
-                    message: format!("Failed to add environment: {e}"),
-                })?;
+                .with_context(&format!("adding {env_type} environment '{name}'"))?;
 
             format!("Successfully added {env_type} environment: {name}")
         };
@@ -187,9 +181,7 @@ impl EnvironmentSwitcher {
             let mut manager_guard = manager.lock().await;
             manager_guard
                 .remove(name)
-                .map_err(|e| AppError::Environment {
-                    message: format!("Failed to remove environment: {e}"),
-                })?;
+                .with_context(&format!("removing {env_type} environment '{name}'"))?;
         }
 
         // 如果删除的是当前环境，清除会话状态
@@ -230,21 +222,16 @@ impl EnvironmentSwitcher {
             let manager_guard = manager.lock().await;
             let current_env = manager_guard
                 .get_current()
-                .map_err(|e| AppError::Environment {
-                    message: format!("Failed to get current environment: {e}"),
-                })?;
+                .with_context("getting current environment")?;
             (current_env, manager_guard)
         };
 
         match output_format {
             OutputFormat::Text => {
                 if let Some(env_name) = current_env {
-                    if let Some(env_info) =
-                        manager_guard
-                            .get(&env_name)
-                            .map_err(|e| AppError::Environment {
-                                message: format!("Failed to get environment info: {e}"),
-                            })?
+                    if let Some(env_info) = manager_guard
+                        .get(&env_name)
+                        .with_context("getting environment info")?
                     {
                         Ok(format!(
                             "Current {} environment: {}\n{}\n",
@@ -263,12 +250,9 @@ impl EnvironmentSwitcher {
             }
             OutputFormat::Json => {
                 let json_output = if let Some(env_name) = current_env {
-                    if let Some(env_info) =
-                        manager_guard
-                            .get(&env_name)
-                            .map_err(|e| AppError::Environment {
-                                message: format!("Failed to get environment info: {e}"),
-                            })?
+                    if let Some(env_info) = manager_guard
+                        .get(&env_name)
+                        .with_context("getting environment info")?
                     {
                         serde_json::json!({
                             "environment_type": env_type,
@@ -322,9 +306,7 @@ impl EnvironmentSwitcher {
             manager_guard
                 .scan()
                 .await
-                .map_err(|e| AppError::Environment {
-                    message: format!("Failed to scan environments: {e}"),
-                })?
+                .with_context(&format!("scanning {env_type} environments"))?
         };
 
         let mut output = String::new();
@@ -426,9 +408,7 @@ impl EnvironmentSwitcher {
             let manager = manager_entry.lock().await;
             if !manager
                 .is_available(name)
-                .map_err(|e| AppError::Environment {
-                    message: format!("Failed to check environment availability: {e}"),
-                })?
+                .with_context("checking environment availability")?
             {
                 return Err(AppError::Environment {
                     message: format!("{env_type} environment '{name}' not found"),
@@ -540,9 +520,7 @@ impl EnvironmentSwitcher {
 
         let (environments, current_env) = {
             let manager_guard = manager.lock().await;
-            let environments = manager_guard.list().map_err(|e| AppError::Environment {
-                message: format!("Failed to get environment list: {e}"),
-            })?;
+            let environments = manager_guard.list().with_context("listing environments")?;
             let current_env = {
                 let session_manager = self.session_manager.lock()?;
                 session_manager.get_current_environment(env_type).cloned()
