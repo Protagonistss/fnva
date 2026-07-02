@@ -1,5 +1,5 @@
-use crate::cli::output::OutputFormat;
 use crate::core::environment_manager::{EnvironmentManager, EnvironmentType, SwitchResult};
+use crate::core::presentation::{EnvItem, HistoryItem, OutputFormat};
 use crate::core::session::{HistoryManager, SessionManager, SwitchHistory};
 use crate::error::{
     option_with_context, safe_to_json, safe_to_json_pretty, AppError, ContextualResult, ResultExt,
@@ -110,7 +110,7 @@ impl EnvironmentSwitcher {
         // Persist to current_envs.toml for shell hook auto-restore
         {
             if let Err(e) = CurrentEnvsFile::write(env_type, name) {
-                crate::cli::print::warn(&format!("Failed to update current_envs.toml: {e}"));
+                eprintln!("⚠  Failed to update current_envs.toml: {e}");
             }
         }
 
@@ -195,7 +195,7 @@ impl EnvironmentSwitcher {
                             message: format!("Failed to clear current environment: {e}"),
                         })?;
                     if let Err(e) = CurrentEnvsFile::clear(env_type) {
-                        crate::cli::print::warn(&format!("Failed to clear current_envs.toml: {e}"));
+                        eprintln!("⚠  Failed to clear current_envs.toml: {e}");
                     }
                 }
             }
@@ -354,22 +354,19 @@ impl EnvironmentSwitcher {
         &self,
         env_type: Option<EnvironmentType>,
         limit: usize,
-    ) -> ContextualResult<String> {
+    ) -> ContextualResult<Vec<HistoryItem>> {
         let history: Vec<SwitchHistory> = {
             let history_manager = self.history_manager.lock()?;
 
             if let Some(env_type) = env_type {
-                // get_history_for_env returns Vec<&SwitchHistory>
-                // We need to convert the references to owned values
                 history_manager
                     .get_history_for_env(env_type)
                     .into_iter()
                     .rev()
                     .take(limit)
-                    .cloned() // Clone to get owned SwitchHistory
+                    .cloned()
                     .collect()
             } else {
-                // get_recent_history returns Vec<&SwitchHistory>
                 history_manager
                     .get_recent_history(limit)
                     .into_iter()
@@ -379,7 +376,6 @@ impl EnvironmentSwitcher {
             }
         };
 
-        use crate::cli::print::{format_history, HistoryItem};
         let mut items = Vec::new();
         for record in history {
             items.push(HistoryItem {
@@ -389,7 +385,7 @@ impl EnvironmentSwitcher {
                 to: record.new_env.clone(),
             });
         }
-        Ok(format_history(&items))
+        Ok(items)
     }
 
     /// 设置默认环境
@@ -505,8 +501,7 @@ impl EnvironmentSwitcher {
     pub async fn list_environments_with_default(
         &self,
         env_type: EnvironmentType,
-        output_format: OutputFormat,
-    ) -> ContextualResult<String> {
+    ) -> ContextualResult<Vec<EnvItem>> {
         let manager = option_with_context(
             self.managers.get(&env_type),
             AppError::env_not_found(&format!("{env_type:?}")),
@@ -533,53 +528,26 @@ impl EnvironmentSwitcher {
             _ => None,
         };
 
-        // 格式化输出
-        match output_format {
-            OutputFormat::Text => {
-                use crate::cli::print::{format_envs, EnvItem};
-                let mut items = Vec::new();
-                for env in environments {
-                    let name = env.name.clone();
-                    let description = env.description.clone().unwrap_or_default();
-                    let is_current = current_env.as_ref() == Some(&name);
-                    let is_default = default_env.as_ref() == Some(&name);
-
-                    // 显示环境信息，对于 CC 环境显示模型
-                    let extra = if env_type == EnvironmentType::Cc {
-                        if let Some(model) = &env.version {
-                            if !model.is_empty() {
-                                Some(model.clone())
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    };
-
-                    items.push(EnvItem {
-                        name,
-                        description,
-                        extra,
-                        is_current,
-                        is_default,
-                    });
-                }
-                Ok(format_envs(&items))
-            }
-            OutputFormat::Json => {
-                use serde_json;
-                let json_output = serde_json::json!({
-                    "environment_type": env_type,
-                    "current": current_env,
-                    "default": default_env,
-                    "environments": environments
-                });
-                Ok(crate::error::safe_to_json_pretty(&json_output)?)
-            }
+        let mut items = Vec::new();
+        for env in environments {
+            let name = env.name.clone();
+            let is_current = current_env.as_ref() == Some(&name);
+            let is_default = default_env.as_ref() == Some(&name);
+            // CC 环境把模型显示在 extra
+            let extra = if env_type == EnvironmentType::Cc {
+                env.version.filter(|m| !m.is_empty())
+            } else {
+                None
+            };
+            items.push(EnvItem {
+                name,
+                description: env.description.clone().unwrap_or_default(),
+                extra,
+                is_current,
+                is_default,
+            });
         }
+        Ok(items)
     }
 }
 
@@ -657,7 +625,7 @@ mod tests {
         let switcher = make_switcher();
         // 空配置下列表应成功返回(覆盖 switcher 初始化 + list 路径)。
         switcher
-            .list_environments_with_default(EnvironmentType::Java, OutputFormat::Text)
+            .list_environments_with_default(EnvironmentType::Java)
             .await
             .expect("list should resolve");
     }

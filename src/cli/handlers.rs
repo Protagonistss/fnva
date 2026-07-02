@@ -1,11 +1,28 @@
 use crate::cli::commands::*;
-use crate::cli::output::{OutputFormat, FORMATTER};
+use crate::cli::output::FORMATTER;
+use crate::cli::print::format_envs;
 use crate::core::environment_manager::EnvironmentType;
+use crate::core::presentation::{EnvItem, OutputFormat};
 use crate::core::switcher::EnvironmentSwitcher;
 use crate::error::AppError;
 use crate::infrastructure::shell::platform::detect_shell;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
+/// 把环境列表数据渲染成 Text 或 Json 字符串。
+fn render_envs(
+    items: &[EnvItem],
+    env_type: EnvironmentType,
+    fmt: OutputFormat,
+) -> Result<String, String> {
+    match fmt {
+        OutputFormat::Text => Ok(format_envs(items)),
+        OutputFormat::Json => {
+            let json = serde_json::json!({"environment_type": env_type, "environments": items});
+            serde_json::to_string_pretty(&json).map_err(|e| e.to_string())
+        }
+    }
+}
 
 /// 命令处理器
 pub struct CommandHandler {
@@ -141,18 +158,16 @@ impl CommandHandler {
     async fn handle_java_command(&mut self, action: JavaCommands) -> Result<(), String> {
         match action {
             JavaCommands::List { json } => {
-                let output = self
+                let items = self
                     .switcher
-                    .list_environments_with_default(
-                        EnvironmentType::Java,
-                        if json {
-                            OutputFormat::Json
-                        } else {
-                            OutputFormat::Text
-                        },
-                    )
+                    .list_environments_with_default(EnvironmentType::Java)
                     .await?;
-                print!("{output}");
+                let fmt = if json {
+                    OutputFormat::Json
+                } else {
+                    OutputFormat::Text
+                };
+                print!("{}", render_envs(&items, EnvironmentType::Java, fmt)?);
             }
             JavaCommands::Use { name, shell, json } => {
                 let shell_type = match shell {
@@ -322,18 +337,16 @@ impl CommandHandler {
         use crate::infrastructure::tool_protocol::VersionDiscovery;
         match action {
             MavenCommands::List { json } => {
-                let output = self
+                let items = self
                     .switcher
-                    .list_environments_with_default(
-                        EnvironmentType::Maven,
-                        if json {
-                            OutputFormat::Json
-                        } else {
-                            OutputFormat::Text
-                        },
-                    )
+                    .list_environments_with_default(EnvironmentType::Maven)
                     .await?;
-                print!("{output}");
+                let fmt = if json {
+                    OutputFormat::Json
+                } else {
+                    OutputFormat::Text
+                };
+                print!("{}", render_envs(&items, EnvironmentType::Maven, fmt)?);
             }
             MavenCommands::Use { name, shell, json } => {
                 let shell_type = match shell {
@@ -504,18 +517,16 @@ impl CommandHandler {
     async fn handle_cc_command(&mut self, action: CcCommands) -> Result<(), String> {
         match action {
             CcCommands::List { json } => {
-                let output = self
+                let items = self
                     .switcher
-                    .list_environments_with_default(
-                        EnvironmentType::Cc,
-                        if json {
-                            OutputFormat::Json
-                        } else {
-                            OutputFormat::Text
-                        },
-                    )
+                    .list_environments_with_default(EnvironmentType::Cc)
                     .await?;
-                print!("{output}");
+                let fmt = if json {
+                    OutputFormat::Json
+                } else {
+                    OutputFormat::Text
+                };
+                print!("{}", render_envs(&items, EnvironmentType::Cc, fmt)?);
             }
             CcCommands::Scan => {
                 let output = self.switcher.scan_environments(EnvironmentType::Cc).await?;
@@ -672,8 +683,8 @@ impl CommandHandler {
         _json: bool,
     ) -> Result<(), String> {
         let env_type = env_type.map(|t| parse_environment_type(&t)).transpose()?;
-        let output = self.switcher.get_switch_history(env_type, limit).await?;
-        print!("{output}");
+        let items = self.switcher.get_switch_history(env_type, limit).await?;
+        print!("{}", crate::cli::print::format_history(&items));
         Ok(())
     }
 }

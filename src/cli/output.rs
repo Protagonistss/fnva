@@ -1,11 +1,5 @@
+use crate::core::presentation::OutputFormat;
 use serde::Serialize;
-
-/// 输出格式
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OutputFormat {
-    Text,
-    Json,
-}
 
 /// 输出格式化器
 pub struct OutputFormatter;

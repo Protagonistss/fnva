@@ -1,3 +1,4 @@
+use crate::core::presentation::{EnvItem, HistoryItem};
 use std::io::Write;
 
 // ─── Color Basics ────────────────────────────────────────────────────
@@ -83,14 +84,6 @@ pub fn warn(msg: &str) {
 }
 
 // ─── List Formatting ────────────────────────────────────────────────────
-pub struct EnvItem {
-    pub name: String,
-    pub description: String,
-    pub extra: Option<String>,
-    pub is_current: bool,
-    pub is_default: bool,
-}
-
 pub fn format_envs(items: &[EnvItem]) -> String {
     let mut out = String::new();
     out.push_str(&format!("\n{} {}\n", dim("╭─"), bold("Environments")));
@@ -148,13 +141,6 @@ pub fn format_envs(items: &[EnvItem]) -> String {
 }
 
 // ─── History Formatting ────────────────────────────────────────────────────
-pub struct HistoryItem {
-    pub timestamp: String,
-    pub env_type: String,
-    pub from: Option<String>,
-    pub to: String,
-}
-
 pub fn format_history(items: &[HistoryItem]) -> String {
     let mut out = String::new();
     out.push_str(&format!(
