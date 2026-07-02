@@ -4,6 +4,9 @@ use sha2::{Digest, Sha256};
 use std::path::Path;
 use tokio::io::AsyncWriteExt;
 
+/// HTTP User-Agent，版本随 Cargo.toml 自动同步。
+const USER_AGENT: &str = concat!("fnva/", env!("CARGO_PKG_VERSION"));
+
 /// 错误类型：用于区分临时错误和永久错误
 #[derive(Debug, Clone, PartialEq)]
 pub enum ErrorType {
@@ -249,7 +252,7 @@ async fn download_to_bytes_internal(
 ) -> Result<Vec<u8>, String> {
     let response = client
         .get(url)
-        .header("User-Agent", "fnva/0.0.5")
+        .header("User-Agent", USER_AGENT)
         .send()
         .await
         .map_err(|e| {
@@ -400,7 +403,7 @@ async fn download_to_file_internal(
 ) -> Result<(), String> {
     let response = client
         .get(url)
-        .header("User-Agent", "fnva/0.0.5")
+        .header("User-Agent", USER_AGENT)
         .send()
         .await
         .map_err(|e| {
