@@ -35,52 +35,6 @@ impl JavaEnvironmentManager {
         manager
     }
 
-    /// 创建新的 Java 环境管理器并进行系统扫描
-    pub async fn new_with_scan() -> Self {
-        let mut manager = Self::new();
-
-        // 扫描系统中的 Java 环境，添加新发现的环境
-        if let Ok(installations) = JavaScanner::scan_system().await {
-            for installation in installations {
-                let name = installation.name.clone();
-                // 只有当环境中不存在时才添加
-                manager.installations.entry(name).or_insert_with(|| {
-                    // 将扫描发现的环境也保存到配置文件中
-                    if let Err(e) = Self::save_scanned_environment_to_config(&installation) {
-                        crate::cli::print::warn(&format!(
-                            "Failed to save scanned environment to config: {e}"
-                        ));
-                    }
-                    installation
-                });
-            }
-        }
-
-        manager
-    }
-
-    /// 扫描系统并更新环境列表
-    pub async fn scan_and_update(&mut self) -> Result<(), String> {
-        // 扫描系统中的 Java 环境
-        let installations = JavaScanner::scan_system().await?;
-
-        for installation in installations {
-            let name = installation.name.clone();
-            // 只有当环境中不存在时才添加
-            self.installations.entry(name).or_insert_with(|| {
-                // 将扫描发现的环境保存到配置文件中
-                if let Err(e) = Self::save_scanned_environment_to_config(&installation) {
-                    crate::cli::print::warn(&format!(
-                        "Failed to save scanned environment to config: {e}"
-                    ));
-                }
-                installation
-            });
-        }
-
-        Ok(())
-    }
-
     /// 从配置文件加载 Java 环境
     fn load_from_config(&mut self) -> Result<(), String> {
         use crate::infrastructure::config::Config;
@@ -135,46 +89,6 @@ impl JavaEnvironmentManager {
             config.java_environments.push(new_env);
         }
 
-        config.save()?;
-
-        Ok(())
-    }
-
-    /// 将扫描发现的环境保存到配置文件
-    fn save_scanned_environment_to_config(
-        installation: &crate::environments::java::scanner::JavaInstallation,
-    ) -> Result<(), String> {
-        use crate::infrastructure::config::{Config, EnvironmentSource, JavaEnvironment};
-
-        let mut config = Config::load()?;
-
-        // 检查是否已经存在，如果存在则更新（覆盖）
-        if let Some(existing_env) = config
-            .java_environments
-            .iter_mut()
-            .find(|env| env.name == installation.name)
-        {
-            // 更新现有环境的信息
-            existing_env.java_home = installation.java_home.clone();
-            existing_env.description = installation.description.clone();
-            if existing_env.source == EnvironmentSource::Manual {
-                // 如果是手动添加的，保持 source 为 Manual
-            } else {
-                existing_env.source = EnvironmentSource::Scanned;
-            }
-            config.save()?;
-            return Ok(());
-        }
-
-        // 添加新的扫描发现的环境
-        let scanned_env = JavaEnvironment {
-            name: installation.name.clone(),
-            java_home: installation.java_home.clone(),
-            description: installation.description.clone(),
-            source: EnvironmentSource::Scanned,
-        };
-
-        config.java_environments.push(scanned_env);
         config.save()?;
 
         Ok(())

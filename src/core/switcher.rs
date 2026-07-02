@@ -137,62 +137,6 @@ impl EnvironmentSwitcher {
         })
     }
 
-    /// 列出环境
-    pub async fn list_environments(
-        &self,
-        env_type: EnvironmentType,
-        output_format: OutputFormat,
-    ) -> ContextualResult<String> {
-        let manager = option_with_context(
-            self.managers.get(&env_type),
-            AppError::env_not_found(&format!("{env_type:?}")),
-            "finding environment manager when listing environments",
-        )?;
-
-        let environments = {
-            let manager_guard = manager.lock().await;
-            manager_guard.list().map_err(|e| AppError::Environment {
-                message: format!("Failed to get environment list: {e}"),
-            })?
-        };
-
-        // 获取当前环境
-        let current_env = {
-            let session_manager = self.session_manager.lock()?;
-            session_manager.get_current_environment(env_type).cloned()
-        };
-
-        // 格式化输出
-        match output_format {
-            OutputFormat::Text => {
-                use crate::cli::print::{format_envs, EnvItem};
-                let mut items = Vec::new();
-                for env in environments {
-                    let name = env.name.clone();
-                    let description = env.description.clone().unwrap_or_default();
-                    let is_current = current_env.as_ref() == Some(&name);
-
-                    items.push(EnvItem {
-                        name,
-                        description,
-                        extra: None, // Simplified for list_environments
-                        is_current,
-                        is_default: false,
-                    });
-                }
-                Ok(format_envs(&items))
-            }
-            OutputFormat::Json => {
-                let json_output = serde_json::json!({
-                    "environment_type": env_type,
-                    "current": current_env,
-                    "environments": environments
-                });
-                Ok(safe_to_json_pretty(&json_output)?)
-            }
-        }
-    }
-
     /// 添加环境
     pub async fn add_environment(
         &self,
@@ -575,41 +519,6 @@ impl EnvironmentSwitcher {
             _ => None,
         };
         Ok(default_env)
-    }
-
-    /// 切换到默认环境
-    pub async fn switch_to_default_environment(
-        &self,
-        env_type: EnvironmentType,
-        shell_type: Option<ShellType>,
-    ) -> ContextualResult<SwitchResult> {
-        let config = Config::load().map_err(|e| AppError::Config {
-            message: format!("Failed to load config: {e}"),
-        })?;
-
-        let default_env = match env_type {
-            EnvironmentType::Java => config.default_java_env.clone(),
-            EnvironmentType::Cc => config.default_cc_env.clone(),
-            _ => None,
-        };
-
-        if let Some(default_env) = default_env {
-            self.switch_environment(
-                env_type,
-                &default_env,
-                shell_type,
-                Some("Switch to default environment".to_string()),
-            )
-            .await
-        } else {
-            Ok(SwitchResult {
-                name: "default".to_string(),
-                env_type,
-                script: String::new(),
-                success: false,
-                error: Some(format!("No default {env_type} environment set")),
-            })
-        }
     }
 
     /// 列出环境时显示默认环境标记
