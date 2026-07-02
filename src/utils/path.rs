@@ -5,6 +5,6 @@ pub fn normalize_path(path: &str) -> String {
     let p = Path::new(path);
     match p.canonicalize() {
         Ok(canonical_path) => canonical_path.to_string_lossy().to_string(),
-        Err(_) => p.to_string_lossy().replace('\\', "/").to_lowercase(),
+        Err(_) => p.to_string_lossy().replace('\\', "/"),
     }
 }

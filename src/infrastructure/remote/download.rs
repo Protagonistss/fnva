@@ -95,22 +95,6 @@ fn classify_error(error: &str, status_code: Option<u16>) -> ErrorType {
     }
 }
 
-/// 验证数据哈希
-fn verify_sha256(data: &[u8], expected: &str) -> Result<(), String> {
-    let mut hasher = Sha256::new();
-    hasher.update(data);
-    let result = hasher.finalize();
-    let actual = hex::encode(result);
-
-    if actual.eq_ignore_ascii_case(expected) {
-        Ok(())
-    } else {
-        Err(format!(
-            "SHA256 mismatch: expected {expected}, got {actual}"
-        ))
-    }
-}
-
 /// 验证文件哈希
 async fn verify_file_sha256(path: &Path, expected: &str) -> Result<(), String> {
     let mut file = tokio::fs::File::open(path)
@@ -145,147 +129,6 @@ pub fn load_download_options() -> DownloadOptions {
     crate::infrastructure::config::Config::load()
         .map(|config| DownloadOptions::from_config(&config.download))
         .unwrap_or_else(|_| DownloadOptions::default())
-}
-
-/// 通用的下载工具：流式下载并回调进度，支持重试和校验。
-pub async fn download_to_bytes(
-    client: &Client,
-    url: &str,
-    progress: impl Fn(u64, u64),
-) -> Result<Vec<u8>, String> {
-    download_to_bytes_with_options(client, url, progress, DownloadOptions::default()).await
-}
-
-pub async fn download_to_bytes_with_options(
-    client: &Client,
-    url: &str,
-    progress: impl Fn(u64, u64),
-    options: DownloadOptions,
-) -> Result<Vec<u8>, String> {
-    let mut attempts = 0;
-    let mut last_status_code: Option<u16> = None;
-
-    loop {
-        attempts += 1;
-        match download_to_bytes_internal(client, url, &progress).await {
-            Ok(data) => {
-                if let Some(expected) = &options.expected_sha256 {
-                    if let Err(e) = verify_sha256(&data, expected) {
-                        crate::cli::print::step(
-                            "Error",
-                            &format!(
-                                "Checksum verification failed (attempt {}/{}): {}",
-                                attempts,
-                                options.retry_count + 1,
-                                e
-                            ),
-                        );
-                        if attempts > options.retry_count {
-                            return Err(format!(
-                                "Checksum failed (retried {} times): {}",
-                                options.retry_count, e
-                            ));
-                        }
-                        let delay = options.calculate_retry_delay(attempts);
-                        tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
-                        continue;
-                    }
-                    crate::cli::print::step("Status", "SHA256 checksum verified");
-                }
-                return Ok(data);
-            }
-            Err(e) => {
-                // 尝试从错误消息中提取状态码
-                if e.contains("status code:") {
-                    if let Some(code_str) = e.split("status code:").nth(1) {
-                        if let Ok(code) = code_str
-                            .split_whitespace()
-                            .next()
-                            .unwrap_or("")
-                            .parse::<u16>()
-                        {
-                            last_status_code = Some(code);
-                        }
-                    }
-                }
-
-                let error_type = classify_error(&e, last_status_code);
-
-                // 永久错误不重试
-                if matches!(error_type, ErrorType::Permanent(_)) {
-                    return Err(format!(
-                        "{}: {}",
-                        if let ErrorType::Permanent(msg) = error_type {
-                            msg
-                        } else {
-                            unreachable!()
-                        },
-                        e
-                    ));
-                }
-
-                if attempts > options.retry_count {
-                    return Err(format!(
-                        "Download failed (retried {} times): {}. URL: {}",
-                        options.retry_count, e, url
-                    ));
-                }
-
-                let delay = options.calculate_retry_delay(attempts);
-                println!(
-                    "Download error (attempt {}/{}): {}. Retrying in {}ms...",
-                    attempts,
-                    options.retry_count + 1,
-                    e,
-                    delay
-                );
-                tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
-            }
-        }
-    }
-}
-
-async fn download_to_bytes_internal(
-    client: &Client,
-    url: &str,
-    progress: &impl Fn(u64, u64),
-) -> Result<Vec<u8>, String> {
-    let response = client
-        .get(url)
-        .header("User-Agent", USER_AGENT)
-        .send()
-        .await
-        .map_err(|e| {
-            let error_msg = e.to_string();
-            if error_msg.contains("timeout") {
-                format!("Connection timed out: {error_msg}")
-            } else if error_msg.contains("dns") || error_msg.contains("resolve") {
-                format!("DNS resolution failed: {error_msg}")
-            } else {
-                format!("Network request failed: {error_msg} (URL: {url})")
-            }
-        })?;
-
-    let status = response.status();
-    if !status.is_success() {
-        return Err(format!(
-            "Server returned status code: {status} (URL: {url})"
-        ));
-    }
-
-    let total_size = response.content_length().unwrap_or(0);
-    let mut downloaded = 0u64;
-    let mut data = Vec::new();
-    let mut stream = response.bytes_stream();
-
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| format!("Failed to read data: {e}"))?;
-        downloaded += chunk.len() as u64;
-        progress(downloaded, total_size);
-        data.extend_from_slice(&chunk);
-    }
-
-    Ok(data)
 }
 
 pub async fn download_to_file(
@@ -358,17 +201,8 @@ pub async fn download_to_file_with_options(
                 let error_type = classify_error(&e, last_status_code);
 
                 // 永久错误不重试
-                if matches!(error_type, ErrorType::Permanent(_)) {
-                    return Err(format!(
-                        "{}: {} (URL: {})",
-                        if let ErrorType::Permanent(msg) = error_type {
-                            msg
-                        } else {
-                            unreachable!()
-                        },
-                        e,
-                        url
-                    ));
+                if let ErrorType::Permanent(msg) = error_type {
+                    return Err(format!("{msg}: {e} (URL: {url})"));
                 }
 
                 if attempts > options.retry_count {
