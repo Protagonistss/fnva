@@ -604,3 +604,113 @@ impl EnvironmentSwitcher {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::environments::java::JavaEnvironmentManager;
+    use crate::infrastructure::config::{Config, EnvironmentSource, JavaEnvironment};
+    use std::sync::OnceLock;
+
+    // 所有依赖 FNVA_HOME 的测试必须串行运行:环境变量是进程全局的,
+    // cargo test 默认多线程并行会导致 set_var 互相覆盖。
+    static SEQUENTIAL: OnceLock<std::sync::Mutex<()>> = OnceLock::new();
+
+    /// 把 FNVA_HOME 指向给定临时目录,作用域结束时还原环境变量。
+    struct FnvaHomeGuard {
+        _lock: std::sync::MutexGuard<'static, ()>,
+    }
+
+    impl FnvaHomeGuard {
+        fn new(dir: &std::path::Path) -> Self {
+            let lock = SEQUENTIAL
+                .get_or_init(|| std::sync::Mutex::new(()))
+                .lock()
+                .unwrap();
+            std::env::set_var("FNVA_HOME", dir);
+            Self { _lock: lock }
+        }
+    }
+
+    impl Drop for FnvaHomeGuard {
+        fn drop(&mut self) {
+            std::env::remove_var("FNVA_HOME");
+        }
+    }
+
+    fn make_switcher() -> EnvironmentSwitcher {
+        let mut switcher = EnvironmentSwitcher::new().expect("switcher init");
+        let java = JavaEnvironmentManager::new();
+        switcher
+            .register_manager(EnvironmentType::Java, Arc::new(Mutex::new(java)))
+            .expect("register java manager");
+        switcher
+    }
+
+    #[tokio::test]
+    async fn test_switch_unknown_environment_returns_failed_result() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let _guard = FnvaHomeGuard::new(tmp.path());
+
+        let switcher = make_switcher();
+        let result = switcher
+            .switch_environment(EnvironmentType::Java, "does-not-exist", None, None)
+            .await
+            .expect("switch should resolve");
+
+        // 不存在的环境返回 Ok 但标记失败(而非 Err),与 cli 层约定一致。
+        assert!(!result.success);
+        assert!(
+            result
+                .error
+                .as_deref()
+                .map(|e| e.contains("not found"))
+                .unwrap_or(false),
+            "error should mention 'not found', got: {:?}",
+            result.error
+        );
+    }
+
+    #[tokio::test]
+    async fn test_list_environments_resolves_on_empty_config() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let _guard = FnvaHomeGuard::new(tmp.path());
+
+        let switcher = make_switcher();
+        // 空配置下列表应成功返回(覆盖 switcher 初始化 + list 路径)。
+        switcher
+            .list_environments_with_default(EnvironmentType::Java, OutputFormat::Text)
+            .await
+            .expect("list should resolve");
+    }
+
+    #[tokio::test]
+    async fn test_switch_invalid_java_home_errors() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let _guard = FnvaHomeGuard::new(tmp.path());
+
+        // 写入一个 java_home 指向无效路径的环境:load_from_config 不校验路径,
+        // 因此能进入 installations,再由 use_env 的 validate_java_home 触发错误。
+        {
+            let mut config = Config::new();
+            config
+                .add_java_env(JavaEnvironment {
+                    name: "bad".to_string(),
+                    java_home: "/nonexistent/path/to/java".to_string(),
+                    description: "test".to_string(),
+                    source: EnvironmentSource::Manual,
+                })
+                .expect("add bad java env");
+            config.save().expect("save config");
+        }
+
+        let switcher = make_switcher();
+        let result = switcher
+            .switch_environment(EnvironmentType::Java, "bad", None, None)
+            .await;
+        assert!(
+            result.is_err(),
+            "switching env with invalid java_home should error"
+        );
+    }
+}

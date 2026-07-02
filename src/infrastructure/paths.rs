@@ -13,6 +13,12 @@ use std::path::PathBuf;
 const FNVA_DIR: &str = ".fnva";
 
 fn home() -> Result<PathBuf, String> {
+    // FNVA_HOME 优先(主要用于测试隔离到临时目录);未设置时回落到用户主目录。
+    if let Ok(custom) = std::env::var("FNVA_HOME") {
+        if !custom.is_empty() {
+            return Ok(PathBuf::from(custom));
+        }
+    }
     dirs::home_dir().ok_or_else(|| "Cannot get user home directory".to_string())
 }
 
