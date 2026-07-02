@@ -7,25 +7,18 @@
 //! 抓取结果缓存到 `~/.fnva/maven_versions.json`,带 24h TTL,支持
 //! `fnva maven refresh` 强制刷新。抓取失败时回退编译期嵌入的兜底列表。
 
+use crate::infrastructure::tool_protocol::fetch_with_retry;
 use crate::infrastructure::tool_protocol::template_vars::TemplateVars;
 use crate::infrastructure::tool_protocol::version_discovery::{
     DiscoveryError, ResolvedVersion, VersionDiscovery,
 };
+use crate::infrastructure::tool_protocol::CacheEntry;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::pin::Pin;
 
 const ARCHIVE_URL: &str = "https://archive.apache.org/dist/maven/maven-3/";
 const CACHE_TTL_SECS: i64 = 86_400; // 24h
-
-/// 缓存文件结构(`~/.fnva/maven_versions.json`)
-#[derive(Serialize, Deserialize)]
-struct VersionCache {
-    /// 抓取时间(unix 秒)
-    fetched_at: i64,
-    versions: Vec<String>,
-}
 
 /// 镜像目录动态发现:Maven 版本来源。
 pub struct MirrorDirectoryDiscovery {
@@ -83,34 +76,7 @@ impl MirrorDirectoryDiscovery {
     /// 抓取目录并写缓存。网络错误向上传播(由 `load_versions` / `refresh`
     /// 决定是否回退);抓到内容但解析为空则回退嵌入式列表。
     async fn fetch_and_cache(&self) -> Result<Vec<String>, DiscoveryError> {
-        let mut attempts = 0;
-        let mut html = String::new();
-        while attempts < 3 {
-            attempts += 1;
-            match self
-                .client
-                .get(self.discovery_url)
-                .timeout(std::time::Duration::from_secs(15))
-                .send()
-                .await
-            {
-                Ok(resp) => {
-                    if let Ok(text) = resp.text().await {
-                        html = text;
-                        break;
-                    }
-                }
-                Err(e) => {
-                    if attempts == 3 {
-                        return Err(DiscoveryError::Network(format!(
-                            "Failed to fetch {} after 3 attempts: {}",
-                            self.discovery_url, e
-                        )));
-                    }
-                    tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-                }
-            }
-        }
+        let html = fetch_with_retry(&self.client, self.discovery_url).await?;
         let mut versions = Self::parse_directory_html(&html);
         if versions.is_empty() {
             return Self::embedded_versions();
@@ -118,16 +84,7 @@ impl MirrorDirectoryDiscovery {
         versions.sort_by_key(|v| std::cmp::Reverse(version_sort_key(v)));
 
         if let Ok(path) = Self::cache_path() {
-            if let Some(parent) = path.parent() {
-                let _ = std::fs::create_dir_all(parent);
-            }
-            let cache = VersionCache {
-                fetched_at: chrono::Utc::now().timestamp(),
-                versions: versions.clone(),
-            };
-            if let Ok(json) = serde_json::to_string(&cache) {
-                let _ = std::fs::write(&path, json);
-            }
+            CacheEntry::write(&path, &versions);
         }
         Ok(versions)
     }
@@ -135,12 +92,8 @@ impl MirrorDirectoryDiscovery {
     /// TTL 内用本地缓存,否则抓取;抓取失败(离线)回退嵌入式列表。
     async fn load_versions(&self) -> Result<Vec<String>, DiscoveryError> {
         if let Ok(path) = Self::cache_path() {
-            if let Ok(content) = std::fs::read_to_string(&path) {
-                if let Ok(cache) = serde_json::from_str::<VersionCache>(&content) {
-                    if chrono::Utc::now().timestamp() - cache.fetched_at < CACHE_TTL_SECS {
-                        return Ok(cache.versions);
-                    }
-                }
+            if let Some(cached) = CacheEntry::<String>::read(&path, CACHE_TTL_SECS) {
+                return Ok(cached);
             }
         }
         match self.fetch_and_cache().await {
