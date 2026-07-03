@@ -48,31 +48,9 @@ impl ScriptFactory {
         self.get_strategy(shell_type)
     }
 
-    /// 检测当前Shell类型
+    /// 检测当前Shell类型(委托 `shell::platform::detect_shell`,统一全项目检测逻辑)
     pub fn detect_shell_type(&self) -> ShellType {
-        // 检查环境变量
-        if let Ok(shell) = std::env::var("SHELL") {
-            if shell.contains("bash") {
-                return ShellType::Bash;
-            } else if shell.contains("zsh") {
-                return ShellType::Zsh;
-            } else if shell.contains("fish") {
-                return ShellType::Fish;
-            }
-        }
-
-        // 检查Windows PowerShell
-        if std::env::var("PSModulePath").is_ok() || std::env::var("POSH_THEMES_PATH").is_ok() {
-            return ShellType::PowerShell;
-        }
-
-        // 检查Windows CMD
-        if cfg!(target_os = "windows") && std::env::var("PROMPT").is_ok() {
-            return ShellType::Cmd;
-        }
-
-        // 默认返回Bash
-        ShellType::Bash
+        crate::infrastructure::shell::platform::detect_shell()
     }
 
     /// 注册自定义策略
