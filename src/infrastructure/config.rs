@@ -3,6 +3,9 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 
+/// 默认 CC sonnet 模型名(配置缺省值与扫描兜底共用)。
+pub const DEFAULT_SONNET_MODEL: &str = "claude-sonnet-4-5";
+
 /// 镜像配置（模板化 URL）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MirrorConfig {
@@ -179,7 +182,7 @@ fn default_cc_environments() -> Vec<CcEnvironment> {
         provider: "anthropic".to_string(),
         api_key: "${ANTHROPIC_API_KEY}".to_string(),
         base_url: "https://api.anthropic.com".to_string(),
-        sonnet_model: "claude-sonnet-4-5".to_string(),
+        sonnet_model: DEFAULT_SONNET_MODEL.to_string(),
         opus_model: Some("claude-opus-4-5".to_string()),
         haiku_model: Some("claude-haiku-4-5".to_string()),
         description: "Anthropic Claude Code environment".to_string(),

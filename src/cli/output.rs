@@ -1,47 +1,9 @@
 use crate::core::presentation::OutputFormat;
-use serde::Serialize;
 
-/// 输出格式化器
+/// 输出格式化器(目前仅用于 use 命令的输出)。
 pub struct OutputFormatter;
 
 impl OutputFormatter {
-    /// 格式化环境列表
-    pub fn format_environments<T: Serialize + std::fmt::Debug>(
-        &self,
-        environments: &[T],
-        env_type: &str,
-        current: Option<&str>,
-        format: OutputFormat,
-    ) -> Result<String, String> {
-        match format {
-            OutputFormat::Text => {
-                let mut output = String::new();
-                if environments.is_empty() {
-                    output.push_str(&format!("No {env_type} environments found\n"));
-                } else {
-                    output.push_str(&format!("Available {env_type} environments:\n"));
-                    for env in environments {
-                        // 这里需要根据具体类型来格式化
-                        // 暂时使用简单的序列化
-                        output.push_str(&format!("  {env:?}\n"));
-                    }
-                    if let Some(current) = current {
-                        output.push_str(&format!("Current: {current}\n"));
-                    }
-                }
-                Ok(output)
-            }
-            OutputFormat::Json => {
-                let json_output = serde_json::json!({
-                    "environment_type": env_type,
-                    "current": current,
-                    "environments": environments
-                });
-                Ok(serde_json::to_string_pretty(&json_output).unwrap())
-            }
-        }
-    }
-
     /// 格式化切换结果
     pub fn format_switch_result(
         &self,
@@ -63,34 +25,6 @@ impl OutputFormatter {
                 }
             }
             OutputFormat::Json => Ok(serde_json::to_string_pretty(result).unwrap()),
-        }
-    }
-
-    /// 格式化错误信息
-    pub fn format_error(&self, error: &str, format: OutputFormat) -> String {
-        match format {
-            OutputFormat::Text => format!("{error}\n"),
-            OutputFormat::Json => {
-                let json_output = serde_json::json!({
-                    "error": error,
-                    "success": false
-                });
-                serde_json::to_string_pretty(&json_output).unwrap()
-            }
-        }
-    }
-
-    /// 格式化成功信息
-    pub fn format_success(&self, message: &str, format: OutputFormat) -> String {
-        match format {
-            OutputFormat::Text => format!("{message}\n"),
-            OutputFormat::Json => {
-                let json_output = serde_json::json!({
-                    "message": message,
-                    "success": true
-                });
-                serde_json::to_string_pretty(&json_output).unwrap()
-            }
         }
     }
 }

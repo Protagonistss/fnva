@@ -1,7 +1,9 @@
 use crate::core::environment_manager::{DynEnvironment, EnvironmentManager, EnvironmentType};
 use crate::core::session::SessionManager;
 use crate::error::AppError;
-use crate::infrastructure::config::{CcEnvironment as ConfigCcEnvironment, Config};
+use crate::infrastructure::config::{
+    CcEnvironment as ConfigCcEnvironment, Config, DEFAULT_SONNET_MODEL,
+};
 use crate::infrastructure::shell::ScriptGenerator;
 use crate::infrastructure::shell::ShellType;
 use serde_json;
@@ -114,7 +116,7 @@ impl EnvironmentManager for CcEnvironmentManager {
             .get("sonnet_model")
             .or_else(|| config.get("model"))
             .and_then(|v| v.as_str())
-            .unwrap_or("claude-sonnet-4-5");
+            .unwrap_or(DEFAULT_SONNET_MODEL);
 
         let opus_model = config.get("opus_model").and_then(|v| v.as_str());
         let haiku_model = config.get("haiku_model").and_then(|v| v.as_str());
@@ -286,7 +288,7 @@ impl EnvironmentManager for CcEnvironmentManager {
             let sonnet_model = env_map
                 .get("ANTHROPIC_DEFAULT_SONNET_MODEL")
                 .and_then(|v| v.as_str())
-                .unwrap_or("claude-sonnet-4-5")
+                .unwrap_or(DEFAULT_SONNET_MODEL)
                 .to_string();
 
             let source_label = candidate
@@ -318,7 +320,7 @@ impl EnvironmentManager for CcEnvironmentManager {
 
             if !already_in_result && !already_managed {
                 let sonnet = std::env::var("ANTHROPIC_DEFAULT_SONNET_MODEL")
-                    .unwrap_or_else(|_| "claude-sonnet-4-5".to_string());
+                    .unwrap_or_else(|_| DEFAULT_SONNET_MODEL.to_string());
                 result.push(DynEnvironment {
                     name,
                     path: base_url,
