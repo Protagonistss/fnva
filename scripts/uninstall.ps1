@@ -1,40 +1,42 @@
-# fnva 卸载脚本(Windows PowerShell):删 binary + 清 $PROFILE 的 fnva 块 + 从用户 PATH 移除。
+# fnva uninstaller (Windows PowerShell):
+#   remove binary + strip fnva block from $PROFILE + remove from user PATH.
 #   irm https://raw.githubusercontent.com/Protagonistss/fnva/main/scripts/uninstall.ps1 | iex
-# 默认保留 %USERPROFILE%\.fnva;如需彻底删除,末尾有提示。
+#
+# Keeps %USERPROFILE%\.fnva by default; see the note at the end to wipe it.
 
 $ErrorActionPreference = "Stop"
 $InstallDir = if ($env:FNVA_INSTALL_DIR) { $env:FNVA_INSTALL_DIR } else { Join-Path $env:USERPROFILE ".fnva\bin" }
 
-# 1. 清 $PROFILE 的 fnva 块(>>> fnva >>> ... <<< fnva <<<)
+# 1. strip fnva block from $PROFILE
 if (Test-Path $PROFILE) {
     $content = Get-Content $PROFILE -Raw
     if ($content -match ">>> fnva >>>") {
         $content = $content -replace "(?s)\r?\n?# >>> fnva >>>.*?# <<< fnva <<<", ""
         Set-Content -Path $PROFILE -Value $content -NoNewline
-        Write-Host "已从 $PROFILE 清除 fnva 块"
+        Write-Host "Removed fnva block from $PROFILE"
     }
 }
 
-# 2. 从用户 PATH 移除 InstallDir
+# 2. remove InstallDir from user PATH
 $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($userPath -like "*$InstallDir*") {
     $newPath = ($userPath -split ";" | Where-Object { $_ -and $_ -ne $InstallDir }) -join ";"
     [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
-    Write-Host "已从用户 PATH 移除 $InstallDir"
+    Write-Host "Removed $InstallDir from user PATH"
 }
 
-# 3. 删 binary
+# 3. remove binary
 $exe = Join-Path $InstallDir "fnva.exe"
 if (Test-Path $exe) {
     Remove-Item $exe -Force
-    Write-Host "已删除 $exe"
+    Write-Host "Removed $exe"
 } else {
-    Write-Host "$exe 不存在(可能已删)"
+    Write-Host "$exe not found (already removed?)"
 }
 
 Write-Host ""
-Write-Host "✓ fnva 已卸载"
-Write-Host "  配置目录 $env:USERPROFILE\.fnva 已保留;如需彻底删除:"
+Write-Host "✓ fnva uninstalled"
+Write-Host "  Config dir $env:USERPROFILE\.fnva kept; to wipe it completely:"
 Write-Host "    Remove-Item -Recurse -Force $env:USERPROFILE\.fnva"
 Write-Host ""
-Write-Host "重开 PowerShell 使 PATH 变更生效。"
+Write-Host "Reopen PowerShell so PATH changes take effect."
