@@ -1,6 +1,10 @@
 use crate::core::environment_manager::{DynEnvironment, EnvironmentManager, EnvironmentType};
+use crate::core::presentation::ScanHit;
 use crate::core::session::SessionManager;
-use crate::infrastructure::config::{CcEnvironment as ConfigCcEnvironment, Config};
+use crate::error::AppError;
+use crate::infrastructure::config::{
+    CcEnvironment as ConfigCcEnvironment, Config, DEFAULT_SONNET_MODEL,
+};
 use crate::infrastructure::shell::ScriptGenerator;
 use crate::infrastructure::shell::ShellType;
 use serde_json;
@@ -33,8 +37,8 @@ impl CcEnvironmentManager {
     }
 
     /// 从配置文件加载 CC 环境
-    fn load_from_config(&mut self) -> Result<(), String> {
-        let config = Config::load()?;
+    fn load_from_config(&mut self) -> Result<(), AppError> {
+        let config = Config::load().map_err(|e| AppError::config_error(&e))?;
 
         self.environments.clear();
         for env in &config.cc_environments {
@@ -64,7 +68,7 @@ impl EnvironmentManager for CcEnvironmentManager {
         EnvironmentType::Cc
     }
 
-    fn list(&self) -> Result<Vec<DynEnvironment>, String> {
+    fn list(&self) -> Result<Vec<DynEnvironment>, AppError> {
         let mut result = Vec::new();
         for env in self.environments.values() {
             result.push(DynEnvironment {
@@ -78,7 +82,7 @@ impl EnvironmentManager for CcEnvironmentManager {
         Ok(result)
     }
 
-    fn get(&self, name: &str) -> Result<Option<DynEnvironment>, String> {
+    fn get(&self, name: &str) -> Result<Option<DynEnvironment>, AppError> {
         if let Some(env) = self.environments.get(name) {
             Ok(Some(DynEnvironment {
                 name: env.name.clone(),
@@ -92,10 +96,9 @@ impl EnvironmentManager for CcEnvironmentManager {
         }
     }
 
-    fn add(&mut self, name: &str, config_str: &str) -> Result<(), String> {
+    fn add(&mut self, name: &str, config_str: &str) -> Result<(), AppError> {
         // Parse config as JSON
-        let config: serde_json::Value =
-            serde_json::from_str(config_str).map_err(|e| format!("Failed to parse config: {e}"))?;
+        let config: serde_json::Value = serde_json::from_str(config_str)?;
 
         let provider = config
             .get("provider")
@@ -107,14 +110,14 @@ impl EnvironmentManager for CcEnvironmentManager {
         let base_url = config
             .get("base_url")
             .and_then(|v| v.as_str())
-            .ok_or("Missing base_url in config")?;
+            .ok_or_else(|| AppError::validation("base_url", "missing in config"))?;
 
         // Support both "model" (legacy) and "sonnet_model" (new)
         let sonnet_model = config
             .get("sonnet_model")
             .or_else(|| config.get("model"))
             .and_then(|v| v.as_str())
-            .unwrap_or("claude-sonnet-4-5");
+            .unwrap_or(DEFAULT_SONNET_MODEL);
 
         let opus_model = config.get("opus_model").and_then(|v| v.as_str());
         let haiku_model = config.get("haiku_model").and_then(|v| v.as_str());
@@ -143,7 +146,7 @@ impl EnvironmentManager for CcEnvironmentManager {
         };
 
         // 持久化到配置文件
-        let mut file_config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
+        let mut file_config = Config::load().map_err(|e| AppError::config_error(&e))?;
         if let Some(existing) = file_config
             .cc_environments
             .iter_mut()
@@ -164,38 +167,34 @@ impl EnvironmentManager for CcEnvironmentManager {
         } else {
             file_config.cc_environments.push(cc_environment.clone());
         }
-        file_config
-            .save()
-            .map_err(|e| format!("Failed to save config: {e}"))?;
+        file_config.save().map_err(|e| AppError::config_error(&e))?;
 
         self.environments.insert(name.to_string(), cc_environment);
         Ok(())
     }
 
-    fn remove(&mut self, name: &str) -> Result<(), String> {
+    fn remove(&mut self, name: &str) -> Result<(), AppError> {
         if self.environments.remove(name).is_none() {
-            return Err(format!("CC environment '{name}' not found"));
+            return Err(AppError::not_found(&format!("CC environment '{name}'")));
         }
 
-        let mut config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
+        let mut config = Config::load().map_err(|e| AppError::config_error(&e))?;
         let original_len = config.cc_environments.len();
         config.cc_environments.retain(|env| env.name != name);
         if config.cc_environments.len() == original_len {
-            return Err(format!("CC environment '{name}' not found"));
+            return Err(AppError::not_found(&format!("CC environment '{name}'")));
         }
 
-        config
-            .save()
-            .map_err(|e| format!("Failed to save config: {e}"))?;
+        config.save().map_err(|e| AppError::config_error(&e))?;
 
         Ok(())
     }
 
-    fn use_env(&mut self, name: &str, shell_type: Option<ShellType>) -> Result<String, String> {
+    fn use_env(&mut self, name: &str, shell_type: Option<ShellType>) -> Result<String, AppError> {
         let cc_env = self
             .environments
             .get(name)
-            .ok_or_else(|| format!("CC environment '{name}' not found"))?;
+            .ok_or_else(|| AppError::not_found(&format!("CC environment '{name}'")))?;
 
         let shell_type =
             shell_type.unwrap_or_else(crate::infrastructure::shell::platform::detect_shell);
@@ -211,15 +210,11 @@ impl EnvironmentManager for CcEnvironmentManager {
         let provider = crate::environments::cc::provider::get_provider(&cc_env.provider);
         provider.setup_config(cc_env, &mut config);
 
-        let generator = ScriptGenerator::new().map_err(|e| e.to_string())?;
-        match generator.generate_switch_script(EnvironmentType::Cc, name, &config, Some(shell_type))
-        {
-            Ok(script) => Ok(script),
-            Err(e) => Err(format!("Failed to generate script: {e}")),
-        }
+        let generator = ScriptGenerator::new()?;
+        generator.generate_switch_script(EnvironmentType::Cc, name, &config, Some(shell_type))
     }
 
-    fn get_current(&self) -> Result<Option<String>, String> {
+    fn get_current(&self) -> Result<Option<String>, AppError> {
         // Session 优先
         if let Ok(session) = SessionManager::new() {
             if let Some(current) = session.get_current_environment(EnvironmentType::Cc) {
@@ -245,8 +240,8 @@ impl EnvironmentManager for CcEnvironmentManager {
         Ok(None)
     }
 
-    async fn scan(&self) -> Result<Vec<DynEnvironment>, String> {
-        let mut result = Vec::new();
+    async fn scan(&self, _extra: &[String]) -> Result<Vec<ScanHit>, AppError> {
+        let mut result: Vec<ScanHit> = Vec::new();
         let existing_config = crate::infrastructure::config::Config::load().unwrap_or_default();
         let existing_names: std::collections::HashSet<String> = existing_config
             .cc_environments
@@ -279,11 +274,13 @@ impl EnvironmentManager for CcEnvironmentManager {
                 continue;
             }
 
-            // Skip if already tracked by fnva (by name or base_url)
             let name = url_to_env_name(&base_url);
             if existing_names.contains(&name)
-                || existing_config.cc_environments.iter().any(|e| e.base_url == base_url)
-                || result.iter().any(|e: &DynEnvironment| e.path == base_url)
+                || existing_config
+                    .cc_environments
+                    .iter()
+                    .any(|e| e.base_url == base_url)
+                || result.iter().any(|e: &ScanHit| e.location == base_url)
             {
                 continue;
             }
@@ -291,31 +288,30 @@ impl EnvironmentManager for CcEnvironmentManager {
             let sonnet_model = env_map
                 .get("ANTHROPIC_DEFAULT_SONNET_MODEL")
                 .and_then(|v| v.as_str())
-                .unwrap_or("claude-sonnet-4-5")
+                .unwrap_or(DEFAULT_SONNET_MODEL)
                 .to_string();
 
             let source_label = candidate
                 .to_string_lossy()
                 .replace(&std::env::var("HOME").unwrap_or_default(), "~");
-
-            result.push(DynEnvironment {
+            let import = format!(
+                "fnva cc add --name {name} --provider <provider> --base-url \"{base_url}\""
+            );
+            result.push(ScanHit {
                 name,
-                path: base_url,
-                version: Some(sonnet_model.clone()),
-                description: Some(format!(
-                    "Detected from {source_label} (model: {sonnet_model})"
-                )),
-                is_active: false,
+                location: base_url,
+                detail: format!("{sonnet_model} (from {source_label})"),
+                import_cmd: import,
             });
         }
 
-        // 2. Check system environment variables (original logic)
-        if let (Ok(auth_token), Ok(base_url)) = (
+        // 2. Check system environment variables
+        if let (Ok(_auth_token), Ok(base_url)) = (
             std::env::var("ANTHROPIC_AUTH_TOKEN"),
             std::env::var("ANTHROPIC_BASE_URL"),
         ) {
             let name = url_to_env_name(&base_url);
-            let already_in_result = result.iter().any(|e| e.path == base_url);
+            let already_in_result = result.iter().any(|e| e.location == base_url);
             let already_managed = existing_config
                 .cc_environments
                 .iter()
@@ -323,34 +319,33 @@ impl EnvironmentManager for CcEnvironmentManager {
 
             if !already_in_result && !already_managed {
                 let sonnet = std::env::var("ANTHROPIC_DEFAULT_SONNET_MODEL")
-                    .unwrap_or_else(|_| "claude-sonnet-4-5".to_string());
-                result.push(DynEnvironment {
+                    .unwrap_or_else(|_| DEFAULT_SONNET_MODEL.to_string());
+                let import = format!(
+                    "fnva cc add --name {name} --provider <provider> --base-url \"{base_url}\""
+                );
+                result.push(ScanHit {
                     name,
-                    path: base_url,
-                    version: Some(sonnet.clone()),
-                    description: Some(format!(
-                        "Detected from system environment variables (model: {sonnet})"
-                    )),
-                    is_active: true,
+                    location: base_url,
+                    detail: format!("{sonnet} (from env vars)"),
+                    import_cmd: import,
                 });
-                let _ = auth_token;
             }
         }
 
         Ok(result)
     }
 
-    fn set_current(&mut self, _name: &str) -> Result<(), String> {
+    fn set_current(&mut self, _name: &str) -> Result<(), AppError> {
         // This would set the current environment by updating environment variables
         // For now, this is a no-op - the actual switching is handled by use_env
         Ok(())
     }
 
-    fn is_available(&self, name: &str) -> Result<bool, String> {
+    fn is_available(&self, name: &str) -> Result<bool, AppError> {
         Ok(self.environments.contains_key(name))
     }
 
-    fn get_details(&self, name: &str) -> Result<Option<DynEnvironment>, String> {
+    fn get_details(&self, name: &str) -> Result<Option<DynEnvironment>, AppError> {
         self.get(name)
     }
 }

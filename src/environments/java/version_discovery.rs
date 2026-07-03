@@ -9,10 +9,12 @@
 //! - major 8:`{ver}` = `8u{u}b{b}` → version `8u{u}b{b}`,tag `jdk8u{u}-b{b}`
 
 use crate::infrastructure::remote::platform::Platform;
+use crate::infrastructure::tool_protocol::fetch_with_retry;
 use crate::infrastructure::tool_protocol::template_vars::TemplateVars;
 use crate::infrastructure::tool_protocol::version_discovery::{
     DiscoveryError, ResolvedVersion, VersionDiscovery,
 };
+use crate::infrastructure::tool_protocol::CacheEntry;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::future::Future;
@@ -105,12 +107,6 @@ struct CachedVersion {
     arch: String,
 }
 
-#[derive(Serialize, Deserialize)]
-struct VersionCache {
-    fetched_at: i64,
-    versions: Vec<CachedVersion>,
-}
-
 /// 清华 Adoptium 镜像目录动态发现:Java 版本来源。
 pub struct AdoptiumDiscovery {
     client: Client,
@@ -141,25 +137,7 @@ impl AdoptiumDiscovery {
             "{MIRROR_BASE}/{major}/jdk/{}/{}/",
             self.platform.arch, self.platform.os
         );
-        let mut attempts = 0;
-        let mut html = String::new();
-        while attempts < 3 {
-            attempts += 1;
-            match self.client.get(&url).timeout(std::time::Duration::from_secs(15)).send().await {
-                Ok(resp) => {
-                    if let Ok(text) = resp.text().await {
-                        html = text;
-                        break;
-                    }
-                }
-                Err(e) => {
-                    if attempts == 3 {
-                        return Err(DiscoveryError::Network(format!("Failed to fetch {} after 3 attempts: {}", url, e)));
-                    }
-                    tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-                }
-            }
-        }
+        let html = fetch_with_retry(&self.client, &url).await?;
 
         let prefix = "href=\"";
         let mut out = Vec::new();
@@ -205,13 +183,7 @@ impl AdoptiumDiscovery {
         }
         all.sort_by(|a, b| b.major.cmp(&a.major).then(b.version.cmp(&a.version)));
         if let Ok(path) = Self::cache_path() {
-            let cache = VersionCache {
-                fetched_at: chrono::Utc::now().timestamp(),
-                versions: all.clone(),
-            };
-            if let Ok(json) = serde_json::to_string(&cache) {
-                let _ = std::fs::write(&path, json);
-            }
+            CacheEntry::write(&path, &all);
         }
         Ok(all)
     }
@@ -219,12 +191,8 @@ impl AdoptiumDiscovery {
     /// TTL 内用缓存,否则抓取;抓取失败(离线)回退嵌入表。
     async fn load_versions(&self) -> Result<Vec<CachedVersion>, DiscoveryError> {
         if let Ok(path) = Self::cache_path() {
-            if let Ok(content) = std::fs::read_to_string(&path) {
-                if let Ok(cache) = serde_json::from_str::<VersionCache>(&content) {
-                    if chrono::Utc::now().timestamp() - cache.fetched_at < CACHE_TTL_SECS {
-                        return Ok(cache.versions);
-                    }
-                }
+            if let Some(cached) = CacheEntry::<CachedVersion>::read(&path, CACHE_TTL_SECS) {
+                return Ok(cached);
             }
         }
         match self.fetch_and_cache().await {

@@ -1,10 +1,28 @@
 use crate::cli::commands::*;
-use crate::cli::output::{OutputFormat, FORMATTER};
+use crate::cli::output::FORMATTER;
+use crate::cli::print::format_envs;
 use crate::core::environment_manager::EnvironmentType;
+use crate::core::presentation::{EnvItem, OutputFormat};
 use crate::core::switcher::EnvironmentSwitcher;
+use crate::error::AppError;
 use crate::infrastructure::shell::platform::detect_shell;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
+/// 把环境列表数据渲染成 Text 或 Json 字符串。
+fn render_envs(
+    items: &[EnvItem],
+    env_type: EnvironmentType,
+    fmt: OutputFormat,
+) -> Result<String, String> {
+    match fmt {
+        OutputFormat::Text => Ok(format_envs(items)),
+        OutputFormat::Json => {
+            let json = serde_json::json!({"environment_type": env_type, "environments": items});
+            serde_json::to_string_pretty(&json).map_err(|e| e.to_string())
+        }
+    }
+}
 
 /// 命令处理器
 pub struct CommandHandler {
@@ -78,25 +96,35 @@ impl CommandHandler {
             let output = self.switcher.clear_default_environment(env_type).await?;
             print!("{output}");
         } else if let Some(env_name) = name {
-            let output = self.switcher.set_default_environment(env_type, &env_name).await?;
+            let output = self
+                .switcher
+                .set_default_environment(env_type, &env_name)
+                .await?;
             print!("{output}");
         } else {
             match self.switcher.get_default_environment(env_type).await? {
                 Some(env_name) => {
                     if let Some(shell_name) = shell {
                         let shell_type = parse_shell_type(&shell_name)?;
-                        let result = self.switcher.switch_environment(
-                            env_type,
-                            &env_name,
-                            Some(shell_type),
-                            Some("Switch to default environment".to_string()),
-                        ).await?;
+                        let result = self
+                            .switcher
+                            .switch_environment(
+                                env_type,
+                                &env_name,
+                                Some(shell_type),
+                                Some("Switch to default environment".to_string()),
+                            )
+                            .await?;
                         Self::handle_use_result(&result, &env_name, env_type_label, json)?;
                     } else {
-                        crate::cli::print::success(&format!("{env_name}  [{env_type_label}] (default)"));
+                        crate::cli::print::success(&format!(
+                            "{env_name}  [{env_type_label}] (default)"
+                        ));
                     }
                 }
-                None => crate::cli::print::warn(&format!("No default {env_type_label} environment set")),
+                None => {
+                    crate::cli::print::warn(&format!("No default {env_type_label} environment set"))
+                }
             }
         }
         Ok(())
@@ -113,10 +141,7 @@ impl CommandHandler {
                     .map(|s| parse_shell_type(&s))
                     .transpose()?
                     .unwrap_or_else(detect_shell);
-                let script = self
-                    .switcher
-                    .generate_shell_integration(shell_type)
-                    .await?;
+                let script = self.switcher.generate_shell_integration(shell_type).await?;
                 print!("{script}");
                 Ok(())
             }
@@ -133,18 +158,16 @@ impl CommandHandler {
     async fn handle_java_command(&mut self, action: JavaCommands) -> Result<(), String> {
         match action {
             JavaCommands::List { json } => {
-                let output = self
+                let items = self
                     .switcher
-                    .list_environments_with_default(
-                        EnvironmentType::Java,
-                        if json {
-                            OutputFormat::Json
-                        } else {
-                            OutputFormat::Text
-                        },
-                    )
+                    .list_environments_with_default(EnvironmentType::Java)
                     .await?;
-                print!("{output}");
+                let fmt = if json {
+                    OutputFormat::Json
+                } else {
+                    OutputFormat::Text
+                };
+                print!("{}", render_envs(&items, EnvironmentType::Java, fmt)?);
             }
             JavaCommands::Use { name, shell, json } => {
                 let shell_type = match shell {
@@ -163,25 +186,42 @@ impl CommandHandler {
                     .await
                 {
                     Ok(res) => res,
-                    Err(e) => {
-                        let err_str = e.to_string();
-                        if err_str.contains("Invalid JAVA_HOME") {
-                            crate::cli::print::warn(&format!(
-                                "The configured Java path for '{}' is invalid or missing.",
-                                name
-                            ));
-                            crate::cli::print::warn("Would you like to remove it from fnva configuration? [y/N]");
-                            
-                            let mut input = String::new();
-                            if std::io::stdin().read_line(&mut input).is_ok() && input.trim().eq_ignore_ascii_case("y") {
-                                if let Err(remove_err) = self.switcher.remove_environment(EnvironmentType::Java, &name).await {
-                                    crate::cli::print::warn(&format!("Failed to remove environment: {}", remove_err));
-                                } else {
-                                    crate::cli::print::success(&format!("Successfully removed stale environment '{}'", name));
+                    Err(ctx_err) => {
+                        // java_home 失效时交互式询问是否从配置中删除该环境
+                        match &ctx_err.error {
+                            AppError::Validation { field, .. } if field == "java_home" => {
+                                crate::cli::print::warn(&format!(
+                                    "The configured Java path for '{}' is invalid or missing.",
+                                    name
+                                ));
+                                crate::cli::print::warn(
+                                    "Would you like to remove it from fnva configuration? [y/N]",
+                                );
+
+                                let mut input = String::new();
+                                if std::io::stdin().read_line(&mut input).is_ok()
+                                    && input.trim().eq_ignore_ascii_case("y")
+                                {
+                                    if let Err(remove_err) = self
+                                        .switcher
+                                        .remove_environment(EnvironmentType::Java, &name)
+                                        .await
+                                    {
+                                        crate::cli::print::warn(&format!(
+                                            "Failed to remove environment: {}",
+                                            remove_err
+                                        ));
+                                    } else {
+                                        crate::cli::print::success(&format!(
+                                            "Successfully removed stale environment '{}'",
+                                            name
+                                        ));
+                                    }
                                 }
                             }
+                            _ => {}
                         }
-                        return Err(err_str);
+                        return Err(ctx_err.to_string());
                     }
                 };
 
@@ -201,10 +241,10 @@ impl CommandHandler {
                     .await?;
                 print!("{output}");
             }
-            JavaCommands::Scan => {
+            JavaCommands::Scan { path } => {
                 let output = self
                     .switcher
-                    .scan_environments(EnvironmentType::Java)
+                    .scan_environments(EnvironmentType::Java, &path)
                     .await?;
                 print!("{output}");
             }
@@ -277,7 +317,15 @@ impl CommandHandler {
                 shell,
                 json,
             } => {
-                self.handle_default_command_helper(EnvironmentType::Java, name, unset, shell, json, "java").await?;
+                self.handle_default_command_helper(
+                    EnvironmentType::Java,
+                    name,
+                    unset,
+                    shell,
+                    json,
+                    "java",
+                )
+                .await?;
             }
         }
         Ok(())
@@ -289,18 +337,16 @@ impl CommandHandler {
         use crate::infrastructure::tool_protocol::VersionDiscovery;
         match action {
             MavenCommands::List { json } => {
-                let output = self
+                let items = self
                     .switcher
-                    .list_environments_with_default(
-                        EnvironmentType::Maven,
-                        if json {
-                            OutputFormat::Json
-                        } else {
-                            OutputFormat::Text
-                        },
-                    )
+                    .list_environments_with_default(EnvironmentType::Maven)
                     .await?;
-                print!("{output}");
+                let fmt = if json {
+                    OutputFormat::Json
+                } else {
+                    OutputFormat::Text
+                };
+                print!("{}", render_envs(&items, EnvironmentType::Maven, fmt)?);
             }
             MavenCommands::Use { name, shell, json } => {
                 let shell_type = match shell {
@@ -326,10 +372,10 @@ impl CommandHandler {
                     .map_err(|e| format!("Failed to load config: {e}"))?;
                 MavenInstaller::install_maven(&version, &mut config, auto_switch).await?;
             }
-            MavenCommands::Scan => {
+            MavenCommands::Scan { path } => {
                 let output = self
                     .switcher
-                    .scan_environments(EnvironmentType::Maven)
+                    .scan_environments(EnvironmentType::Maven, &path)
                     .await?;
                 print!("{output}");
             }
@@ -413,7 +459,15 @@ impl CommandHandler {
                 shell,
                 json,
             } => {
-                self.handle_default_command_helper(EnvironmentType::Maven, name, unset, shell, json, "maven").await?;
+                self.handle_default_command_helper(
+                    EnvironmentType::Maven,
+                    name,
+                    unset,
+                    shell,
+                    json,
+                    "maven",
+                )
+                .await?;
             }
             MavenCommands::Set {
                 name,
@@ -444,13 +498,15 @@ impl CommandHandler {
                     settings.map(Some)
                 };
 
-                manager.set_env_vars(&name, opts_arg, repo_arg, settings_arg)?;
+                manager
+                    .set_env_vars(&name, opts_arg, repo_arg, settings_arg)
+                    .map_err(|e| e.to_string())?;
                 crate::cli::print::success(&format!("Updated Maven environment: {name}"));
             }
             MavenCommands::Show { name } => {
                 use crate::environments::maven::MavenEnvironmentManager;
                 let manager = MavenEnvironmentManager::new();
-                let info = manager.show_env(&name)?;
+                let info = manager.show_env(&name).map_err(|e| e.to_string())?;
                 println!("{info}");
             }
         }
@@ -461,21 +517,22 @@ impl CommandHandler {
     async fn handle_cc_command(&mut self, action: CcCommands) -> Result<(), String> {
         match action {
             CcCommands::List { json } => {
+                let items = self
+                    .switcher
+                    .list_environments_with_default(EnvironmentType::Cc)
+                    .await?;
+                let fmt = if json {
+                    OutputFormat::Json
+                } else {
+                    OutputFormat::Text
+                };
+                print!("{}", render_envs(&items, EnvironmentType::Cc, fmt)?);
+            }
+            CcCommands::Scan { path } => {
                 let output = self
                     .switcher
-                    .list_environments_with_default(
-                        EnvironmentType::Cc,
-                        if json {
-                            OutputFormat::Json
-                        } else {
-                            OutputFormat::Text
-                        },
-                    )
+                    .scan_environments(EnvironmentType::Cc, &path)
                     .await?;
-                print!("{output}");
-            }
-            CcCommands::Scan => {
-                let output = self.switcher.scan_environments(EnvironmentType::Cc).await?;
                 print!("{output}");
             }
             CcCommands::Use { name, shell, json } => {
@@ -500,7 +557,15 @@ impl CommandHandler {
                 shell,
                 json,
             } => {
-                self.handle_default_command_helper(EnvironmentType::Cc, name, unset, shell, json, "cc").await?;
+                self.handle_default_command_helper(
+                    EnvironmentType::Cc,
+                    name,
+                    unset,
+                    shell,
+                    json,
+                    "cc",
+                )
+                .await?;
             }
             CcCommands::Current { json } => {
                 let output = self
@@ -621,8 +686,8 @@ impl CommandHandler {
         _json: bool,
     ) -> Result<(), String> {
         let env_type = env_type.map(|t| parse_environment_type(&t)).transpose()?;
-        let output = self.switcher.get_switch_history(env_type, limit).await?;
-        print!("{output}");
+        let items = self.switcher.get_switch_history(env_type, limit).await?;
+        print!("{}", crate::cli::print::format_history(&items));
         Ok(())
     }
 }

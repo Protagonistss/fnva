@@ -1,8 +1,9 @@
-use crate::cli::output::OutputFormat;
 use crate::core::environment_manager::{EnvironmentManager, EnvironmentType, SwitchResult};
+use crate::core::presentation::{EnvItem, HistoryItem, OutputFormat};
 use crate::core::session::{HistoryManager, SessionManager, SwitchHistory};
 use crate::error::{
-    option_with_context, safe_to_json, safe_to_json_pretty, AppError, ContextualResult, SafeMutex,
+    option_with_context, safe_to_json, safe_to_json_pretty, AppError, ContextualResult, ResultExt,
+    SafeMutex,
 };
 use crate::infrastructure::config::Config;
 use crate::infrastructure::shell::current_envs::CurrentEnvsFile;
@@ -67,17 +68,15 @@ impl EnvironmentSwitcher {
             let manager_guard = manager.lock().await;
             manager_guard
                 .get_current()
-                .map_err(|e| AppError::Environment {
-                    message: format!("Failed to get current environment: {e}"),
-                })?
+                .with_context("getting current environment")?
         };
 
         // 验证环境是否存在
         let env_info = {
             let manager_guard = manager.lock().await;
-            manager_guard.get(name).map_err(|e| AppError::Environment {
-                message: format!("Failed to find environment '{name}': {e}"),
-            })?
+            manager_guard
+                .get(name)
+                .with_context(&format!("looking up {env_type} environment '{name}'"))?
         };
 
         if env_info.is_none() {
@@ -95,10 +94,7 @@ impl EnvironmentSwitcher {
             let mut manager_guard = manager.lock().await;
             manager_guard
                 .use_env(name, shell_type)
-                .map_err(|e| AppError::ScriptGeneration {
-                    shell_type: format!("{:?}", shell_type.unwrap_or(ShellType::Bash)),
-                    reason: e,
-                })?
+                .with_context(&format!("switching to {env_type} environment '{name}'"))?
         };
 
         // 更新会话状态
@@ -114,7 +110,7 @@ impl EnvironmentSwitcher {
         // Persist to current_envs.toml for shell hook auto-restore
         {
             if let Err(e) = CurrentEnvsFile::write(env_type, name) {
-                crate::cli::print::warn(&format!("Failed to update current_envs.toml: {e}"));
+                eprintln!("⚠  Failed to update current_envs.toml: {e}");
             }
         }
 
@@ -135,62 +131,6 @@ impl EnvironmentSwitcher {
             success: true,
             error: None,
         })
-    }
-
-    /// 列出环境
-    pub async fn list_environments(
-        &self,
-        env_type: EnvironmentType,
-        output_format: OutputFormat,
-    ) -> ContextualResult<String> {
-        let manager = option_with_context(
-            self.managers.get(&env_type),
-            AppError::env_not_found(&format!("{env_type:?}")),
-            "finding environment manager when listing environments",
-        )?;
-
-        let environments = {
-            let manager_guard = manager.lock().await;
-            manager_guard.list().map_err(|e| AppError::Environment {
-                message: format!("Failed to get environment list: {e}"),
-            })?
-        };
-
-        // 获取当前环境
-        let current_env = {
-            let session_manager = self.session_manager.lock()?;
-            session_manager.get_current_environment(env_type).cloned()
-        };
-
-        // 格式化输出
-        match output_format {
-            OutputFormat::Text => {
-                use crate::cli::print::{format_envs, EnvItem};
-                let mut items = Vec::new();
-                for env in environments {
-                    let name = env.name.clone();
-                    let description = env.description.clone().unwrap_or_default();
-                    let is_current = current_env.as_ref() == Some(&name);
-
-                    items.push(EnvItem {
-                        name,
-                        description,
-                        extra: None, // Simplified for list_environments
-                        is_current,
-                        is_default: false,
-                    });
-                }
-                Ok(format_envs(&items))
-            }
-            OutputFormat::Json => {
-                let json_output = serde_json::json!({
-                    "environment_type": env_type,
-                    "current": current_env,
-                    "environments": environments
-                });
-                Ok(safe_to_json_pretty(&json_output)?)
-            }
-        }
     }
 
     /// 添加环境
@@ -217,9 +157,7 @@ impl EnvironmentSwitcher {
 
             manager_guard
                 .add(name, &config_str)
-                .map_err(|e| AppError::Environment {
-                    message: format!("Failed to add environment: {e}"),
-                })?;
+                .with_context(&format!("adding {env_type} environment '{name}'"))?;
 
             format!("Successfully added {env_type} environment: {name}")
         };
@@ -243,9 +181,7 @@ impl EnvironmentSwitcher {
             let mut manager_guard = manager.lock().await;
             manager_guard
                 .remove(name)
-                .map_err(|e| AppError::Environment {
-                    message: format!("Failed to remove environment: {e}"),
-                })?;
+                .with_context(&format!("removing {env_type} environment '{name}'"))?;
         }
 
         // 如果删除的是当前环境，清除会话状态
@@ -259,7 +195,7 @@ impl EnvironmentSwitcher {
                             message: format!("Failed to clear current environment: {e}"),
                         })?;
                     if let Err(e) = CurrentEnvsFile::clear(env_type) {
-                        crate::cli::print::warn(&format!("Failed to clear current_envs.toml: {e}"));
+                        eprintln!("⚠  Failed to clear current_envs.toml: {e}");
                     }
                 }
             }
@@ -286,21 +222,16 @@ impl EnvironmentSwitcher {
             let manager_guard = manager.lock().await;
             let current_env = manager_guard
                 .get_current()
-                .map_err(|e| AppError::Environment {
-                    message: format!("Failed to get current environment: {e}"),
-                })?;
+                .with_context("getting current environment")?;
             (current_env, manager_guard)
         };
 
         match output_format {
             OutputFormat::Text => {
                 if let Some(env_name) = current_env {
-                    if let Some(env_info) =
-                        manager_guard
-                            .get(&env_name)
-                            .map_err(|e| AppError::Environment {
-                                message: format!("Failed to get environment info: {e}"),
-                            })?
+                    if let Some(env_info) = manager_guard
+                        .get(&env_name)
+                        .with_context("getting environment info")?
                     {
                         Ok(format!(
                             "Current {} environment: {}\n{}\n",
@@ -319,12 +250,9 @@ impl EnvironmentSwitcher {
             }
             OutputFormat::Json => {
                 let json_output = if let Some(env_name) = current_env {
-                    if let Some(env_info) =
-                        manager_guard
-                            .get(&env_name)
-                            .map_err(|e| AppError::Environment {
-                                message: format!("Failed to get environment info: {e}"),
-                            })?
+                    if let Some(env_info) = manager_guard
+                        .get(&env_name)
+                        .with_context("getting environment info")?
                     {
                         serde_json::json!({
                             "environment_type": env_type,
@@ -366,7 +294,11 @@ impl EnvironmentSwitcher {
     }
 
     /// 扫描环境
-    pub async fn scan_environments(&self, env_type: EnvironmentType) -> ContextualResult<String> {
+    pub async fn scan_environments(
+        &self,
+        env_type: EnvironmentType,
+        extra: &[String],
+    ) -> ContextualResult<String> {
         let manager = option_with_context(
             self.managers.get(&env_type),
             AppError::env_not_found(&format!("{env_type:?}")),
@@ -375,31 +307,28 @@ impl EnvironmentSwitcher {
 
         let found_envs = {
             let manager_guard = manager.lock().await;
-            manager_guard.scan().await.map_err(|e| AppError::Environment {
-                message: format!("Failed to scan environments: {e}"),
-            })?
+            manager_guard
+                .scan(extra)
+                .await
+                .with_context(&format!("scanning {env_type} environments"))?
         };
 
         let mut output = String::new();
         if found_envs.is_empty() {
             output.push_str(&format!("No new {env_type} environments found on system\n"));
-            output.push_str("(Tip: already-managed environments are excluded from scan results)\n");
+            output.push_str("(Tip: already-managed environments are excluded; use --path to scan custom locations)\n");
         } else {
             output.push_str(&format!(
                 "Found {} new {env_type} environment(s):\n\n",
                 found_envs.len(),
             ));
-            for env in &found_envs {
-                let desc = env.description.as_deref().unwrap_or("-");
-                let model = env.version.as_deref().unwrap_or("-");
-                output.push_str(&format!("  Name    : {}\n", env.name));
-                output.push_str(&format!("  URL     : {}\n", env.path));
-                output.push_str(&format!("  Model   : {model}\n"));
-                output.push_str(&format!("  Source  : {desc}\n"));
-                output.push_str(&format!(
-                    "  Import  : fnva cc add {} --base-url \"{}\" --auto\n\n",
-                    env.name, env.path
-                ));
+            for h in &found_envs {
+                output.push_str(&format!("  Name    : {}\n", h.name));
+                output.push_str(&format!("  Location: {}\n", h.location));
+                if !h.detail.is_empty() {
+                    output.push_str(&format!("  Detail  : {}\n", h.detail));
+                }
+                output.push_str(&format!("  Import  : {}\n\n", h.import_cmd));
             }
         }
 
@@ -411,22 +340,19 @@ impl EnvironmentSwitcher {
         &self,
         env_type: Option<EnvironmentType>,
         limit: usize,
-    ) -> ContextualResult<String> {
+    ) -> ContextualResult<Vec<HistoryItem>> {
         let history: Vec<SwitchHistory> = {
             let history_manager = self.history_manager.lock()?;
 
             if let Some(env_type) = env_type {
-                // get_history_for_env returns Vec<&SwitchHistory>
-                // We need to convert the references to owned values
                 history_manager
                     .get_history_for_env(env_type)
                     .into_iter()
                     .rev()
                     .take(limit)
-                    .cloned() // Clone to get owned SwitchHistory
+                    .cloned()
                     .collect()
             } else {
-                // get_recent_history returns Vec<&SwitchHistory>
                 history_manager
                     .get_recent_history(limit)
                     .into_iter()
@@ -436,7 +362,6 @@ impl EnvironmentSwitcher {
             }
         };
 
-        use crate::cli::print::{format_history, HistoryItem};
         let mut items = Vec::new();
         for record in history {
             items.push(HistoryItem {
@@ -446,7 +371,7 @@ impl EnvironmentSwitcher {
                 to: record.new_env.clone(),
             });
         }
-        Ok(format_history(&items))
+        Ok(items)
     }
 
     /// 设置默认环境
@@ -465,9 +390,7 @@ impl EnvironmentSwitcher {
             let manager = manager_entry.lock().await;
             if !manager
                 .is_available(name)
-                .map_err(|e| AppError::Environment {
-                    message: format!("Failed to check environment availability: {e}"),
-                })?
+                .with_context("checking environment availability")?
             {
                 return Err(AppError::Environment {
                     message: format!("{env_type} environment '{name}' not found"),
@@ -560,47 +483,11 @@ impl EnvironmentSwitcher {
         Ok(default_env)
     }
 
-    /// 切换到默认环境
-    pub async fn switch_to_default_environment(
-        &self,
-        env_type: EnvironmentType,
-        shell_type: Option<ShellType>,
-    ) -> ContextualResult<SwitchResult> {
-        let config = Config::load().map_err(|e| AppError::Config {
-            message: format!("Failed to load config: {e}"),
-        })?;
-
-        let default_env = match env_type {
-            EnvironmentType::Java => config.default_java_env.clone(),
-            EnvironmentType::Cc => config.default_cc_env.clone(),
-            _ => None,
-        };
-
-        if let Some(default_env) = default_env {
-            self.switch_environment(
-                env_type,
-                &default_env,
-                shell_type,
-                Some("Switch to default environment".to_string()),
-            )
-            .await
-        } else {
-            Ok(SwitchResult {
-                name: "default".to_string(),
-                env_type,
-                script: String::new(),
-                success: false,
-                error: Some(format!("No default {env_type} environment set")),
-            })
-        }
-    }
-
     /// 列出环境时显示默认环境标记
     pub async fn list_environments_with_default(
         &self,
         env_type: EnvironmentType,
-        output_format: OutputFormat,
-    ) -> ContextualResult<String> {
+    ) -> ContextualResult<Vec<EnvItem>> {
         let manager = option_with_context(
             self.managers.get(&env_type),
             AppError::env_not_found(&format!("{env_type:?}")),
@@ -614,9 +501,7 @@ impl EnvironmentSwitcher {
 
         let (environments, current_env) = {
             let manager_guard = manager.lock().await;
-            let environments = manager_guard.list().map_err(|e| AppError::Environment {
-                message: format!("Failed to get environment list: {e}"),
-            })?;
+            let environments = manager_guard.list().with_context("listing environments")?;
             let current_env = {
                 let session_manager = self.session_manager.lock()?;
                 session_manager.get_current_environment(env_type).cloned()
@@ -629,52 +514,135 @@ impl EnvironmentSwitcher {
             _ => None,
         };
 
-        // 格式化输出
-        match output_format {
-            OutputFormat::Text => {
-                use crate::cli::print::{format_envs, EnvItem};
-                let mut items = Vec::new();
-                for env in environments {
-                    let name = env.name.clone();
-                    let description = env.description.clone().unwrap_or_default();
-                    let is_current = current_env.as_ref() == Some(&name);
-                    let is_default = default_env.as_ref() == Some(&name);
-
-                    // 显示环境信息，对于 CC 环境显示模型
-                    let extra = if env_type == EnvironmentType::Cc {
-                        if let Some(model) = &env.version {
-                            if !model.is_empty() {
-                                Some(model.clone())
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    };
-
-                    items.push(EnvItem {
-                        name,
-                        description,
-                        extra,
-                        is_current,
-                        is_default,
-                    });
-                }
-                Ok(format_envs(&items))
-            }
-            OutputFormat::Json => {
-                use serde_json;
-                let json_output = serde_json::json!({
-                    "environment_type": env_type,
-                    "current": current_env,
-                    "default": default_env,
-                    "environments": environments
-                });
-                Ok(crate::error::safe_to_json_pretty(&json_output)?)
-            }
+        let mut items = Vec::new();
+        for env in environments {
+            let name = env.name.clone();
+            let is_current = current_env.as_ref() == Some(&name);
+            let is_default = default_env.as_ref() == Some(&name);
+            // CC 环境把模型显示在 extra
+            let extra = if env_type == EnvironmentType::Cc {
+                env.version.filter(|m| !m.is_empty())
+            } else {
+                None
+            };
+            items.push(EnvItem {
+                name,
+                description: env.description.clone().unwrap_or_default(),
+                extra,
+                is_current,
+                is_default,
+            });
         }
+        Ok(items)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::environments::java::JavaEnvironmentManager;
+    use crate::infrastructure::config::{Config, EnvironmentSource, JavaEnvironment};
+    use std::sync::OnceLock;
+
+    // 所有依赖 FNVA_HOME 的测试必须串行运行:环境变量是进程全局的,
+    // cargo test 默认多线程并行会导致 set_var 互相覆盖。
+    static SEQUENTIAL: OnceLock<std::sync::Mutex<()>> = OnceLock::new();
+
+    /// 把 FNVA_HOME 指向给定临时目录,作用域结束时还原环境变量。
+    struct FnvaHomeGuard {
+        _lock: std::sync::MutexGuard<'static, ()>,
+    }
+
+    impl FnvaHomeGuard {
+        fn new(dir: &std::path::Path) -> Self {
+            let lock = SEQUENTIAL
+                .get_or_init(|| std::sync::Mutex::new(()))
+                .lock()
+                .unwrap();
+            std::env::set_var("FNVA_HOME", dir);
+            Self { _lock: lock }
+        }
+    }
+
+    impl Drop for FnvaHomeGuard {
+        fn drop(&mut self) {
+            std::env::remove_var("FNVA_HOME");
+        }
+    }
+
+    fn make_switcher() -> EnvironmentSwitcher {
+        let mut switcher = EnvironmentSwitcher::new().expect("switcher init");
+        let java = JavaEnvironmentManager::new();
+        switcher
+            .register_manager(EnvironmentType::Java, Arc::new(Mutex::new(java)))
+            .expect("register java manager");
+        switcher
+    }
+
+    #[tokio::test]
+    async fn test_switch_unknown_environment_returns_failed_result() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let _guard = FnvaHomeGuard::new(tmp.path());
+
+        let switcher = make_switcher();
+        let result = switcher
+            .switch_environment(EnvironmentType::Java, "does-not-exist", None, None)
+            .await
+            .expect("switch should resolve");
+
+        // 不存在的环境返回 Ok 但标记失败(而非 Err),与 cli 层约定一致。
+        assert!(!result.success);
+        assert!(
+            result
+                .error
+                .as_deref()
+                .map(|e| e.contains("not found"))
+                .unwrap_or(false),
+            "error should mention 'not found', got: {:?}",
+            result.error
+        );
+    }
+
+    #[tokio::test]
+    async fn test_list_environments_resolves_on_empty_config() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let _guard = FnvaHomeGuard::new(tmp.path());
+
+        let switcher = make_switcher();
+        // 空配置下列表应成功返回(覆盖 switcher 初始化 + list 路径)。
+        switcher
+            .list_environments_with_default(EnvironmentType::Java)
+            .await
+            .expect("list should resolve");
+    }
+
+    #[tokio::test]
+    async fn test_switch_invalid_java_home_errors() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let _guard = FnvaHomeGuard::new(tmp.path());
+
+        // 写入一个 java_home 指向无效路径的环境:load_from_config 不校验路径,
+        // 因此能进入 installations,再由 use_env 的 validate_java_home 触发错误。
+        {
+            let mut config = Config::new();
+            config
+                .add_java_env(JavaEnvironment {
+                    name: "bad".to_string(),
+                    java_home: "/nonexistent/path/to/java".to_string(),
+                    description: "test".to_string(),
+                    source: EnvironmentSource::Manual,
+                })
+                .expect("add bad java env");
+            config.save().expect("save config");
+        }
+
+        let switcher = make_switcher();
+        let result = switcher
+            .switch_environment(EnvironmentType::Java, "bad", None, None)
+            .await;
+        assert!(
+            result.is_err(),
+            "switching env with invalid java_home should error"
+        );
     }
 }

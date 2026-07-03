@@ -1,6 +1,6 @@
 [package]
 name = "fnva"
-version = "0.0.80"
+version = "0.0.83"
 edition = "2021"
 authors = ["protagonistss"]
 description = "跨平台环境切换工具，支持 Java 和 LLM 环境配置"
@@ -47,4 +47,7 @@ thiserror = "1.0"
 sha2 = "0.10.9"
 hex = "0.4.3"
 async-trait = "0.1.89"
+
+[dev-dependencies]
+tempfile = "3"
 

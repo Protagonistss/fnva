@@ -194,8 +194,6 @@ impl JavaInstaller {
         Err("No valid Java installation found".to_string())
     }
 
-
-
     /// 列出可安装的 Java 版本
     pub async fn list_installable_versions() -> Result<Vec<String>, String> {
         let config = crate::infrastructure::config::Config::load()
@@ -299,7 +297,10 @@ impl JavaInstaller {
     }
 
     /// 检查本地是否已有对应的Java包
-    fn check_local_java_package(version_spec: &str, config: &Config) -> Result<Option<String>, String> {
+    fn check_local_java_package(
+        version_spec: &str,
+        config: &Config,
+    ) -> Result<Option<String>, String> {
         let fnva_dir = crate::infrastructure::paths::tool_packages_dir("java")?;
 
         if !fnva_dir.exists() {

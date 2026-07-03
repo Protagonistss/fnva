@@ -186,20 +186,3 @@ impl VersionCacheManager {
         Ok(())
     }
 }
-
-/// 缓存键生成器
-pub struct CacheKeys;
-
-impl CacheKeys {
-    pub fn java_versions_tsinghua() -> String {
-        "java_versions_tsinghua".to_string()
-    }
-
-    pub fn java_versions_aliyun() -> String {
-        "java_versions_aliyun".to_string()
-    }
-
-    pub fn java_versions_github() -> String {
-        "java_versions_github".to_string()
-    }
-}

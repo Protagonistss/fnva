@@ -1,5 +1,5 @@
 use crate::core::environment_manager::EnvironmentInfo;
-use crate::utils::path::normalize_path;
+use crate::core::presentation::ScanHit;
 use serde::{Deserialize, Serialize};
 
 /// Java 安装信息
@@ -53,156 +53,32 @@ pub struct JavaScanner;
 
 impl JavaScanner {
     /// 扫描系统中的 Java 安装
-    pub async fn scan_system() -> Result<Vec<JavaInstallation>, String> {
-        tokio::task::spawn_blocking(|| {
-            let mut installations = Vec::new();
-            let mut seen_paths = std::collections::HashSet::new();
-
-            // 扫描常见路径
-            let common_paths = Self::get_common_java_paths();
-
-            for path in common_paths {
-                // 首先尝试直接路径
-                if Self::is_valid_java_installation(&path) {
-                    let normalized_path = normalize_path(&path);
-                    if !seen_paths.contains(&normalized_path) {
-                        if let Ok(installation) = Self::create_installation_from_path(&path) {
-                            installations.push(installation);
-                            seen_paths.insert(normalized_path);
-                        }
-                    }
-                } else {
-                    // 如果直接路径无效，尝试扫描子目录
-                    if let Ok(entries) = std::fs::read_dir(&path) {
-                        for entry in entries.flatten() {
-                            let entry_path = entry.path();
-                            if entry_path.is_dir() {
-                                let path_str = entry_path.to_string_lossy();
-                                let normalized_path = normalize_path(&path_str);
-                                if !seen_paths.contains(&normalized_path)
-                                    && Self::is_valid_java_installation(&path_str)
-                                {
-                                    if let Ok(installation) =
-                                        Self::create_installation_from_path(&path_str)
-                                    {
-                                        installations.push(installation);
-                                        seen_paths.insert(normalized_path);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 扫描 PATH 中的 Java
-            if let Ok(Some(path_java)) = Self::scan_path_java() {
-                let normalized_path = normalize_path(&path_java.java_home);
-                if !seen_paths.contains(&normalized_path) {
-                    installations.push(path_java);
-                }
-            }
-
-            Ok(installations)
+    pub async fn scan_system(extra: &[String]) -> Result<Vec<ScanHit>, String> {
+        use crate::infrastructure::scanner::scan_directory_roots;
+        let extra_owned = extra.to_vec();
+        tokio::task::spawn_blocking(move || {
+            let roots = crate::environments::java::paths::common_paths(&extra_owned);
+            let hits = scan_directory_roots(
+                &roots,
+                |p: &std::path::Path| Self::is_valid_java_installation(&p.to_string_lossy()),
+                |p: &std::path::Path| {
+                    let java_home = p.to_string_lossy().to_string();
+                    let name = Self::extract_name_from_path(&java_home)?;
+                    let version = Self::detect_java_version(&java_home).ok().flatten();
+                    let detail = version.unwrap_or_else(|| "unknown".to_string());
+                    let import = format!("fnva java add --name {name} --home \"{java_home}\"");
+                    Ok(ScanHit {
+                        name,
+                        location: java_home,
+                        detail,
+                        import_cmd: import,
+                    })
+                },
+            );
+            Ok(hits)
         })
         .await
-        .map_err(|e| format!("Scanner task panicked: {}", e))?
-    }
-
-    /// 获取常见的 Java 安装路径
-    fn get_common_java_paths() -> Vec<String> {
-        let mut paths = Vec::new();
-
-        if cfg!(target_os = "windows") {
-            // Windows 常见路径
-            paths.extend_from_slice(&[
-                r"C:\Program Files\Java".to_string(),
-                r"C:\Program Files (x86)\Java".to_string(),
-                r"C:\Program Files\Eclipse Adoptium".to_string(),
-                r"C:\Program Files\Amazon Corretto".to_string(),
-                r"C:\Program Files\Microsoft\jdk".to_string(),
-                r"C:\Program Files\Zulu".to_string(),
-            ]);
-
-            // 动态添加用户相关的路径
-            if let Some(home_dir) = dirs::home_dir() {
-                let home_str = home_dir.to_string_lossy();
-                paths.push(format!("{home_str}\\.fnva\\packages\\java"));
-            }
-
-            // 从配置文件读取自定义路径（如果存在）
-            if let Ok(custom_paths) = Self::get_custom_scan_paths() {
-                paths.extend(custom_paths);
-            }
-        } else if cfg!(target_os = "macos") {
-            // macOS 常见路径
-            paths.extend_from_slice(&[
-                "/Library/Java/JavaVirtualMachines".to_string(),
-                "/System/Library/Java/JavaVirtualMachines".to_string(),
-                "/usr/local/java".to_string(),
-                "/opt/homebrew/Caskroom".to_string(),
-            ]);
-
-            // 动态添加用户相关的路径
-            if let Some(home_dir) = dirs::home_dir() {
-                let home_str = home_dir.to_string_lossy();
-                paths.push(format!("{home_str}/.fnva/packages/java"));
-            }
-
-            // 从配置文件读取自定义路径
-            if let Ok(custom_paths) = Self::get_custom_scan_paths() {
-                paths.extend(custom_paths);
-            }
-        } else {
-            // Linux 常见路径
-            paths.extend_from_slice(&[
-                "/usr/lib/jvm".to_string(),
-                "/usr/lib/jvm/java".to_string(),
-                "/usr/local/java".to_string(),
-                "/opt/java".to_string(),
-                "/usr/java".to_string(),
-            ]);
-
-            // 动态添加用户相关的路径
-            if let Some(home_dir) = dirs::home_dir() {
-                let home_str = home_dir.to_string_lossy();
-                paths.push(format!("{home_str}/.fnva/packages/java"));
-            }
-
-            // 从配置文件读取自定义路径
-            if let Ok(custom_paths) = Self::get_custom_scan_paths() {
-                paths.extend(custom_paths);
-            }
-        }
-
-        paths
-    }
-
-    /// 从配置文件获取自定义扫描路径
-    fn get_custom_scan_paths() -> Result<Vec<String>, String> {
-        use crate::infrastructure::config::Config;
-
-        let config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
-
-        let mut custom_paths = Vec::new();
-
-        // 从配置文件的自定义扫描路径读取
-        for path in &config.custom_java_scan_paths {
-            if !path.trim().is_empty() {
-                custom_paths.push(path.trim().to_string());
-            }
-        }
-
-        // 从环境变量读取额外路径
-        if let Ok(env_paths) = std::env::var("FNVA_SCAN_PATHS") {
-            for path in env_paths.split(';') {
-                if !path.trim().is_empty() {
-                    custom_paths.push(path.trim().to_string());
-                }
-            }
-        }
-
-        Ok(custom_paths)
+        .map_err(|e| format!("Scanner task panicked: {e}"))?
     }
 
     /// 检查路径是否是有效的 Java 安装
@@ -326,41 +202,6 @@ impl JavaScanner {
         } else {
             Ok(None)
         }
-    }
-
-    /// 扫描 PATH 中的 Java
-    fn scan_path_java() -> Result<Option<JavaInstallation>, String> {
-        use std::env;
-
-        if let Ok(path_var) = env::var("PATH") {
-            let path_separator = if cfg!(target_os = "windows") {
-                ';'
-            } else {
-                ':'
-            };
-
-            for path_dir in path_var.split(path_separator) {
-                let java_exe = if cfg!(target_os = "windows") {
-                    std::path::Path::new(path_dir).join("java.exe")
-                } else {
-                    std::path::Path::new(path_dir).join("java")
-                };
-
-                if java_exe.exists() && java_exe.is_file() {
-                    // 找到 Java，尝试确定 JAVA_HOME
-                    if let Some(java_home) = java_exe.parent().and_then(|p| p.parent()) {
-                        let home_str = java_home.to_str().ok_or_else(|| "Invalid path encoding".to_string())?;
-                        if Self::is_valid_java_installation(home_str) {
-                            return Ok(Some(Self::create_installation_from_path(
-                                home_str,
-                            )?));
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(None)
     }
 }
 

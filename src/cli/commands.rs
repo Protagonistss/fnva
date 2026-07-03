@@ -93,7 +93,11 @@ pub enum JavaCommands {
         json: bool,
     },
     /// Scan the system for Java installations
-    Scan,
+    Scan {
+        /// 额外扫描路径(可多次指定)
+        #[arg(long)]
+        path: Vec<String>,
+    },
     /// Add a Java environment
     Add {
         /// Environment name
@@ -175,7 +179,11 @@ pub enum MavenCommands {
         json: bool,
     },
     /// Scan the system for Maven installations
-    Scan,
+    Scan {
+        /// 额外扫描路径(可多次指定)
+        #[arg(long)]
+        path: Vec<String>,
+    },
     /// Add a Maven environment
     Add {
         /// Environment name
@@ -283,7 +291,11 @@ pub enum CcCommands {
         json: bool,
     },
     /// Scan the system for CC environments
-    Scan,
+    Scan {
+        /// 额外扫描路径(可多次指定)
+        #[arg(long)]
+        path: Vec<String>,
+    },
     /// Switch to a CC environment
     Use {
         /// Environment name
@@ -370,6 +382,8 @@ pub fn parse_shell_type(shell_str: &str) -> Result<ShellType, String> {
         "fish" => Ok(ShellType::Fish),
         "powershell" | "ps1" => Ok(ShellType::PowerShell),
         "cmd" => Ok(ShellType::Cmd),
-        _ => Err(format!("Unknown shell '{shell_str}'. Valid: bash, zsh, fish, powershell, cmd")),
+        _ => Err(format!(
+            "Unknown shell '{shell_str}'. Valid: bash, zsh, fish, powershell, cmd"
+        )),
     }
 }

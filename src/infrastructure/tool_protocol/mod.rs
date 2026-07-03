@@ -9,13 +9,17 @@
 //! - `ToolDescriptor`:工具元信息(阶段 2 接入 installer 时引入)
 
 pub mod descriptor;
+pub mod dir_cache;
 pub mod downloader;
+pub mod generic_downloader;
 pub mod mirror_resolver;
 pub mod template_vars;
 pub mod version_discovery;
 
 pub use descriptor::{AssetModel, ToolDescriptor, ToolId};
+pub use dir_cache::{fetch_with_retry, CacheEntry};
 pub use downloader::ToolDownloader;
+pub use generic_downloader::GenericDownloader;
 pub use mirror_resolver::{MirrorResolver, ResolveError};
 pub use template_vars::TemplateVars;
 pub use version_discovery::{DiscoveryError, ResolvedVersion, VersionDiscovery};

@@ -41,8 +41,8 @@
 
 修改 `src/infrastructure/shell/script_strategy.rs` 中的内联模板或 `src/infrastructure/shell/templates/*.hbs` 文件时，**必须**遵守以下规则：
 
-### 同步规则
-1. **Rust 内联模板和 .hbs 文件必须同步修改** — 运行时使用 Rust 内联 `const` 字符串，不读取 `.hbs` 文件。两边不一致会导致参考文档与实际行为偏差。
+### 模板修改规则
+1. **模板真源为 `.hbs` 文件** — `script_strategy.rs` 通过 `include_str!("templates/xxx.hbs")` 引用模板，运行时直接读取 `.hbs`。修改模板只需改对应 `.hbs` 一处，无需维护两份。
 2. **所有 Shell 类型必须同步** — Bash/Zsh、Fish、PowerShell、CMD 四套模板的同一类修改必须同步完成，不能只改一种。
 
 ### `_FNVA_QUIET` 生命周期
@@ -56,7 +56,7 @@
 8. 手动验证：新终端 autoload 仅输出 `[fnva] restored:...` 一行
 
 ### 模板架构参考
-- 12 个模板常量定义在 `script_strategy.rs:388-873`
-- Switch 模板：Java 用 `*_java_switch`，LLM/CC 共用 `*_llm_switch`
+- 16 个模板源文件位于 `src/infrastructure/shell/templates/*.hbs`，由 `script_strategy.rs` 用 `include_str!` 引用
+- Switch 模板：Java 用 `*_java_switch`，Maven 用 `*_maven_switch`，CC 用 `*_cc_switch`
 - Integration 模板：autoload 函数 → autoload 调用 → wrapper 函数（顺序不可调换）
 - 详细规格见 `docs/spec/shell-template-system.md` 和 `docs/spec/shell-integration.md`

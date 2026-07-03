@@ -3,7 +3,7 @@ use crate::infrastructure::config::CcEnvironment as ConfigCcEnvironment;
 pub trait CcProvider {
     /// Append provider-specific variables to the config JSON object
     fn setup_config(&self, env: &ConfigCcEnvironment, config: &mut serde_json::Value);
-    
+
     /// Check if the environment looks like it's active for this provider based on environment variables
     fn is_active(&self) -> bool;
 }
@@ -22,9 +22,14 @@ impl CcProvider for AnthropicProvider {
         config["anthropic_auth_token"] = serde_json::Value::String(auth_token_raw.clone());
         config["anthropic_base_url"] = serde_json::Value::String(base_url_resolved);
 
-        let timeout_ms = env.api_timeout_ms.as_deref().unwrap_or("3000000").to_string();
+        let timeout_ms = env
+            .api_timeout_ms
+            .as_deref()
+            .unwrap_or("3000000")
+            .to_string();
         config["api_timeout_ms"] = serde_json::Value::String(timeout_ms);
-        config["claude_code_disable_nonessential_traffic"] = serde_json::Value::Number(serde_json::Number::from(1));
+        config["claude_code_disable_nonessential_traffic"] =
+            serde_json::Value::Number(serde_json::Number::from(1));
 
         if !env.sonnet_model.is_empty() {
             let opus_model = env.opus_model.as_ref().unwrap_or(&env.sonnet_model);

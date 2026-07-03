@@ -3,6 +3,9 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 
+/// 默认 CC sonnet 模型名(配置缺省值与扫描兜底共用)。
+pub const DEFAULT_SONNET_MODEL: &str = "claude-sonnet-4-5";
+
 /// 镜像配置（模板化 URL）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MirrorConfig {
@@ -127,6 +130,9 @@ pub struct Config {
     /// 自定义 Java 扫描路径
     #[serde(default)]
     pub custom_java_scan_paths: Vec<String>,
+    /// 自定义 Maven 扫描路径
+    #[serde(default)]
+    pub custom_maven_scan_paths: Vec<String>,
     /// 明确移除的 Java 环境名称（防止重新扫描添加）
     #[serde(default)]
     pub removed_java_names: Vec<String>,
@@ -179,7 +185,7 @@ fn default_cc_environments() -> Vec<CcEnvironment> {
         provider: "anthropic".to_string(),
         api_key: "${ANTHROPIC_API_KEY}".to_string(),
         base_url: "https://api.anthropic.com".to_string(),
-        sonnet_model: "claude-sonnet-4-5".to_string(),
+        sonnet_model: DEFAULT_SONNET_MODEL.to_string(),
         opus_model: Some("claude-opus-4-5".to_string()),
         haiku_model: Some("claude-haiku-4-5".to_string()),
         description: "Anthropic Claude Code environment".to_string(),
@@ -277,6 +283,7 @@ impl Config {
             default_maven_env: None,
             default_cc_env: Some("anthropic-cc".to_string()),
             custom_java_scan_paths: Vec::new(),
+            custom_maven_scan_paths: Vec::new(),
             removed_java_names: Vec::new(),
         }
     }
@@ -293,8 +300,8 @@ impl Config {
             return Ok(config);
         }
 
-        let content =
-            fs::read_to_string(&config_path).map_err(|e| format!("Failed to read config file: {e}"))?;
+        let content = fs::read_to_string(&config_path)
+            .map_err(|e| format!("Failed to read config file: {e}"))?;
 
         toml::from_str(&content).map_err(|e| format!("Failed to parse config file: {e}"))
     }
@@ -305,13 +312,15 @@ impl Config {
 
         // 确保配置目录存在
         if let Some(parent) = config_path.parent() {
-            fs::create_dir_all(parent).map_err(|e| format!("Failed to create config directory: {e}"))?;
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create config directory: {e}"))?;
         }
 
         let toml_content =
             toml::to_string_pretty(self).map_err(|e| format!("Failed to serialize config: {e}"))?;
 
-        fs::write(&config_path, toml_content).map_err(|e| format!("Failed to write config file: {e}"))?;
+        fs::write(&config_path, toml_content)
+            .map_err(|e| format!("Failed to write config file: {e}"))?;
 
         Ok(())
     }
@@ -517,8 +526,8 @@ impl Config {
 
         let mut config = if existed {
             // 如果配置文件存在，加载现有配置
-            let content =
-                fs::read_to_string(&config_path).map_err(|e| format!("Failed to read config file: {e}"))?;
+            let content = fs::read_to_string(&config_path)
+                .map_err(|e| format!("Failed to read config file: {e}"))?;
             toml::from_str(&content).map_err(|e| format!("Failed to parse config file: {e}"))?
         } else {
             // 如果配置文件不存在，创建默认配置
@@ -561,8 +570,8 @@ impl Config {
         }
 
         // 序列化配置
-        let serialized =
-            toml::to_string_pretty(&config).map_err(|e| format!("Failed to serialize config: {e}"))?;
+        let serialized = toml::to_string_pretty(&config)
+            .map_err(|e| format!("Failed to serialize config: {e}"))?;
 
         // 检查是否有变更
         if existed {
