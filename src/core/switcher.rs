@@ -294,7 +294,11 @@ impl EnvironmentSwitcher {
     }
 
     /// 扫描环境
-    pub async fn scan_environments(&self, env_type: EnvironmentType) -> ContextualResult<String> {
+    pub async fn scan_environments(
+        &self,
+        env_type: EnvironmentType,
+        extra: &[String],
+    ) -> ContextualResult<String> {
         let manager = option_with_context(
             self.managers.get(&env_type),
             AppError::env_not_found(&format!("{env_type:?}")),
@@ -304,7 +308,7 @@ impl EnvironmentSwitcher {
         let found_envs = {
             let manager_guard = manager.lock().await;
             manager_guard
-                .scan()
+                .scan(extra)
                 .await
                 .with_context(&format!("scanning {env_type} environments"))?
         };
@@ -312,37 +316,19 @@ impl EnvironmentSwitcher {
         let mut output = String::new();
         if found_envs.is_empty() {
             output.push_str(&format!("No new {env_type} environments found on system\n"));
-            output.push_str("(Tip: already-managed environments are excluded from scan results)\n");
+            output.push_str("(Tip: already-managed environments are excluded; use --path to scan custom locations)\n");
         } else {
             output.push_str(&format!(
                 "Found {} new {env_type} environment(s):\n\n",
                 found_envs.len(),
             ));
-            for env in &found_envs {
-                let desc = env.description.as_deref().unwrap_or("-");
-                let model = env.version.as_deref().unwrap_or("-");
-                output.push_str(&format!("  Name    : {}\n", env.name));
-                output.push_str(&format!("  URL     : {}\n", env.path));
-                output.push_str(&format!("  Model   : {model}\n"));
-                output.push_str(&format!("  Source  : {desc}\n"));
-                // 生成与该环境类型对应的导入命令（不同类型的 add 子命令参数不同）
-                let import_cmd = match env_type {
-                    EnvironmentType::Java | EnvironmentType::Maven => {
-                        format!(
-                            "fnva {env_type} add --name {} --home \"{}\"",
-                            env.name, env.path
-                        )
-                    }
-                    EnvironmentType::Cc => {
-                        // CC 的 add 必填 --provider，但扫描只能拿到 base_url，无法推断 provider，
-                        // 故 --provider 留作占位符让用户补全。
-                        format!(
-                            "fnva cc add --name {} --provider <provider> --base-url \"{}\"",
-                            env.name, env.path
-                        )
-                    }
-                };
-                output.push_str(&format!("  Import  : {import_cmd}\n\n"));
+            for h in &found_envs {
+                output.push_str(&format!("  Name    : {}\n", h.name));
+                output.push_str(&format!("  Location: {}\n", h.location));
+                if !h.detail.is_empty() {
+                    output.push_str(&format!("  Detail  : {}\n", h.detail));
+                }
+                output.push_str(&format!("  Import  : {}\n\n", h.import_cmd));
             }
         }
 

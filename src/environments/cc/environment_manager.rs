@@ -1,4 +1,5 @@
 use crate::core::environment_manager::{DynEnvironment, EnvironmentManager, EnvironmentType};
+use crate::core::presentation::ScanHit;
 use crate::core::session::SessionManager;
 use crate::error::AppError;
 use crate::infrastructure::config::{
@@ -239,8 +240,8 @@ impl EnvironmentManager for CcEnvironmentManager {
         Ok(None)
     }
 
-    async fn scan(&self) -> Result<Vec<DynEnvironment>, AppError> {
-        let mut result = Vec::new();
+    async fn scan(&self, _extra: &[String]) -> Result<Vec<ScanHit>, AppError> {
+        let mut result: Vec<ScanHit> = Vec::new();
         let existing_config = crate::infrastructure::config::Config::load().unwrap_or_default();
         let existing_names: std::collections::HashSet<String> = existing_config
             .cc_environments
@@ -273,14 +274,13 @@ impl EnvironmentManager for CcEnvironmentManager {
                 continue;
             }
 
-            // Skip if already tracked by fnva (by name or base_url)
             let name = url_to_env_name(&base_url);
             if existing_names.contains(&name)
                 || existing_config
                     .cc_environments
                     .iter()
                     .any(|e| e.base_url == base_url)
-                || result.iter().any(|e: &DynEnvironment| e.path == base_url)
+                || result.iter().any(|e: &ScanHit| e.location == base_url)
             {
                 continue;
             }
@@ -294,25 +294,24 @@ impl EnvironmentManager for CcEnvironmentManager {
             let source_label = candidate
                 .to_string_lossy()
                 .replace(&std::env::var("HOME").unwrap_or_default(), "~");
-
-            result.push(DynEnvironment {
+            let import = format!(
+                "fnva cc add --name {name} --provider <provider> --base-url \"{base_url}\""
+            );
+            result.push(ScanHit {
                 name,
-                path: base_url,
-                version: Some(sonnet_model.clone()),
-                description: Some(format!(
-                    "Detected from {source_label} (model: {sonnet_model})"
-                )),
-                is_active: false,
+                location: base_url,
+                detail: format!("{sonnet_model} (from {source_label})"),
+                import_cmd: import,
             });
         }
 
-        // 2. Check system environment variables (original logic)
-        if let (Ok(auth_token), Ok(base_url)) = (
+        // 2. Check system environment variables
+        if let (Ok(_auth_token), Ok(base_url)) = (
             std::env::var("ANTHROPIC_AUTH_TOKEN"),
             std::env::var("ANTHROPIC_BASE_URL"),
         ) {
             let name = url_to_env_name(&base_url);
-            let already_in_result = result.iter().any(|e| e.path == base_url);
+            let already_in_result = result.iter().any(|e| e.location == base_url);
             let already_managed = existing_config
                 .cc_environments
                 .iter()
@@ -321,16 +320,15 @@ impl EnvironmentManager for CcEnvironmentManager {
             if !already_in_result && !already_managed {
                 let sonnet = std::env::var("ANTHROPIC_DEFAULT_SONNET_MODEL")
                     .unwrap_or_else(|_| DEFAULT_SONNET_MODEL.to_string());
-                result.push(DynEnvironment {
+                let import = format!(
+                    "fnva cc add --name {name} --provider <provider> --base-url \"{base_url}\""
+                );
+                result.push(ScanHit {
                     name,
-                    path: base_url,
-                    version: Some(sonnet.clone()),
-                    description: Some(format!(
-                        "Detected from system environment variables (model: {sonnet})"
-                    )),
-                    is_active: true,
+                    location: base_url,
+                    detail: format!("{sonnet} (from env vars)"),
+                    import_cmd: import,
                 });
-                let _ = auth_token;
             }
         }
 

@@ -241,10 +241,10 @@ impl CommandHandler {
                     .await?;
                 print!("{output}");
             }
-            JavaCommands::Scan => {
+            JavaCommands::Scan { path } => {
                 let output = self
                     .switcher
-                    .scan_environments(EnvironmentType::Java)
+                    .scan_environments(EnvironmentType::Java, &path)
                     .await?;
                 print!("{output}");
             }
@@ -372,10 +372,10 @@ impl CommandHandler {
                     .map_err(|e| format!("Failed to load config: {e}"))?;
                 MavenInstaller::install_maven(&version, &mut config, auto_switch).await?;
             }
-            MavenCommands::Scan => {
+            MavenCommands::Scan { path } => {
                 let output = self
                     .switcher
-                    .scan_environments(EnvironmentType::Maven)
+                    .scan_environments(EnvironmentType::Maven, &path)
                     .await?;
                 print!("{output}");
             }
@@ -528,8 +528,11 @@ impl CommandHandler {
                 };
                 print!("{}", render_envs(&items, EnvironmentType::Cc, fmt)?);
             }
-            CcCommands::Scan => {
-                let output = self.switcher.scan_environments(EnvironmentType::Cc).await?;
+            CcCommands::Scan { path } => {
+                let output = self
+                    .switcher
+                    .scan_environments(EnvironmentType::Cc, &path)
+                    .await?;
                 print!("{output}");
             }
             CcCommands::Use { name, shell, json } => {

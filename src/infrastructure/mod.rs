@@ -2,6 +2,7 @@ pub mod config;
 pub mod installer;
 pub mod paths;
 pub mod remote;
+pub mod scanner;
 pub mod shell;
 pub mod tool_protocol;
 

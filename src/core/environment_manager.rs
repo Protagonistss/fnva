@@ -1,3 +1,4 @@
+use crate::core::presentation::ScanHit;
 use crate::error::AppError;
 use crate::infrastructure::shell::ShellType;
 use serde::{Deserialize, Serialize};
@@ -57,8 +58,8 @@ pub trait EnvironmentManager: Send + Sync {
     /// 设置当前环境
     fn set_current(&mut self, name: &str) -> Result<(), AppError>;
 
-    /// 扫描系统中的可用环境
-    async fn scan(&self) -> Result<Vec<DynEnvironment>, AppError>;
+    /// 扫描系统中的可用环境(`extra_paths`:命令行/临时额外路径)
+    async fn scan(&self, extra_paths: &[String]) -> Result<Vec<ScanHit>, AppError>;
 
     /// 检查环境是否可用
     fn is_available(&self, name: &str) -> Result<bool, AppError>;

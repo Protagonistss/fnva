@@ -6,6 +6,7 @@
 pub mod downloader;
 pub mod environment_manager;
 pub mod installer;
+pub mod paths;
 pub mod validator;
 pub mod version_discovery;
 

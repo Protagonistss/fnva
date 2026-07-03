@@ -130,6 +130,9 @@ pub struct Config {
     /// 自定义 Java 扫描路径
     #[serde(default)]
     pub custom_java_scan_paths: Vec<String>,
+    /// 自定义 Maven 扫描路径
+    #[serde(default)]
+    pub custom_maven_scan_paths: Vec<String>,
     /// 明确移除的 Java 环境名称（防止重新扫描添加）
     #[serde(default)]
     pub removed_java_names: Vec<String>,
@@ -280,6 +283,7 @@ impl Config {
             default_maven_env: None,
             default_cc_env: Some("anthropic-cc".to_string()),
             custom_java_scan_paths: Vec::new(),
+            custom_maven_scan_paths: Vec::new(),
             removed_java_names: Vec::new(),
         }
     }

@@ -1,4 +1,5 @@
 use crate::core::environment_manager::{DynEnvironment, EnvironmentManager, EnvironmentType};
+use crate::core::presentation::ScanHit;
 use crate::core::session::SessionManager;
 use crate::error::AppError;
 use crate::infrastructure::config::{Config, EnvironmentSource, MavenEnvironment};
@@ -174,9 +175,47 @@ impl EnvironmentManager for MavenEnvironmentManager {
         Ok(None)
     }
 
-    async fn scan(&self) -> Result<Vec<DynEnvironment>, AppError> {
-        // Maven 不做系统扫描,返回当前已配置的环境
-        self.list()
+    async fn scan(&self, extra: &[String]) -> Result<Vec<ScanHit>, AppError> {
+        use crate::infrastructure::scanner::scan_directory_roots;
+        let extra_owned = extra.to_vec();
+        let mut hits = tokio::task::spawn_blocking(move || {
+            scan_directory_roots(
+                &crate::environments::maven::paths::common_paths(&extra_owned),
+                |p: &std::path::Path| {
+                    let exe = if cfg!(target_os = "windows") {
+                        p.join("bin").join("mvn.cmd")
+                    } else {
+                        p.join("bin").join("mvn")
+                    };
+                    exe.exists() && exe.is_file()
+                },
+                |p: &std::path::Path| {
+                    let maven_home = p.to_string_lossy().to_string();
+                    let name = p
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("maven")
+                        .to_string();
+                    let import = format!("fnva maven add --name {name} --home \"{maven_home}\"");
+                    Ok(ScanHit {
+                        name,
+                        location: maven_home,
+                        detail: String::new(),
+                        import_cmd: import,
+                    })
+                },
+            )
+        })
+        .await
+        .map_err(|e| AppError::from_string(&format!("Maven scan failed: {e}")))?;
+        // 去重已配置的环境
+        let configured: std::collections::HashSet<String> = self
+            .installations
+            .values()
+            .map(|i| normalize_path(&i.maven_home))
+            .collect();
+        hits.retain(|h| !configured.contains(&normalize_path(&h.location)));
+        Ok(hits)
     }
 
     fn set_current(&mut self, _name: &str) -> Result<(), AppError> {

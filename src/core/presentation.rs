@@ -31,3 +31,15 @@ pub struct HistoryItem {
     pub from: Option<String>,
     pub to: String,
 }
+
+/// 扫描结果项(供 switcher 打印;各 scanner 自带 import 命令)。
+///
+/// - `location`:安装路径(Java/Maven)或 base_url(CC)
+/// - `detail`:展示用的版本 / model 等附加信息
+/// - `import_cmd`:该环境对应的 `fnva <type> add ...` 命令(由 scanner 生成)
+pub struct ScanHit {
+    pub name: String,
+    pub location: String,
+    pub detail: String,
+    pub import_cmd: String,
+}

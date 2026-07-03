@@ -1,6 +1,7 @@
 use crate::core::environment_manager::{
     DynEnvironment, EnvironmentInfo, EnvironmentManager, EnvironmentType,
 };
+use crate::core::presentation::ScanHit;
 use crate::core::session::SessionManager;
 use crate::environments::java::scanner::JavaScanner;
 use crate::error::AppError;
@@ -306,61 +307,18 @@ impl EnvironmentManager for JavaEnvironmentManager {
         Ok(None)
     }
 
-    async fn scan(&self) -> Result<Vec<DynEnvironment>, AppError> {
-        let installations = JavaScanner::scan_system()
+    async fn scan(&self, extra: &[String]) -> Result<Vec<ScanHit>, AppError> {
+        let mut hits = JavaScanner::scan_system(extra)
             .await
-            .map_err(|e| AppError::config_error(&e))?;
-        let mut result = Vec::new();
-        let mut seen_paths = std::collections::HashSet::new();
-
-        let current_env = self.get_current().ok().flatten();
-
-        // 首先添加已配置的环境（优先级更高）
-        for (name, installation) in &self.installations {
-            let normalized_path = normalize_path(&installation.java_home);
-            if !seen_paths.contains(&normalized_path) {
-                // 检测版本信息（如果还没有）
-                let version = if installation.version.is_none() {
-                    JavaScanner::detect_java_version(&installation.java_home)
-                        .ok()
-                        .flatten()
-                } else {
-                    installation.version.clone()
-                };
-
-                let is_active = current_env.as_ref() == Some(name);
-
-                result.push(DynEnvironment {
-                    name: name.clone(),
-                    path: installation.java_home.clone(),
-                    version,
-                    description: Some(installation.description.clone()),
-                    is_active,
-                });
-                seen_paths.insert(normalized_path);
-            }
-        }
-
-        // 添加扫描到的环境
-        for installation in installations {
-            let normalized_path = normalize_path(&installation.java_home);
-            if !seen_paths.contains(&normalized_path) {
-                let is_active = current_env.as_ref() == Some(&installation.name);
-                result.push(DynEnvironment {
-                    name: installation.name.clone(),
-                    path: installation.java_home.clone(),
-                    version: installation.version.clone(),
-                    description: Some(installation.description.clone()),
-                    is_active,
-                });
-                seen_paths.insert(normalized_path);
-            }
-        }
-
-        // 按名称排序
-        result.sort_by(|a, b| a.name.cmp(&b.name));
-
-        Ok(result)
+            .map_err(|e| AppError::from_string(&e))?;
+        // 去重已配置的环境(按归一化路径)
+        let configured: std::collections::HashSet<String> = self
+            .installations
+            .values()
+            .map(|i| normalize_path(&i.java_home))
+            .collect();
+        hits.retain(|h| !configured.contains(&normalize_path(&h.location)));
+        Ok(hits)
     }
 
     fn set_current(&mut self, _name: &str) -> Result<(), AppError> {
