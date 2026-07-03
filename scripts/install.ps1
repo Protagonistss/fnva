@@ -33,11 +33,22 @@ try {
         [Environment]::SetEnvironmentVariable("Path", "$InstallDir;$userPath", "User")
         Write-Host "已把 $InstallDir 加到用户 PATH(重开终端生效)"
     }
+
+    # 自动配 PowerShell shell 集成到 $PROFILE(>>> fnva >>> 块标记便于卸载)
+    $profileDir = Split-Path $PROFILE -Parent
+    if (-not (Test-Path $profileDir)) { New-Item -ItemType Directory -Force -Path $profileDir | Out-Null }
+    $needAdd = $true
+    if (Test-Path $PROFILE) {
+        if ((Get-Content $PROFILE -Raw) -match ">>> fnva >>>") { $needAdd = $false }
+    }
+    if ($needAdd) {
+        Add-Content $PROFILE "`n# >>> fnva >>>`nfnva env | Invoke-Expression`n# <<< fnva <<<"
+        Write-Host "已把 shell 集成加到 $PROFILE"
+    }
+
     Write-Host ""
-    Write-Host "下一步:启用 shell 集成,在 PowerShell 配置(\$PROFILE)里加:"
-    Write-Host '  fnva env | Invoke-Expression'
-    Write-Host ""
-    Write-Host "验证:fnva --version"
+    Write-Host "重开 PowerShell 后 fnva 完全可用 —— 验证:fnva --version"
+    Write-Host "卸载:scripts/uninstall.ps1"
 }
 finally {
     Remove-Item -Recurse -Force $Tmp.FullName -ErrorAction SilentlyContinue

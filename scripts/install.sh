@@ -75,8 +75,8 @@ case ":${PATH}:" in
             fish)
                 RC="${HOME}/.config/fish/config.fish"
                 mkdir -p "$(dirname "$RC")"
-                if ! grep -q "# fnva" "$RC" 2>/dev/null; then
-                    printf '\n# fnva\nset -x PATH %s $PATH\nfnva env | source\n' "$INSTALL_DIR" >> "$RC"
+                if ! grep -q "fnva" "$RC" 2>/dev/null; then
+                    printf '\n# >>> fnva >>>\nset -x PATH %s $PATH\nfnva env | source\n# <<< fnva <<<\n' "$INSTALL_DIR" >> "$RC"
                     echo "已把 PATH + shell 集成加到 ${RC}"
                 else
                     echo "${RC} 已有 fnva 配置(跳过)"
@@ -85,8 +85,8 @@ case ":${PATH}:" in
             *)
                 ADDED=0
                 for rc in "${HOME}/.zshrc" "${HOME}/.bashrc" "${HOME}/.profile"; do
-                    if [ -f "$rc" ] && ! grep -q "# fnva" "$rc" 2>/dev/null; then
-                        printf '\n# fnva\nexport PATH="%s:$PATH"\neval "$(fnva env)"\n' "$INSTALL_DIR" >> "$rc"
+                    if [ -f "$rc" ] && ! grep -q "fnva" "$rc" 2>/dev/null; then
+                        printf '\n# >>> fnva >>>\nexport PATH="%s:$PATH"\neval "$(fnva env)"\n# <<< fnva <<<\n' "$INSTALL_DIR" >> "$rc"
                         echo "已把 PATH + shell 集成加到 ${rc}"
                         ADDED=1
                         break

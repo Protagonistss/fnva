@@ -37,15 +37,26 @@ fnva is a cross-platform environment switcher for Java, Maven, and Claude Code (
 
 ## Installation
 
-```bash
-# npm (recommended)
-npm install -g fnva
+**One-liner**(recommended — auto-configures `PATH` + shell integration):
 
-# Cargo
-cargo install fnva
+```sh
+# Unix (bash / zsh / fish)
+curl -fSsL https://raw.githubusercontent.com/Protagonistss/fnva/main/scripts/install.sh | sh
+
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/Protagonistss/fnva/main/scripts/install.ps1 | iex
 ```
 
-Or download from [Releases](https://github.com/Protagonistss/fnva/releases) and add to `PATH`.
+Or via a package manager:
+
+```sh
+npm install -g fnva      # npm
+cargo install fnva       # cargo
+```
+
+Or download the binary from [Releases](https://github.com/Protagonistss/fnva/releases) and add to `PATH`.
+
+> The `curl | sh` installer downloads the binary to `~/.fnva/bin` and appends a `# fnva` block(`PATH` + `eval "$(fnva env)"`)to your shell rc — removable via `scripts/uninstall.sh`. npm/cargo installs need the [shell integration](#shell-integration) below added manually.
 
 ## Shell Integration
 
