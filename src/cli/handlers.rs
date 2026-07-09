@@ -294,7 +294,7 @@ impl CommandHandler {
                     .switcher
                     .add_environment(EnvironmentType::Java, &name, config_value)
                     .await?;
-                print!("{output}");
+                crate::cli::print::success(&output);
             }
             JavaCommands::Remove { name } => {
                 let output = self
@@ -404,7 +404,7 @@ impl CommandHandler {
                     .switcher
                     .add_environment(EnvironmentType::Maven, &name, config_value)
                     .await?;
-                print!("{output}");
+                crate::cli::print::success(&output);
             }
             MavenCommands::Remove { name } => {
                 let output = self
@@ -598,8 +598,8 @@ impl CommandHandler {
                 let mut json = serde_json::json!({
                     "base_url": base_url_val,
                 });
-                if let Some(k) = api_key {
-                    json["api_key"] = serde_json::Value::String(k);
+                if let Some(k) = api_key.as_deref() {
+                    json["api_key"] = serde_json::Value::String(k.to_string());
                 }
                 if let Some(m) = model {
                     json["sonnet_model"] = serde_json::Value::String(m);
@@ -611,7 +611,13 @@ impl CommandHandler {
                     .switcher
                     .add_environment(EnvironmentType::Cc, &name, json)
                     .await?;
-                print!("{output}");
+                crate::cli::print::success(&output);
+                if api_key.as_deref().map(str::trim).unwrap_or("").is_empty() {
+                    crate::cli::print::warn(
+                        "no api-key set — CC will not authenticate. \
+                         Re-add with --api-key, or set api_key in config.",
+                    );
+                }
             }
             CcCommands::Remove { name } => {
                 let output = self

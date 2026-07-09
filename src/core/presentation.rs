@@ -21,6 +21,8 @@ pub struct EnvItem {
     pub extra: Option<String>,
     pub is_current: bool,
     pub is_default: bool,
+    /// 缺少必要凭据(CC 没配 api_key)→ 渲染成 `⚠ no key` 标签,提醒该环境导出后无法鉴权。
+    pub missing_key: bool,
 }
 
 /// 切换历史的一个条目(供 cli 层 `format_history` 渲染)。
