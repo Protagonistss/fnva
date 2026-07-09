@@ -296,9 +296,7 @@ impl EnvironmentManager for CcEnvironmentManager {
             } else {
                 candidate.to_string_lossy().replace(&home_str, "~")
             };
-            let import = format!(
-                "fnva cc add --name {name} --base-url \"{base_url}\""
-            );
+            let import = format!("fnva cc add --name {name} --base-url \"{base_url}\"");
             result.push(ScanHit {
                 name,
                 location: base_url,
@@ -322,9 +320,7 @@ impl EnvironmentManager for CcEnvironmentManager {
             if !already_in_result && !already_managed {
                 let sonnet = std::env::var("ANTHROPIC_DEFAULT_SONNET_MODEL")
                     .unwrap_or_else(|_| DEFAULT_SONNET_MODEL.to_string());
-                let import = format!(
-                    "fnva cc add --name {name} --base-url \"{base_url}\""
-                );
+                let import = format!("fnva cc add --name {name} --base-url \"{base_url}\"");
                 result.push(ScanHit {
                     name,
                     location: base_url,
