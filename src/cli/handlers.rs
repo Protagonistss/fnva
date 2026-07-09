@@ -583,7 +583,6 @@ impl CommandHandler {
             }
             CcCommands::Add {
                 name,
-                provider,
                 api_key,
                 base_url,
                 model,
@@ -592,12 +591,11 @@ impl CommandHandler {
                 let base_url_val = base_url.unwrap_or_default();
                 if base_url_val.is_empty() {
                     return Err("Missing required argument: --base-url <URL>\n\
-                         Example: fnva cc add --name my-cc --provider anthropic \
+                         Example: fnva cc add --name my-cc \
                          --base-url https://api.anthropic.com --api-key ${ANTHROPIC_API_KEY}"
                         .to_string());
                 }
                 let mut json = serde_json::json!({
-                    "provider": provider,
                     "base_url": base_url_val,
                 });
                 if let Some(k) = api_key {

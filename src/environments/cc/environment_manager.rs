@@ -44,7 +44,6 @@ impl CcEnvironmentManager {
         for env in &config.cc_environments {
             let cc_env = ConfigCcEnvironment {
                 name: env.name.clone(),
-                provider: env.provider.clone(),
                 api_key: env.api_key.clone(),
                 base_url: env.base_url.clone(),
                 sonnet_model: env.sonnet_model.clone(),
@@ -100,11 +99,6 @@ impl EnvironmentManager for CcEnvironmentManager {
         // Parse config as JSON
         let config: serde_json::Value = serde_json::from_str(config_str)?;
 
-        let provider = config
-            .get("provider")
-            .and_then(|v| v.as_str())
-            .unwrap_or("anthropic");
-
         let api_key = config.get("api_key").and_then(|v| v.as_str()).unwrap_or("");
 
         let base_url = config
@@ -131,7 +125,6 @@ impl EnvironmentManager for CcEnvironmentManager {
         // Create CC environment
         let cc_environment = ConfigCcEnvironment {
             name: name.to_string(),
-            provider: provider.to_string(),
             description: description.to_string(),
             api_key: api_key.to_string(),
             base_url: base_url.to_string(),
@@ -152,7 +145,6 @@ impl EnvironmentManager for CcEnvironmentManager {
             .iter_mut()
             .find(|env| env.name == name)
         {
-            existing.provider = provider.to_string();
             existing.api_key = api_key.to_string();
             existing.base_url = base_url.to_string();
             existing.sonnet_model = sonnet_model.to_string();
@@ -206,9 +198,8 @@ impl EnvironmentManager for CcEnvironmentManager {
             "sonnet_model": cc_env.sonnet_model,
         });
 
-        // Add CC-specific environment variables using provider factory
-        let provider = crate::environments::cc::provider::get_provider(&cc_env.provider);
-        provider.setup_config(cc_env, &mut config);
+        // Inject Anthropic-protocol vars (ANTHROPIC_AUTH_TOKEN / BASE_URL / models)
+        crate::environments::cc::setup::apply_anthropic_config(cc_env, &mut config);
 
         let generator = ScriptGenerator::new()?;
         generator.generate_switch_script(EnvironmentType::Cc, name, &config, Some(shell_type))
@@ -248,6 +239,15 @@ impl EnvironmentManager for CcEnvironmentManager {
             .iter()
             .map(|e| e.name.clone())
             .collect();
+
+        // Cross-platform home dir for "~" shortening. `HOME` is unset on
+        // Windows, so `std::env::var("HOME").unwrap_or_default()` yields "" and
+        // `String::replace("", "~")` would insert "~" between every character —
+        // garbling the whole path (e.g. ~C~:~\~U~s~e~r~s~...). `dirs::home_dir()`
+        // resolves `%USERPROFILE%` on Windows and `$HOME` on Unix.
+        let home_str = dirs::home_dir()
+            .map(|h| h.to_string_lossy().into_owned())
+            .unwrap_or_default();
 
         // 1. Scan Claude Code settings.json across all supported platforms
         for candidate in claude_settings_candidates() {
@@ -291,11 +291,13 @@ impl EnvironmentManager for CcEnvironmentManager {
                 .unwrap_or(DEFAULT_SONNET_MODEL)
                 .to_string();
 
-            let source_label = candidate
-                .to_string_lossy()
-                .replace(&std::env::var("HOME").unwrap_or_default(), "~");
+            let source_label = if home_str.is_empty() {
+                candidate.to_string_lossy().into_owned()
+            } else {
+                candidate.to_string_lossy().replace(&home_str, "~")
+            };
             let import = format!(
-                "fnva cc add --name {name} --provider <provider> --base-url \"{base_url}\""
+                "fnva cc add --name {name} --base-url \"{base_url}\""
             );
             result.push(ScanHit {
                 name,
@@ -321,7 +323,7 @@ impl EnvironmentManager for CcEnvironmentManager {
                 let sonnet = std::env::var("ANTHROPIC_DEFAULT_SONNET_MODEL")
                     .unwrap_or_else(|_| DEFAULT_SONNET_MODEL.to_string());
                 let import = format!(
-                    "fnva cc add --name {name} --provider <provider> --base-url \"{base_url}\""
+                    "fnva cc add --name {name} --base-url \"{base_url}\""
                 );
                 result.push(ScanHit {
                     name,
@@ -401,8 +403,7 @@ fn url_to_env_name(base_url: &str) -> String {
 // 为 ConfigCcEnvironment 添加扩展方法
 impl ConfigCcEnvironment {
     fn is_active(&self) -> bool {
-        let provider = crate::environments::cc::provider::get_provider(&self.provider);
-        provider.is_active()
+        crate::environments::cc::setup::is_anthropic_active()
     }
 
     pub fn resolve_env_var(&self, value: &str) -> String {

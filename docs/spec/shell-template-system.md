@@ -89,11 +89,11 @@ fnva 通过生成 shell 脚本来设置环境变量。脚本内容由 Handlebars
 | `{{config.api_key}}` | 通用 API Key |
 | `{{config.base_url}}` | 通用 Base URL |
 | `{{config.sonnet_model}}` | Sonnet 模型名称 |
-| `{{config.anthropic_auth_token}}` | Anthropic API Token（由 key 解析，若 provider 为 anthropic） |
-| `{{config.anthropic_base_url}}` | Anthropic API Base URL（由 base_url 解析，若 provider 为 anthropic） |
-| `{{config.opus_model}}` | Opus 模型名（若 provider 为 anthropic） |
-| `{{config.haiku_model}}` | Haiku 模型名（若 provider 为 anthropic） |
-| `{{config.default_model}}` | 默认模型名（同 sonnet_model，若 provider 为 anthropic） |
+| `{{config.anthropic_auth_token}}` | Anthropic API Token（由 api_key 解析） |
+| `{{config.anthropic_base_url}}` | Anthropic API Base URL（由 base_url 解析） |
+| `{{config.opus_model}}` | Opus 模型名 |
+| `{{config.haiku_model}}` | Haiku 模型名 |
+| `{{config.default_model}}` | 默认模型名（同 sonnet_model） |
 
 ### Handlebars 辅助函数
 
