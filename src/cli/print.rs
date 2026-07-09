@@ -110,6 +110,9 @@ pub fn format_envs(items: &[EnvItem]) -> String {
             if item.is_default {
                 tags.push(yellow("★ default"));
             }
+            if item.missing_key {
+                tags.push(yellow("⚠ no key"));
+            }
             let tag_str = if tags.is_empty() {
                 String::new()
             } else {

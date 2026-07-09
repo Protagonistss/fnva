@@ -182,7 +182,6 @@ fn default_read_timeout_sec() -> u64 {
 fn default_cc_environments() -> Vec<CcEnvironment> {
     vec![CcEnvironment {
         name: "anthropic-cc".to_string(),
-        provider: "anthropic".to_string(),
         api_key: "${ANTHROPIC_API_KEY}".to_string(),
         base_url: "https://api.anthropic.com".to_string(),
         sonnet_model: DEFAULT_SONNET_MODEL.to_string(),
@@ -240,7 +239,6 @@ pub struct MavenEnvironment {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CcEnvironment {
     pub name: String,
-    pub provider: String,
     #[serde(default)]
     pub api_key: String,
     #[serde(default)]

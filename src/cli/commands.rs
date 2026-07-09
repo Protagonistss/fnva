@@ -312,9 +312,6 @@ pub enum CcCommands {
         /// Environment name
         #[arg(short, long)]
         name: String,
-        /// Provider
-        #[arg(short, long)]
-        provider: String,
         /// API Key
         #[arg(short = 'k', long)]
         api_key: Option<String>,

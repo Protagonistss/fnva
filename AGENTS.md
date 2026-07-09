@@ -25,7 +25,7 @@
 - 新增平台构建逻辑时，至少验证编译成功并检查生成二进制存在；无法运行的交叉编译目标应在日志中说明。
 
 ## Commit 与 Pull Request
-- Commit 信息使用祈使句、单一主题，如：`Fix zsh integration recursion`、`Add linux arm64 build deps`。小修建议 squash 后再推送。
+- Commit 信息使用 Conventional Commits、单一主题，与现有历史保持一致，如：`feat(cc): add xxx`、`fix(scripts): handle xxx`、`refactor(core): xxx`、`docs: ...`、`chore: bump version`。小修建议 squash 后再推送。
 - PR 描述需包含：背景/动机、主要变更点、测试结果（列出运行的命令）、风险与回滚方案（尤其是安装/卸载脚本、二进制分发）。
 - 如有关联 Issue/工单请在描述中链接；涉及终端交互或错误信息时附上关键日志或截图。
 

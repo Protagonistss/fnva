@@ -50,10 +50,37 @@ function parseVersion(tagName) {
   return { version: `${base}+${build}`, tag: tagName };
 }
 
+/**
+ * 把版本字符串拆成数值元组,用于比较。
+ *   "17.0.18+8" -> [17, 0, 18, 8]
+ *   "8u482b08"  -> [8, 0, 482, 8]
+ * 解析失败返回 [0],排在最前(不会胜出)。
+ */
+function versionKey(versionStr) {
+  let m = versionStr.match(/^(\d+)\.(\d+)\.(\d+)\+(\d+)$/);
+  if (m) return [+m[1], +m[2], +m[3], +m[4]];
+  m = versionStr.match(/^8u(\d+)b(\d+)$/);
+  if (m) return [8, 0, +m[1], +m[2]];
+  return [0];
+}
+
+/** 数值元组比较,返回 >0 / 0 / <0。 */
+function compareVersionKeys(a, b) {
+  const len = Math.max(a.length, b.length);
+  for (let i = 0; i < len; i++) {
+    const d = (a[i] ?? 0) - (b[i] ?? 0);
+    if (d !== 0) return d;
+  }
+  return 0;
+}
+
 async function getLatestVersion(repo, major) {
-  const url = `https://api.github.com/repos/adoptium/${repo}/releases?per_page=5`;
+  // GitHub 的 /releases 按 created_at 排序,不保证版本号从新到旧;只取前几个会
+  // 把"创建时间靠前但版本号更旧"的 GA 当成最新。这里多取一些,再按版本号挑最大。
+  const url = `https://api.github.com/repos/adoptium/${repo}/releases?per_page=30`;
   const releases = await fetchJSON(url);
 
+  let best = null;
   for (const release of releases) {
     if (release.prerelease) continue;
     const parsed = parseVersion(release.tag_name);
@@ -67,12 +94,14 @@ async function getLatestVersion(repo, major) {
         }
       }
     }
+    if (Object.keys(assets).length < 3) continue;
 
-    if (Object.keys(assets).length >= 3) {
-      return { ...parsed, major, assets };
+    const candidate = { ...parsed, major, assets };
+    if (!best || compareVersionKeys(versionKey(candidate.version), versionKey(best.version)) > 0) {
+      best = candidate;
     }
   }
-  return null;
+  return best;
 }
 
 function toToml(entry) {

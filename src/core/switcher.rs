@@ -159,7 +159,7 @@ impl EnvironmentSwitcher {
                 .add(name, &config_str)
                 .with_context(&format!("adding {env_type} environment '{name}'"))?;
 
-            format!("Successfully added {env_type} environment: {name}")
+            format!("Added {env_type} environment: {name}")
         };
 
         Ok(result)
@@ -525,12 +525,24 @@ impl EnvironmentSwitcher {
             } else {
                 None
             };
+            // CC 缺 api_key 时标记,提醒该环境导出后无法鉴权
+            let missing_key = if env_type == EnvironmentType::Cc {
+                config
+                    .cc_environments
+                    .iter()
+                    .find(|e| e.name == name)
+                    .map(|e| e.api_key.trim().is_empty())
+                    .unwrap_or(false)
+            } else {
+                false
+            };
             items.push(EnvItem {
                 name,
                 description: env.description.clone().unwrap_or_default(),
                 extra,
                 is_current,
                 is_default,
+                missing_key,
             });
         }
         Ok(items)
