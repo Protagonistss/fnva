@@ -1,8 +1,8 @@
 # Repository Guidelines
 
 ## 项目结构与模块组织
-- `src/`：Rust 源码。`cli/` 负责命令行解析与入口，`core/` 管理环境切换与会话，`environments/` 提供 Java/LLM 等环境管理，`infrastructure/` 处理配置与脚本生成，`utils/` 存放通用工具。
-- `scripts/`：Node/脚本工具（安装、卸载、平台构建），`bin/` 为 npm 用户提供的入口，`platforms/` 存放按平台打包的二进制。
+- `src/`：Rust 源码。`cli/` 负责命令行解析与入口，`core/` 管理环境切换与会话，`environments/` 提供 Java / Maven / Claude Code(cc) 等环境管理，`infrastructure/` 处理配置、脚本生成、目录扫描（`scanner.rs`）、远程下载与镜像（`remote/`）、工具源协议（`tool_protocol/`）及安装逻辑（`installer/`），`error/` 统一错误类型与上下文，`utils/` 存放通用工具。
+- `scripts/`：Node/Shell 脚本工具，分四类——构建（`build-*.sh`、`build-platforms.js`、`prepare-publish.sh`）、安装/卸载（`install.sh`/`install.ps1`、`uninstall.sh`/`uninstall.ps1` 及配套的 shell 集成 JS）、权限与风格检查（`check-permissions.js`、`check-style.sh`、`format-code.sh`、`fix-fnva-permissions.sh`）、版本维护（`update-java-versions.js`）。`bin/` 为 npm 用户提供的入口，`platforms/` 存放按平台打包的二进制。
 - `config/` 示例配置，`docs/` 文档素材，`target/` 为构建输出目录（不入库）。
 - 工作目录建议始终在仓库根目录执行命令，避免相对路径失效。
 
@@ -11,6 +11,9 @@
 - `cargo build --release`：本机发布构建，产物在 `target/release/fnva[.exe]`。
 - `npm run build:platforms`：跨平台构建脚本（Node 实现，可在 PowerShell/Git Bash/Unix 下运行），生成 `platforms/<os>-<arch>/fnva[.exe]`。
 - `npm run build`：本地打包流程（依赖脚本目录），发布前可本地验证。
+- `npm run build:all`：完整跨平台构建（本地 + 各平台产物）。
+- `npm run check-permissions`：校验打包文件的可执行权限是否正确。
+- `npm run install-shell` / `uninstall-shell`：安装/卸载 shell 集成。
 - `cargo test`：执行测试套件，建议与关键功能改动绑定。
 
 ## 代码风格与命名约定
@@ -59,4 +62,4 @@
 - 16 个模板源文件位于 `src/infrastructure/shell/templates/*.hbs`，由 `script_strategy.rs` 用 `include_str!` 引用
 - Switch 模板：Java 用 `*_java_switch`，Maven 用 `*_maven_switch`，CC 用 `*_cc_switch`
 - Integration 模板：autoload 函数 → autoload 调用 → wrapper 函数（顺序不可调换）
-- 详细规格见 `docs/spec/shell-template-system.md` 和 `docs/spec/shell-integration.md`
+- 详细规格见 `docs/spec/shell-template-system.md` 和 `docs/spec/shell-integration.md`；工具源下载与镜像协议见 `docs/spec/tool-source-protocol.md`
