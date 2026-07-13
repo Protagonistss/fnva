@@ -16,7 +16,7 @@
     "build:platforms:sh": "bash scripts/build-platforms.sh",
     "build:all": "scripts/build-all.sh",
     "check-permissions": "node scripts/check-permissions.js",
-    "postuninstall": "node scripts/uninstall-shell-integration.js"
+    "postinstall": "node scripts/cleanup-legacy-shims.js"
   },
   "files": [
     "bin/",

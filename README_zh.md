@@ -81,6 +81,18 @@ eval "$(fnva env)"
 
 用户配置位于 `~/.fnva/config.toml` (Windows: `%USERPROFILE%\.fnva\config.toml`)。
 
+## 卸载
+
+`npm uninstall -g fnva` 只会移除包本身，**不会**自动清理 shell 集成：npm v7+ 已移除 `postuninstall` 生命周期脚本，fnva 无法挂载卸载钩子。请显式清理 shell 配置中的引导行和遗留启动器（须在 `npm uninstall` **之前**执行，此时脚本仍在磁盘上）：
+
+```sh
+node "$(npm root -g)/fnva/scripts/uninstall-shell-integration.js"
+npm uninstall -g fnva
+rm -rf ~/.fnva   # 可选：删除用户配置与状态
+```
+
+`curl | sh` / `irm` 安装方式请改用 `scripts/uninstall.sh`（Unix）或 `scripts/uninstall.ps1`（Windows）。
+
 ## 许可证
 
 MIT License.
