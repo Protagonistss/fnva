@@ -9,7 +9,7 @@ echo "准备发布 npm 包..."
 # 检查必要的文件
 REQUIRED_FILES=(
     "package.json"
-    "bin/fnva"
+    "bin/fnva.js"
     "README.md"
 )
 
