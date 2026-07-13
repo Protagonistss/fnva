@@ -1,6 +1,17 @@
 
 # fnva environment setup (fnva env --shell powershell | Out-String | Invoke-Expression)
 
+# Resolve the real fnva launcher: npm installs expose fnva.cmd, the irm
+# installer exposes fnva.exe. Calling the resolved path (instead of the bare
+# name) keeps the `fnva` function below from recursing into itself and
+# supports both install methods.
+function fnva-FindBin {
+    $b = (Get-Command fnva.cmd -ErrorAction SilentlyContinue).Source
+    if (-not $b) { $b = (Get-Command fnva.exe -ErrorAction SilentlyContinue).Source }
+    return $b
+}
+$fnvaBin = fnva-FindBin
+
 # --- Auto-restore on startup ---
 $fnvaAutoLoadDone = $false
 function fnva-AutoLoadDefault {
@@ -8,7 +19,7 @@ function fnva-AutoLoadDefault {
     $fnvaAutoLoadDone = $true
 
     $envsFile = "$env:USERPROFILE\.fnva\state\current_envs.toml"
-    if ((Test-Path $envsFile) -and (Get-Command fnva -ErrorAction SilentlyContinue)) {
+    if ((Test-Path $envsFile) -and $fnvaBin) {
         $restored = @()
         $lines = Get-Content $envsFile -ErrorAction SilentlyContinue
         foreach ($line in $lines) {
@@ -17,7 +28,7 @@ function fnva-AutoLoadDefault {
             $value = $Matches[2]
             if ([string]::IsNullOrWhiteSpace($value)) { continue }
             $env:_FNVA_QUIET = "1"
-            $envScript = (& fnva.cmd $key use $value 2>$null) -join "`n"
+            $envScript = (& $fnvaBin $key use $value 2>$null) -join "`n"
             if ($envScript) { Invoke-Expression $envScript; $restored += "$key $value" }
             Remove-Item Env:\_FNVA_QUIET
         }
@@ -32,10 +43,17 @@ fnva-AutoLoadDefault
 
 # --- Shell wrapper (auto-source on use) ---
 function fnva {
+    # Re-resolve in case fnva was installed or updated after this profile loaded.
+    $bin = $fnvaBin
+    if (-not $bin) { $bin = fnva-FindBin; $fnvaBin = $bin }
+    if (-not $bin) {
+        Write-Error 'fnva launcher not found on PATH (expected fnva.cmd or fnva.exe). Reinstall fnva or check PATH.'
+        return
+    }
     if ($args.Count -ge 2 -and ($args[0] -eq "java" -or $args[0] -eq "cc" -or $args[0] -eq "maven") -and ($args[1] -eq "use")) {
         $tempFile = Join-Path $env:TEMP ("fnva_script_" + (Get-Random) + ".ps1")
         try {
-            & fnva.cmd @args 2>&1 | Out-File -FilePath $tempFile -Encoding UTF8
+            & $bin @args 2>&1 | Out-File -FilePath $tempFile -Encoding UTF8
             $content = Get-Content $tempFile -Raw -Encoding UTF8
             if ($content -match '\$env:' -or $content -match 'Write-Host') {
                 . $tempFile
@@ -46,6 +64,6 @@ function fnva {
             if (Test-Path $tempFile) { Remove-Item $tempFile -ErrorAction SilentlyContinue }
         }
     } else {
-        & fnva.cmd @args
+        & $bin @args
     }
 }

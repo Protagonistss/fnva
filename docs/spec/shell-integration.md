@@ -93,12 +93,12 @@ function fnva-AutoLoadDefault {
     $fnvaAutoLoadDone = $true
 
     $envsFile = "$env:USERPROFILE\.fnva\state\current_envs.toml"
-    if ((Test-Path $envsFile) -and (Get-Command fnva -ErrorAction SilentlyContinue)) {
+    if ((Test-Path $envsFile) -and $fnvaBin) {
         $restored = @()
         foreach ($line in $lines) {
             # ... 解析 TOML 行 ...
             $env:_FNVA_QUIET = "1"
-            $envScript = (& fnva.cmd $key use $value 2>$null) -join "`n"
+            $envScript = (& $fnvaBin $key use $value 2>$null) -join "`n"
             if ($envScript) { Invoke-Expression $envScript; $restored += $value }
             Remove-Item Env:\_FNVA_QUIET
         }
@@ -161,12 +161,16 @@ end
 
 ### PowerShell Wrapper
 
+`$fnvaBin` 在脚本开头由 `fnva-FindBin` 解析一次（npm 安装为 `fnva.cmd`，irm 安装为 `fnva.exe`），wrapper 内调用解析到的路径，既避免函数递归，又兼容两种安装方式。
+
 ```powershell
 function fnva {
+    $bin = $fnvaBin
+    if (-not $bin) { $bin = fnva-FindBin; $fnvaBin = $bin }
     if ($args.Count -ge 2 -and ($args[0] -in @("java","cc","maven")) -and $args[1] -eq "use") {
         $tempFile = Join-Path $env:TEMP ("fnva_script_" + (Get-Random) + ".ps1")
         try {
-            & fnva.cmd @args 2>&1 | Out-File -FilePath $tempFile -Encoding UTF8
+            & $bin @args 2>&1 | Out-File -FilePath $tempFile -Encoding UTF8
             $content = Get-Content $tempFile -Raw -Encoding UTF8
             if ($content -match '\$env:' -or $content -match 'Write-Host') {
                 . $tempFile
@@ -177,7 +181,7 @@ function fnva {
             if (Test-Path $tempFile) { Remove-Item $tempFile -ErrorAction SilentlyContinue }
         }
     } else {
-        & fnva.cmd @args
+        & $bin @args
     }
 }
 ```
@@ -197,6 +201,8 @@ fnva cc use mycc           ← 用户调用，触发 wrapper
 fnva cc use mycc           ← 用户调用，触发 wrapper
   └─ fnva cc use mycc      ← 再次触发 wrapper → 无限递归！
 ```
+
+PowerShell 同理，但用**解析到的路径**而非 `command`：wrapper 调用 `$fnvaBin`（`fnva-FindBin` 解析出的 `fnva.cmd` 或 `fnva.exe` 绝对路径），不会再次命中名为 `fnva` 的函数，从而避免递归。
 
 ## state/current_envs.toml
 
@@ -245,11 +251,13 @@ while IFS='=' read -r key value; do
 
 ### 安装标记
 
-Shell 配置文件中的 fnva 代码带有标记：
+Shell 配置文件中的 fnva 引导行包裹在围栏标记内（npm 安装器 `install-shell-integration.js` 与 irm 安装器 `install.ps1` 写入相同标记，卸载器据此对称清理）：
 ```
-# fnva auto integration (added by npm install)
+# >>> fnva >>>
+fnva env --shell <sh> | ...   # 各 shell 的引导行
+# <<< fnva <<<
 ```
-卸载脚本根据此标记清理。
+引导行在 shell 启动时调用 `fnva env --shell <sh>` 动态生成下方完整的 wrapper，因此配置文件里**只存引导行**，不存 `function fnva` 定义。
 
 ## 跨平台差异总结
 
@@ -257,6 +265,6 @@ Shell 配置文件中的 fnva 代码带有标记：
 |------|----------|------|------------|
 | Wrapper 机制 | temp_file + source | temp_file + source | temp_file + source (dot source) |
 | Autoload 静默 | `_FNVA_QUIET=1 eval` | temp_file + `source $_t` | `$env:_FNVA_QUIET` + Remove-Item |
-| 防递归 | `command fnva` | `command fnva` | `fnva.cmd` |
+| 防递归 | `command fnva` | `command fnva` | 解析到 `$fnvaBin`（`fnva.cmd` 或 `fnva.exe`）后调用 |
 | TOML 解析 | `while IFS='=' read` | `string match -r` | `-match` 正则 |
 | 汇总输出 | `echo "[fnva] restored:..."` | `echo "[fnva] restored:..."` | `Write-Host ... -ForegroundColor DarkGray` |

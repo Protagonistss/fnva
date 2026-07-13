@@ -42,7 +42,9 @@ try {
         if ((Get-Content $PROFILE -Raw) -match ">>> fnva >>>") { $needAdd = $false }
     }
     if ($needAdd) {
-        Add-Content $PROFILE "`n# >>> fnva >>>`nfnva env | Invoke-Expression`n# <<< fnva <<<"
+        # Same fenced marker + bootstrap line as the npm installer
+        # (scripts/install-shell-integration.js), so one uninstaller cleans both.
+        Add-Content $PROFILE "`n# >>> fnva >>>`nfnva env --shell powershell | Out-String | Invoke-Expression`n# <<< fnva <<<"
         Write-Host "Added shell integration to $PROFILE"
     }
 

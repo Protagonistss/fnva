@@ -13,9 +13,14 @@ function detectShell() {
 }
 
 function getShellConfigPaths(shell) {
+  const home = process.env.USERPROFILE || os.homedir();
   switch (shell) {
     case 'powershell':
-      return [path.join(process.env.USERPROFILE || os.homedir(), 'Documents', 'WindowsPowerShell', 'Microsoft.PowerShell_profile.ps1')];
+      // Cover both PowerShell 7 (PowerShell\) and Windows PowerShell 5.x (WindowsPowerShell\).
+      return [
+        path.join(home, 'Documents', 'PowerShell', 'Microsoft.PowerShell_profile.ps1'),
+        path.join(home, 'Documents', 'WindowsPowerShell', 'Microsoft.PowerShell_profile.ps1'),
+      ];
     case 'bash':
       return [path.join(os.homedir(), '.bashrc')];
     case 'zsh':
@@ -31,63 +36,46 @@ function getShellConfigPaths(shell) {
 }
 
 function cleanConfigFile(cfgPath) {
-  let content = fs.readFileSync(cfgPath, 'utf8');
-  const originalContent = content;
+  const original = fs.readFileSync(cfgPath, 'utf8');
+  let content = original;
 
-  const marker = '# fnva auto integration (added by npm install)';
-  const startIndex = content.indexOf(marker);
+  // Current fenced marker block — matches what install-shell-integration.js
+  // and install.ps1 write. Same marker the irm uninstaller strips.
+  content = content.replace(/\r?\n?# >>> fnva >>>[\s\S]*?# <<< fnva <<</g, '');
 
-  if (startIndex !== -1) {
-    const beforeMarker = content.substring(0, startIndex).trimEnd();
-    const afterMarker = content.substring(startIndex);
-    const lines = afterMarker.split('\n');
+  // Legacy one-line marker written by fnva 0.0.75–0.0.86.
+  content = content.replace(/\r?\n?# fnva shell integration\r?\n[^\r\n]*(?:\r?\n)?/g, '');
 
-    let functionEndIndex = -1;
-    let braceCount = 0;
-    let foundFunction = false;
+  if (content === original) {
+    console.log(`⚠️  No fnva block found in ${cfgPath}`);
+    return false;
+  }
 
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      if (line.includes('function fnva') || line.includes('fnva(')) {
-        foundFunction = true;
-      }
+  content = content.replace(/\n{3,}/g, '\n\n').trim() + '\n';
+  fs.writeFileSync(cfgPath, content);
+  console.log(`✅ fnva shell integration removed from ${cfgPath}`);
+  return true;
+}
 
-      if (foundFunction) {
-        for (const char of line) {
-          if (char === '{') braceCount++;
-          if (char === '}') braceCount--;
-        }
-        if (braceCount === 0) {
-          functionEndIndex = i + 1;
-          break;
-        }
-      }
+// Older fnva versions copied bin/fnva.ps1 into what they guessed was the npm
+// global bin dir. On Windows + recent Node that guess fell back to the
+// node.exe directory, leaving a stray fnva.ps1 on PATH that shadowed the real
+// binary and produced "native binary not found". Remove it (Windows only,
+// best-effort). Never touch the real npm prefix — npm owns fnva.ps1 there.
+function cleanupLegacyPs1() {
+  if (process.platform !== 'win32') return;
+  try {
+    const nodeDir = path.dirname(process.execPath);
+    const npmPrefix = process.env.npm_config_prefix || '';
+    if (npmPrefix && path.resolve(nodeDir) === path.resolve(npmPrefix)) return;
+    const stray = path.join(nodeDir, 'fnva.ps1');
+    if (fs.existsSync(stray)) {
+      fs.unlinkSync(stray);
+      console.log(`🧹 Removed legacy fnva.ps1 shim from ${stray}`);
     }
-
-    if (functionEndIndex !== -1) {
-      const afterFunction = lines.slice(functionEndIndex).join('\n');
-      content = beforeMarker + '\n' + afterFunction;
-    }
+  } catch (_) {
+    // best-effort; ignore
   }
-
-  if (content === originalContent) {
-    content = content
-      .replace(/# fnva auto integration \(added by npm install\)[\s\S]*?(?=\n\S|\n$)/g, '')
-      .replace(/.*fnva.*\n?/g, '')
-      .replace(/.*FNVAAUTOMODE.*\n?/g, '')
-      .replace(/.*cmd\.exe.*fnva.*\n?/g, '')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim() + '\n';
-  }
-
-  if (content !== originalContent) {
-    fs.writeFileSync(cfgPath, content);
-    console.log(`✅ fnva shell integration removed from ${cfgPath}`);
-    return true;
-  }
-
-  console.log(`⚠️  No fnva block found in ${cfgPath}`);
-  return false;
 }
 
 function removeShellIntegration(configPath, shell) {
@@ -116,6 +104,9 @@ function main() {
   console.log('npm install location:', __dirname);
   console.log('Current platform:', process.platform);
   console.log('Detected shell:', process.env.SHELL || 'unknown');
+
+  // Best-effort: remove any stray fnva.ps1 the old installer dropped on PATH.
+  cleanupLegacyPs1();
 
   const shell = detectShell();
   const paths = getShellConfigPaths(shell);
@@ -166,4 +157,5 @@ module.exports = {
   detectShell,
   getShellConfigPaths,
   removeShellIntegration,
+  cleanupLegacyPs1,
 };
