@@ -1,100 +1,26 @@
+//! 用户配置(`~/.fnva/config.toml`):环境列表、镜像、下载选项。
+//!
+//! 按职责拆分:
+//! - [`Config`] 主体(本文件):结构定义 + load/save/sync + 各环境类型的增删查改
+//! - [`environments`]:Java / Maven / Cc 环境数据类型 + 默认 CC 环境
+//! - [`mirrors`]:镜像配置 + 默认镜像源
+//! - [`download`]:下载重试 / 超时配置
+
+mod download;
+mod environments;
+mod mirrors;
+
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
 use std::path::PathBuf;
 
-/// 默认 CC sonnet 模型名(配置缺省值与扫描兜底共用)。
-pub const DEFAULT_SONNET_MODEL: &str = "claude-sonnet-4-5";
-
-/// 镜像配置（模板化 URL）
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MirrorConfig {
-    pub name: String,
-    #[serde(default = "default_mirror_priority")]
-    pub priority: u32,
-    pub base_url: String,
-    /// URL 模板变量: {base_url}, {major}, {tag}, {filename}, {os}, {arch}
-    pub url_template: String,
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-}
-
-fn default_mirror_priority() -> u32 {
-    10
-}
-
-fn default_true() -> bool {
-    true
-}
-
-/// 所有工具的镜像配置集合
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MirrorsConfig {
-    #[serde(default = "default_java_mirrors")]
-    pub java: Vec<MirrorConfig>,
-    #[serde(default = "default_maven_mirrors")]
-    pub maven: Vec<MirrorConfig>,
-}
-
-impl Default for MirrorsConfig {
-    fn default() -> Self {
-        Self {
-            java: default_java_mirrors(),
-            maven: default_maven_mirrors(),
-        }
-    }
-}
-
-impl MirrorsConfig {
-    /// 通用访问器:按工具 id 取镜像列表(未知工具返回空切片)。
-    pub fn get(&self, tool: &str) -> &[MirrorConfig] {
-        match tool {
-            "java" => &self.java,
-            "maven" => &self.maven,
-            _ => &[],
-        }
-    }
-}
-
-fn default_maven_mirrors() -> Vec<MirrorConfig> {
-    vec![
-        MirrorConfig {
-            name: "tsinghua".to_string(),
-            priority: 1,
-            base_url: "https://mirrors.tuna.tsinghua.edu.cn/apache/maven/maven-3".to_string(),
-            url_template: "{base_url}/{version}/binaries/apache-maven-{version}-bin.tar.gz"
-                .to_string(),
-            enabled: true,
-        },
-        MirrorConfig {
-            name: "apache-archive".to_string(),
-            priority: 2,
-            base_url: "https://archive.apache.org/dist/maven/maven-3".to_string(),
-            url_template: "{base_url}/{version}/binaries/apache-maven-{version}-bin.tar.gz"
-                .to_string(),
-            enabled: true,
-        },
-    ]
-}
-
-fn default_java_mirrors() -> Vec<MirrorConfig> {
-    vec![
-        MirrorConfig {
-            name: "tsinghua".to_string(),
-            priority: 1,
-            base_url: "https://mirrors.tuna.tsinghua.edu.cn/Adoptium".to_string(),
-            url_template: "{base_url}/{major}/jdk/{arch}/{os}/{filename}".to_string(),
-            enabled: true,
-        },
-        MirrorConfig {
-            name: "github".to_string(),
-            priority: 2,
-            base_url: String::new(),
-            url_template: "https://github.com/adoptium/temurin{major}-binaries/releases/download/{tag}/{filename}".to_string(),
-            enabled: true,
-        },
-    ]
-}
+pub use download::DownloadConfig;
+pub use environments::{
+    default_cc_environments, CcEnvironment, EnvironmentSource, JavaEnvironment, MavenEnvironment,
+    DEFAULT_SONNET_MODEL,
+};
+pub use mirrors::{MirrorConfig, MirrorsConfig};
 
 /// 配置文件结构
 #[derive(Debug, Serialize, Deserialize)]
@@ -136,127 +62,6 @@ pub struct Config {
     /// 明确移除的 Java 环境名称（防止重新扫描添加）
     #[serde(default)]
     pub removed_java_names: Vec<String>,
-}
-
-/// 下载配置
-#[derive(Debug, Default, Serialize, Deserialize)]
-pub struct DownloadConfig {
-    /// 重试次数
-    #[serde(default = "default_retry_count")]
-    pub retry_count: u32,
-    /// 初始重试延迟（毫秒）
-    #[serde(default = "default_retry_delay_ms")]
-    pub retry_delay_ms: u64,
-    /// 是否使用指数退避
-    #[serde(default = "default_exponential_backoff")]
-    pub exponential_backoff: bool,
-    /// 连接超时时间（秒）
-    #[serde(default = "default_connect_timeout_sec")]
-    pub connect_timeout_sec: u64,
-    /// 读取超时时间（秒）
-    #[serde(default = "default_read_timeout_sec")]
-    pub read_timeout_sec: u64,
-}
-
-fn default_retry_count() -> u32 {
-    3
-}
-
-fn default_retry_delay_ms() -> u64 {
-    1000
-}
-
-fn default_exponential_backoff() -> bool {
-    true
-}
-
-fn default_connect_timeout_sec() -> u64 {
-    30
-}
-
-fn default_read_timeout_sec() -> u64 {
-    300
-}
-
-/// 默认 CC 环境配置（仅保留一个 anthropic-cc 作为初始示例）
-fn default_cc_environments() -> Vec<CcEnvironment> {
-    vec![CcEnvironment {
-        name: "anthropic-cc".to_string(),
-        api_key: "${ANTHROPIC_API_KEY}".to_string(),
-        base_url: "https://api.anthropic.com".to_string(),
-        sonnet_model: DEFAULT_SONNET_MODEL.to_string(),
-        opus_model: Some("claude-opus-4-5".to_string()),
-        haiku_model: Some("claude-haiku-4-5".to_string()),
-        description: "Anthropic Claude Code environment".to_string(),
-        api_timeout_ms: None,
-        extra_env: std::collections::HashMap::new(),
-    }]
-}
-
-/// Java 环境配置
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct JavaEnvironment {
-    pub name: String,
-    pub java_home: String,
-    #[serde(default)]
-    pub description: String,
-    /// 环境来源：manual（手动添加）或 scanned（扫描发现）
-    #[serde(default)]
-    pub source: EnvironmentSource,
-}
-
-/// 环境来源
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
-pub enum EnvironmentSource {
-    #[serde(rename = "manual")]
-    #[default]
-    Manual,
-    #[serde(rename = "scanned")]
-    Scanned,
-}
-
-/// Maven 环境配置
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MavenEnvironment {
-    pub name: String,
-    pub maven_home: String,
-    #[serde(default)]
-    pub description: String,
-    #[serde(default)]
-    pub source: EnvironmentSource,
-    /// 自定义 MAVEN_OPTS（JVM 参数，如 -Xmx4g -Dfile.encoding=UTF-8）
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub maven_opts: Option<String>,
-    /// 自定义本地仓库路径（替代默认 ~/.m2/repository）
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub local_repo: Option<String>,
-    /// 自定义 settings.xml 路径
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub settings_file: Option<String>,
-}
-
-/// CC (Claude Code) 环境配置
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CcEnvironment {
-    pub name: String,
-    #[serde(default)]
-    pub api_key: String,
-    #[serde(default)]
-    pub base_url: String,
-    #[serde(default)]
-    pub sonnet_model: String,
-    #[serde(default)]
-    pub opus_model: Option<String>,
-    #[serde(default)]
-    pub haiku_model: Option<String>,
-    #[serde(default)]
-    pub description: String,
-    /// API timeout in milliseconds (default: 3000000 = 50 min, for long Claude Code requests)
-    #[serde(default)]
-    pub api_timeout_ms: Option<String>,
-    /// Extra environment variables to export verbatim (e.g. CLAUDE_CODE_AUTO_COMPACT_WINDOW)
-    #[serde(default)]
-    pub extra_env: std::collections::HashMap<String, String>,
 }
 
 impl Default for Config {
@@ -655,18 +460,6 @@ mod tests {
         assert_eq!(
             config.get_maven_env("maven3").unwrap().maven_home,
             "/home/user/.fnva/packages/maven/3.9.16"
-        );
-    }
-
-    #[test]
-    fn test_default_maven_mirrors() {
-        let m = default_maven_mirrors();
-        assert!(m.iter().any(|x| x.name == "tsinghua"));
-        assert!(m.iter().any(|x| x.name == "apache-archive"));
-        // 清华优先级最高
-        assert_eq!(
-            m.iter().min_by_key(|x| x.priority).unwrap().name,
-            "tsinghua"
         );
     }
 
