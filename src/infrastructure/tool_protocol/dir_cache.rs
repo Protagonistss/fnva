@@ -84,3 +84,59 @@ impl<T: Serialize + DeserializeOwned + Clone> CacheEntry<T> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cache_entry_roundtrip_within_ttl() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("cache.json");
+        let versions = vec!["3.9.1".to_string(), "3.9.2".to_string()];
+        CacheEntry::<String>::write(&path, &versions);
+        assert_eq!(CacheEntry::<String>::read(&path, 3600), Some(versions));
+    }
+
+    #[test]
+    fn cache_entry_expired_returns_none() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("cache.json");
+        // fetched_at = epoch(1970),对任何合理的 TTL 都已过期
+        let stale = CacheEntry {
+            fetched_at: 0,
+            versions: vec!["x".to_string()],
+        };
+        std::fs::write(&path, serde_json::to_string(&stale).unwrap()).unwrap();
+        assert_eq!(CacheEntry::<String>::read(&path, 3600), None);
+    }
+
+    #[test]
+    fn cache_entry_corrupt_json_returns_none() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("cache.json");
+        std::fs::write(&path, "not json").unwrap();
+        assert_eq!(CacheEntry::<String>::read(&path, 3600), None);
+    }
+
+    #[test]
+    fn cache_entry_missing_file_returns_none() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("nope.json");
+        assert_eq!(CacheEntry::<String>::read(&path, 3600), None);
+    }
+
+    #[tokio::test]
+    async fn fetch_with_retry_returns_body_on_success() {
+        use httpmock::prelude::*;
+        let server = httpmock::MockServer::start();
+        server.mock(|when, then| {
+            when.method(GET).path("/list");
+            then.status(200).body("payload");
+        });
+        let client = reqwest::Client::new();
+        let url = server.url("/list");
+        let body = fetch_with_retry(&client, &url).await.unwrap();
+        assert_eq!(body, "payload");
+    }
+}

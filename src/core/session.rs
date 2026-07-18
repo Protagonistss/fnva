@@ -318,3 +318,69 @@ impl HistoryManager {
         self.save_history()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testutil::FnvaHomeGuard;
+
+    #[test]
+    fn history_record_persists_across_reload() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let _g = FnvaHomeGuard::new(tmp.path());
+        {
+            let mut h = HistoryManager::new(100).unwrap();
+            h.record_switch(
+                EnvironmentType::Java,
+                None,
+                "j17".to_string(),
+                Some("test".to_string()),
+            )
+            .unwrap();
+            h.record_switch(
+                EnvironmentType::Cc,
+                Some("old".to_string()),
+                "my-cc".to_string(),
+                None,
+            )
+            .unwrap();
+        }
+        // 重新加载,确认落盘
+        let h = HistoryManager::new(100).unwrap();
+        let recent = h.get_recent_history(10);
+        assert_eq!(recent.len(), 2);
+        // get_recent_history 返回旧→新,最后一条是后记录的
+        assert_eq!(recent.last().unwrap().new_env, "my-cc");
+    }
+
+    #[test]
+    fn history_respects_max_capacity() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let _g = FnvaHomeGuard::new(tmp.path());
+        let mut h = HistoryManager::new(3).unwrap();
+        for i in 0..5 {
+            h.record_switch(EnvironmentType::Java, None, format!("j{i}"), None)
+                .unwrap();
+        }
+        let recent = h.get_recent_history(10);
+        assert_eq!(recent.len(), 3);
+        // 保留最新的 3 条:j2,j3,j4
+        assert_eq!(recent.first().unwrap().new_env, "j2");
+        assert_eq!(recent.last().unwrap().new_env, "j4");
+    }
+
+    #[test]
+    fn history_filter_by_env_type() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let _g = FnvaHomeGuard::new(tmp.path());
+        let mut h = HistoryManager::new(100).unwrap();
+        h.record_switch(EnvironmentType::Java, None, "j17".to_string(), None)
+            .unwrap();
+        h.record_switch(EnvironmentType::Cc, None, "cc1".to_string(), None)
+            .unwrap();
+        h.record_switch(EnvironmentType::Java, None, "j21".to_string(), None)
+            .unwrap();
+        let java_only = h.get_history_for_env(EnvironmentType::Java);
+        assert_eq!(java_only.len(), 2);
+    }
+}

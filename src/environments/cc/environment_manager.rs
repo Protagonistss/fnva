@@ -411,3 +411,64 @@ impl ConfigCcEnvironment {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testutil::FnvaHomeGuard;
+
+    fn cc_json(base_url: &str) -> String {
+        serde_json::json!({
+            "base_url": base_url,
+            "api_key": "${ANTHROPIC_API_KEY}",
+            "sonnet_model": "claude-sonnet-4-5",
+        })
+        .to_string()
+    }
+
+    #[test]
+    fn cc_add_then_get_persists_across_reload() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let _g = FnvaHomeGuard::new(tmp.path());
+        let mut m = CcEnvironmentManager::new();
+        m.add("my-cc", &cc_json("https://api.x.com")).unwrap();
+        assert!(m.get("my-cc").unwrap().is_some());
+        // 重新加载确认落盘
+        let reloaded = CcEnvironmentManager::new();
+        assert!(reloaded.get("my-cc").unwrap().is_some());
+    }
+
+    #[test]
+    fn cc_add_missing_base_url_is_validation_error() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let _g = FnvaHomeGuard::new(tmp.path());
+        let mut m = CcEnvironmentManager::new();
+        let err = m.add("bad", r#"{"api_key":"k"}"#).unwrap_err();
+        assert!(matches!(
+            err.root_cause(),
+            AppError::Validation { field, .. } if field == "base_url"
+        ));
+    }
+
+    #[test]
+    fn cc_remove_deletes_env() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let _g = FnvaHomeGuard::new(tmp.path());
+        let mut m = CcEnvironmentManager::new();
+        m.add("gone", &cc_json("https://api.x.com")).unwrap();
+        m.remove("gone").unwrap();
+        assert!(m.get("gone").unwrap().is_none());
+    }
+
+    #[test]
+    fn cc_use_env_script_exports_anthropic_vars() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let _g = FnvaHomeGuard::new(tmp.path());
+        let mut m = CcEnvironmentManager::new();
+        m.add("my-cc", &cc_json("https://api.x.com")).unwrap();
+        let script = m.use_env("my-cc", None).unwrap();
+        assert!(script.contains("ANTHROPIC_BASE_URL"));
+        assert!(script.contains("https://api.x.com"));
+        assert!(script.contains("ANTHROPIC_AUTH_TOKEN"));
+    }
+}

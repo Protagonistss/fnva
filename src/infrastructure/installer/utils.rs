@@ -69,3 +69,63 @@ pub fn extract_tar_gz(tar_path: &Path, dest_dir: &Path) -> Result<(), String> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use zip::write::SimpleFileOptions;
+    use zip::ZipWriter;
+
+    /// 构造一个 zip 文件,内含 `entries`(名字 → 内容)。
+    fn build_zip(path: &Path, entries: &[(&str, &[u8])]) {
+        let file = fs::File::create(path).unwrap();
+        let mut zip = ZipWriter::new(file);
+        let opts = SimpleFileOptions::default();
+        for (name, data) in entries {
+            zip.start_file(*name, opts).unwrap();
+            zip.write_all(data).unwrap();
+        }
+        zip.finish().unwrap();
+    }
+
+    #[test]
+    fn extract_zip_unpacks_files_and_nested_dirs() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let zip_path = tmp.path().join("a.zip");
+        build_zip(&zip_path, &[("a.txt", b"hello"), ("sub/b.txt", b"world")]);
+
+        let dest = tmp.path().join("out");
+        fs::create_dir_all(&dest).unwrap();
+
+        extract_zip(&zip_path, &dest).unwrap();
+
+        assert_eq!(fs::read_to_string(dest.join("a.txt")).unwrap(), "hello");
+        assert_eq!(
+            fs::read_to_string(dest.join("sub").join("b.txt")).unwrap(),
+            "world"
+        );
+    }
+
+    #[test]
+    fn extract_zip_rejects_path_traversal_entries() {
+        // zip-slip:恶意条目含 `..`,`enclosed_name()` 返回 None 被跳过,
+        // 绝不能写到 dest 目录之外。
+        let tmp = tempfile::TempDir::new().unwrap();
+        let zip_path = tmp.path().join("evil.zip");
+        build_zip(
+            &zip_path,
+            &[("../escape.txt", b"pwned"), ("ok.txt", b"safe")],
+        );
+
+        let dest = tmp.path().join("out");
+        fs::create_dir_all(&dest).unwrap();
+
+        extract_zip(&zip_path, &dest).unwrap();
+
+        // 正常条目照常解压
+        assert_eq!(fs::read_to_string(dest.join("ok.txt")).unwrap(), "safe");
+        // 恶意条目未逃逸到 dest 的父目录
+        assert!(!tmp.path().join("escape.txt").exists());
+    }
+}

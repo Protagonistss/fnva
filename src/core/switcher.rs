@@ -535,33 +535,7 @@ mod tests {
     use super::*;
     use crate::environments::java::JavaEnvironmentManager;
     use crate::infrastructure::config::{Config, EnvironmentSource, JavaEnvironment};
-    use std::sync::OnceLock;
-
-    // 所有依赖 FNVA_HOME 的测试必须串行运行:环境变量是进程全局的,
-    // cargo test 默认多线程并行会导致 set_var 互相覆盖。
-    static SEQUENTIAL: OnceLock<std::sync::Mutex<()>> = OnceLock::new();
-
-    /// 把 FNVA_HOME 指向给定临时目录,作用域结束时还原环境变量。
-    struct FnvaHomeGuard {
-        _lock: std::sync::MutexGuard<'static, ()>,
-    }
-
-    impl FnvaHomeGuard {
-        fn new(dir: &std::path::Path) -> Self {
-            let lock = SEQUENTIAL
-                .get_or_init(|| std::sync::Mutex::new(()))
-                .lock()
-                .unwrap();
-            std::env::set_var("FNVA_HOME", dir);
-            Self { _lock: lock }
-        }
-    }
-
-    impl Drop for FnvaHomeGuard {
-        fn drop(&mut self) {
-            std::env::remove_var("FNVA_HOME");
-        }
-    }
+    use crate::testutil::FnvaHomeGuard;
 
     fn make_switcher() -> EnvironmentSwitcher {
         let mut switcher = EnvironmentSwitcher::new().expect("switcher init");

@@ -291,3 +291,90 @@ impl MavenEnvironmentManager {
         Ok(lines.join("\n"))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testutil::FnvaHomeGuard;
+    use std::fs;
+    use std::path::Path;
+
+    /// 造假一个 maven 安装目录(含 bin/mvn)让 validate_maven_home 通过。
+    fn fake_maven_home(tmp: &Path, name: &str) -> String {
+        let home = tmp.join(name);
+        fs::create_dir_all(home.join("bin")).unwrap();
+        let bin = if cfg!(target_os = "windows") {
+            "mvn.cmd"
+        } else {
+            "mvn"
+        };
+        fs::write(home.join("bin").join(bin), "").unwrap();
+        home.to_string_lossy().to_string()
+    }
+
+    #[test]
+    fn maven_add_then_show_env() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let _g = FnvaHomeGuard::new(tmp.path());
+        let home = fake_maven_home(tmp.path(), "maven39");
+        let mut m = MavenEnvironmentManager::new();
+        m.add(
+            "mvn39",
+            &serde_json::json!({ "maven_home": home }).to_string(),
+        )
+        .unwrap();
+        let info = m.show_env("mvn39").unwrap();
+        assert!(info.contains(&home));
+    }
+
+    #[test]
+    fn maven_add_invalid_home_is_validation_error() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let _g = FnvaHomeGuard::new(tmp.path());
+        let mut m = MavenEnvironmentManager::new();
+        let err = m
+            .add(
+                "bad",
+                &serde_json::json!({ "maven_home": "/no/such/maven" }).to_string(),
+            )
+            .unwrap_err();
+        assert!(matches!(
+            err.root_cause(),
+            AppError::Validation { field, .. } if field == "maven_home"
+        ));
+    }
+
+    #[test]
+    fn maven_set_env_vars_persists_maven_opts() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let _g = FnvaHomeGuard::new(tmp.path());
+        let home = fake_maven_home(tmp.path(), "maven39");
+        let mut m = MavenEnvironmentManager::new();
+        m.add(
+            "mvn39",
+            &serde_json::json!({ "maven_home": home }).to_string(),
+        )
+        .unwrap();
+        m.set_env_vars("mvn39", Some(Some("-Xmx4g".to_string())), None, None)
+            .unwrap();
+        // 重新加载确认落盘
+        let m2 = MavenEnvironmentManager::new();
+        let info = m2.show_env("mvn39").unwrap();
+        assert!(info.contains("-Xmx4g"));
+    }
+
+    #[test]
+    fn maven_remove_deletes_env() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let _g = FnvaHomeGuard::new(tmp.path());
+        let home = fake_maven_home(tmp.path(), "maven39");
+        let mut m = MavenEnvironmentManager::new();
+        m.add(
+            "mvn39",
+            &serde_json::json!({ "maven_home": home }).to_string(),
+        )
+        .unwrap();
+        m.remove("mvn39").unwrap();
+        assert!(m.show_env("mvn39").is_err());
+    }
+}
