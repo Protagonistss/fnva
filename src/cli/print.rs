@@ -3,7 +3,12 @@ use std::io::Write;
 
 // ─── Color Basics ────────────────────────────────────────────────────
 fn use_color() -> bool {
-    std::env::var("NO_COLOR").is_err() && std::env::var("TERM").map(|t| t != "dumb").unwrap_or(true)
+    use std::io::IsTerminal;
+    // NO_COLOR (https://no-color.org) 或非终端输出(管道/重定向)时禁用颜色,
+    // 避免 `fnva list | grep` / `out=$(fnva cc list)` 混入 ANSI 转义码。
+    std::env::var("NO_COLOR").is_err()
+        && std::env::var("TERM").map(|t| t != "dumb").unwrap_or(true)
+        && std::io::stdout().is_terminal()
 }
 
 pub fn green(s: &str) -> String {

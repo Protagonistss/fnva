@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod doctor;
 pub mod handlers;
 pub mod output;
 pub mod print;

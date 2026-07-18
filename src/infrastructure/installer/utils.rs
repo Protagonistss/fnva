@@ -24,8 +24,12 @@ pub fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<(), String> {
         let mut file = archive
             .by_index(i)
             .map_err(|e| format!("Failed to read ZIP entry: {e}"))?;
-        let outpath = dest_dir.join(file.mangled_name());
-        if file.name().ends_with('/') {
+        // enclosed_name 对含 `..` / 绝对路径等不安全条目返回 None,跳过以防 zip-slip。
+        let Some(rel) = file.enclosed_name() else {
+            continue;
+        };
+        let outpath = dest_dir.join(rel);
+        if file.is_dir() {
             fs::create_dir_all(&outpath).map_err(|e| format!("Failed to create directory: {e}"))?;
         } else {
             if let Some(p) = outpath.parent() {

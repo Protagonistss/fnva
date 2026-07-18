@@ -2,7 +2,7 @@ use crate::core::environment_manager::{EnvironmentManager, EnvironmentType, Swit
 use crate::core::presentation::{EnvItem, HistoryItem, OutputFormat};
 use crate::core::session::{HistoryManager, SessionManager, SwitchHistory};
 use crate::error::{
-    option_with_context, safe_to_json, safe_to_json_pretty, AppError, ContextualResult, ResultExt,
+    option_with_context, safe_to_json, safe_to_json_pretty, AppError, AppResult, ResultExt,
     SafeMutex,
 };
 use crate::infrastructure::config::Config;
@@ -24,7 +24,7 @@ pub struct EnvironmentSwitcher {
 
 impl EnvironmentSwitcher {
     /// 创建新的环境切换器
-    pub fn new() -> ContextualResult<Self> {
+    pub fn new() -> AppResult<Self> {
         let session_manager = SessionManager::new().map_err(|e| AppError::Config {
             message: format!("Failed to create session manager: {e}"),
         })?;
@@ -43,7 +43,7 @@ impl EnvironmentSwitcher {
         &mut self,
         env_type: EnvironmentType,
         manager: Arc<Mutex<dyn EnvironmentManager>>,
-    ) -> ContextualResult<()> {
+    ) -> AppResult<()> {
         self.managers.insert(env_type, manager);
         Ok(())
     }
@@ -55,7 +55,7 @@ impl EnvironmentSwitcher {
         name: &str,
         shell_type: Option<ShellType>,
         reason: Option<String>,
-    ) -> ContextualResult<SwitchResult> {
+    ) -> AppResult<SwitchResult> {
         // 获取环境管理器
         let manager = option_with_context(
             self.managers.get(&env_type),
@@ -139,16 +139,14 @@ impl EnvironmentSwitcher {
         env_type: EnvironmentType,
         name: &str,
         config: serde_json::Value,
-    ) -> ContextualResult<String> {
+    ) -> AppResult<String> {
         let manager = option_with_context(
             self.managers.get(&env_type),
             AppError::env_not_found(&format!("{env_type:?}")),
             "finding environment manager when adding environment",
         )?;
 
-        // 这里需要根据环境类型解析配置
-        // TODO: 实现配置解析逻辑
-
+        // 配置由各 manager 的 add() 按环境类型解析与校验,这里只透传 JSON 字符串。
         let result = {
             let mut manager_guard = manager.lock().await;
 
@@ -170,7 +168,7 @@ impl EnvironmentSwitcher {
         &self,
         env_type: EnvironmentType,
         name: &str,
-    ) -> ContextualResult<String> {
+    ) -> AppResult<String> {
         let manager = option_with_context(
             self.managers.get(&env_type),
             AppError::env_not_found(&format!("{env_type:?}")),
@@ -211,7 +209,7 @@ impl EnvironmentSwitcher {
         &self,
         env_type: EnvironmentType,
         output_format: OutputFormat,
-    ) -> ContextualResult<String> {
+    ) -> AppResult<String> {
         let manager = option_with_context(
             self.managers.get(&env_type),
             AppError::env_not_found(&format!("{env_type:?}")),
@@ -279,10 +277,7 @@ impl EnvironmentSwitcher {
     }
 
     /// 生成 shell 集成脚本
-    pub async fn generate_shell_integration(
-        &self,
-        shell_type: ShellType,
-    ) -> ContextualResult<String> {
+    pub async fn generate_shell_integration(&self, shell_type: ShellType) -> AppResult<String> {
         let current_envs = self.session_manager.lock()?.get_all_current().clone();
 
         let generator = ScriptGenerator::new().map_err(|e| AppError::ScriptGeneration {
@@ -290,7 +285,7 @@ impl EnvironmentSwitcher {
             reason: e.to_string(),
         })?;
 
-        Ok(generator.generate_integration_script(&current_envs, Some(shell_type))?)
+        generator.generate_integration_script(&current_envs, Some(shell_type))
     }
 
     /// 扫描环境
@@ -298,7 +293,7 @@ impl EnvironmentSwitcher {
         &self,
         env_type: EnvironmentType,
         extra: &[String],
-    ) -> ContextualResult<String> {
+    ) -> AppResult<String> {
         let manager = option_with_context(
             self.managers.get(&env_type),
             AppError::env_not_found(&format!("{env_type:?}")),
@@ -340,7 +335,7 @@ impl EnvironmentSwitcher {
         &self,
         env_type: Option<EnvironmentType>,
         limit: usize,
-    ) -> ContextualResult<Vec<HistoryItem>> {
+    ) -> AppResult<Vec<HistoryItem>> {
         let history: Vec<SwitchHistory> = {
             let history_manager = self.history_manager.lock()?;
 
@@ -379,7 +374,7 @@ impl EnvironmentSwitcher {
         &self,
         env_type: EnvironmentType,
         name: &str,
-    ) -> ContextualResult<String> {
+    ) -> AppResult<String> {
         let manager_entry = option_with_context(
             self.managers.get(&env_type),
             AppError::env_not_found(&format!("{env_type:?}")),
@@ -394,8 +389,7 @@ impl EnvironmentSwitcher {
             {
                 return Err(AppError::Environment {
                     message: format!("{env_type} environment '{name}' not found"),
-                }
-                .into());
+                });
             }
         }
 
@@ -418,14 +412,12 @@ impl EnvironmentSwitcher {
                         message: format!("Failed to set default CC environment: {e}"),
                     })?
             }
-            _ => {
-                return Err(AppError::Validation {
-                    field: "env_type".to_string(),
-                    reason:
-                        "Default environment support is currently only available for Java and CC"
-                            .to_string(),
-                }
-                .into())
+            EnvironmentType::Maven => {
+                config
+                    .set_default_maven_env(name.to_string())
+                    .map_err(|e| AppError::Config {
+                        message: format!("Failed to set default Maven environment: {e}"),
+                    })?
             }
         }
 
@@ -437,10 +429,7 @@ impl EnvironmentSwitcher {
     }
 
     /// 清除默认环境
-    pub async fn clear_default_environment(
-        &self,
-        env_type: EnvironmentType,
-    ) -> ContextualResult<String> {
+    pub async fn clear_default_environment(&self, env_type: EnvironmentType) -> AppResult<String> {
         let mut config = Config::load().map_err(|e| AppError::Config {
             message: format!("Failed to load config: {e}"),
         })?;
@@ -448,15 +437,7 @@ impl EnvironmentSwitcher {
         match env_type {
             EnvironmentType::Java => config.clear_default_java_env(),
             EnvironmentType::Cc => config.clear_default_cc_env(),
-            _ => {
-                return Err(AppError::Validation {
-                    field: "env_type".to_string(),
-                    reason:
-                        "Default environment support is currently only available for Java and CC"
-                            .to_string(),
-                }
-                .into())
-            }
+            EnvironmentType::Maven => config.clear_default_maven_env(),
         }
 
         config.save().map_err(|e| AppError::Config {
@@ -470,7 +451,7 @@ impl EnvironmentSwitcher {
     pub async fn get_default_environment(
         &self,
         env_type: EnvironmentType,
-    ) -> ContextualResult<Option<String>> {
+    ) -> AppResult<Option<String>> {
         let config = Config::load().map_err(|e| AppError::Config {
             message: format!("Failed to load config: {e}"),
         })?;
@@ -478,7 +459,7 @@ impl EnvironmentSwitcher {
         let default_env = match env_type {
             EnvironmentType::Java => config.default_java_env.clone(),
             EnvironmentType::Cc => config.default_cc_env.clone(),
-            _ => None,
+            EnvironmentType::Maven => config.default_maven_env.clone(),
         };
         Ok(default_env)
     }
@@ -487,7 +468,7 @@ impl EnvironmentSwitcher {
     pub async fn list_environments_with_default(
         &self,
         env_type: EnvironmentType,
-    ) -> ContextualResult<Vec<EnvItem>> {
+    ) -> AppResult<Vec<EnvItem>> {
         let manager = option_with_context(
             self.managers.get(&env_type),
             AppError::env_not_found(&format!("{env_type:?}")),
@@ -511,7 +492,7 @@ impl EnvironmentSwitcher {
         let default_env = match env_type {
             EnvironmentType::Java => config.default_java_env.clone(),
             EnvironmentType::Cc => config.default_cc_env.clone(),
-            _ => None,
+            EnvironmentType::Maven => config.default_maven_env.clone(),
         };
 
         let mut items = Vec::new();
@@ -655,6 +636,65 @@ mod tests {
         assert!(
             result.is_err(),
             "switching env with invalid java_home should error"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_maven_default_roundtrip() {
+        use crate::environments::maven::MavenEnvironmentManager;
+        use crate::infrastructure::config::MavenEnvironment;
+
+        let tmp = tempfile::TempDir::new().unwrap();
+        let _guard = FnvaHomeGuard::new(tmp.path());
+
+        // 配置一个 maven 环境(home 不校验,仅用于 default 闭环验证)
+        {
+            let mut config = Config::new();
+            config
+                .add_maven_env(MavenEnvironment {
+                    name: "mvn39".to_string(),
+                    maven_home: "/x/maven".to_string(),
+                    description: "M".to_string(),
+                    source: EnvironmentSource::Manual,
+                    maven_opts: None,
+                    local_repo: None,
+                    settings_file: None,
+                })
+                .expect("add maven env");
+            config.save().expect("save config");
+        }
+
+        let mut switcher = EnvironmentSwitcher::new().expect("switcher init");
+        switcher
+            .register_manager(
+                EnvironmentType::Maven,
+                Arc::new(Mutex::new(MavenEnvironmentManager::new())),
+            )
+            .expect("register maven manager");
+
+        // Maven default 之前只对 Java/CC 开放,这里验证三态闭环接通。
+        switcher
+            .set_default_environment(EnvironmentType::Maven, "mvn39")
+            .await
+            .expect("set maven default");
+        assert_eq!(
+            switcher
+                .get_default_environment(EnvironmentType::Maven)
+                .await
+                .expect("get maven default"),
+            Some("mvn39".to_string())
+        );
+
+        switcher
+            .clear_default_environment(EnvironmentType::Maven)
+            .await
+            .expect("clear maven default");
+        assert_eq!(
+            switcher
+                .get_default_environment(EnvironmentType::Maven)
+                .await
+                .expect("get maven default after clear"),
+            None
         );
     }
 }

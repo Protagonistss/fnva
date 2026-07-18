@@ -70,6 +70,12 @@ pub enum Commands {
         #[arg(long)]
         json: bool,
     },
+    /// Diagnose installation and shell-integration issues
+    Doctor {
+        /// Also probe mirror reachability (uses the network)
+        #[arg(long)]
+        network: bool,
+    },
 }
 
 /// Java environment management commands
@@ -120,6 +126,9 @@ pub enum JavaCommands {
         /// Major version filter
         #[arg(long, short = 'v')]
         version: Option<u32>,
+        /// Show all versions (default: first 30)
+        #[arg(long)]
+        all: bool,
     },
     /// Refresh the remote version cache
     Refresh,
@@ -230,6 +239,9 @@ pub enum MavenCommands {
         /// Version prefix filter (e.g. 3.9)
         #[arg(long)]
         version: Option<String>,
+        /// Show all versions (default: first 30)
+        #[arg(long)]
+        all: bool,
     },
     /// Show the current Maven environment
     Current {
