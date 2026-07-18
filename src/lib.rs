@@ -6,6 +6,9 @@ pub mod error;
 pub mod infrastructure;
 pub mod utils;
 
+#[cfg(test)]
+mod testutil;
+
 // 重新导出常用类型（向后兼容）
 pub use cli::*;
 pub use environments::*;

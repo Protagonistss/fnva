@@ -693,4 +693,25 @@ mod tests {
         // maven 镜像默认补全
         assert!(!parsed.mirrors.maven.is_empty());
     }
+
+    #[test]
+    fn test_config_maven_default_roundtrip() {
+        let mut config = Config::new();
+        config
+            .add_maven_env(MavenEnvironment {
+                name: "mvn39".to_string(),
+                maven_home: "/x/maven".to_string(),
+                description: "M".to_string(),
+                source: EnvironmentSource::Manual,
+                maven_opts: None,
+                local_repo: None,
+                settings_file: None,
+            })
+            .unwrap();
+        config.set_default_maven_env("mvn39".to_string()).unwrap();
+        assert_eq!(config.default_maven_env.as_deref(), Some("mvn39"));
+        assert_eq!(config.get_default_maven_env().unwrap().name, "mvn39");
+        config.clear_default_maven_env();
+        assert_eq!(config.default_maven_env, None);
+    }
 }

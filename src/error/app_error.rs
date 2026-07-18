@@ -44,80 +44,37 @@ pub enum AppError {
 
     #[error("Internal error: {message}")]
     Internal { message: String },
-}
 
-/// 用于提供错误上下文和用户友好建议
-#[derive(Debug, Clone)]
-pub struct ErrorContext {
-    pub operation: String,
-    pub suggestions: Vec<String>,
-    pub help_url: Option<String>,
+    /// 带操作上下文的包装错误:把高层操作名(如 "switching to java environment 'x'")
+    /// 附在底层错误前,方便定位。用 [`AppError::root_cause`] 可递归剥到具体变体。
+    #[error("{operation}: {cause}")]
+    Context {
+        operation: String,
+        #[source]
+        cause: Box<AppError>,
+    },
 }
 
 impl AppError {
-    /// 为错误添加上下文信息
-    pub fn with_context(self, operation: &str) -> ContextualError {
-        ContextualError {
-            error: self,
-            context: ErrorContext {
-                operation: operation.to_string(),
-                suggestions: Vec::new(),
-                help_url: None,
-            },
+    /// 递归剥到非 `Context` 的底层错误,用于按变体判断(NotFound / Validation 等)。
+    pub fn root_cause(&self) -> &AppError {
+        match self {
+            AppError::Context { cause, .. } => cause.root_cause(),
+            other => other,
         }
     }
 
-    /// 为错误添加建议
-    pub fn with_suggestions(mut self, suggestions: Vec<&str>) -> Self {
-        if let AppError::Environment { message } = &mut self {
-            *message = format!("{}\nSuggestion: {}", message, suggestions.join(", "));
+    /// 为错误附上操作上下文,返回包装后的 [`AppError`]。
+    pub fn context(self, operation: impl Into<String>) -> Self {
+        AppError::Context {
+            operation: operation.into(),
+            cause: Box::new(self),
         }
-        self
-    }
-}
-
-/// 带有上下文的错误
-#[derive(Error, Debug)]
-pub struct ContextualError {
-    #[source]
-    pub error: AppError,
-    pub context: ErrorContext,
-}
-
-impl std::fmt::Display for ContextualError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Operation failed: {}\nError: {}",
-            self.context.operation, self.error
-        )
-    }
-}
-
-impl ContextualError {
-    /// 获取用户友好的错误消息
-    pub fn user_message(&self) -> String {
-        let mut msg = format!("{}\n", self.context.operation);
-        msg.push_str(&format!("Cause: {}\n", self.error));
-
-        if !self.context.suggestions.is_empty() {
-            msg.push_str("Suggestions:\n");
-            for suggestion in &self.context.suggestions {
-                msg.push_str(&format!("  - {suggestion}\n"));
-            }
-        }
-
-        if let Some(help_url) = &self.context.help_url {
-            msg.push_str(&format!("Help: {help_url}\n"));
-        }
-
-        msg
     }
 }
 
 /// 应用程序 Result 类型
 pub type AppResult<T> = Result<T, AppError>;
-pub type ContextualResult<T> = Result<T, Box<ContextualError>>;
 
 /// 便捷的错误创建函数
 impl AppError {
@@ -184,7 +141,7 @@ impl AppError {
         }
     }
 
-    /// infra 层 String 错误的兜底转换（优先用具体变体）
+    /// infra 层 String 错误的兜底转换(优先用具体变体)。
     pub fn from_string(s: &str) -> Self {
         Self::Internal {
             message: s.to_string(),
@@ -192,7 +149,7 @@ impl AppError {
     }
 }
 
-// 转换trait实现
+// 转换 trait 实现
 impl From<std::io::Error> for AppError {
     fn from(error: std::io::Error) -> Self {
         AppError::Io(error.to_string())
@@ -237,83 +194,24 @@ impl From<handlebars::RenderError> for AppError {
     }
 }
 
-// 必要的trait实现
-impl From<AppError> for ContextualError {
-    fn from(error: AppError) -> Self {
-        Self {
-            error,
-            context: ErrorContext {
-                operation: "Unknown operation".to_string(),
-                suggestions: Vec::new(),
-                help_url: None,
-            },
-        }
+/// 兜底:infra 层仍返回 `String` 错误的路径(Config / installer / scanner 等)
+/// 可以直接用 `?` 传播,统一收口为 [`AppError::Internal`]。
+/// 关键路径应优先用具体变体(如 [`AppError::config_error`])以保留类型信息。
+impl From<String> for AppError {
+    fn from(message: String) -> Self {
+        AppError::Internal { message }
     }
 }
 
-impl<T> From<std::sync::PoisonError<T>> for ContextualError {
-    fn from(_error: std::sync::PoisonError<T>) -> Self {
-        Self {
-            error: AppError::LockError {
-                operation: "Thread lock failed".to_string(),
-            },
-            context: ErrorContext {
-                operation: "Lock failed".to_string(),
-                suggestions: vec!["Check for potential deadlock".to_string()],
-                help_url: None,
-            },
-        }
-    }
-}
-
-impl From<ContextualError> for String {
-    fn from(error: ContextualError) -> Self {
-        error.user_message()
-    }
-}
-
-impl From<Box<ContextualError>> for String {
-    fn from(error: Box<ContextualError>) -> Self {
-        error.user_message()
-    }
-}
-
-/// 为 Result 添加上下文信息的扩展 trait
+/// 为 Result 添加操作上下文的扩展 trait。
 pub trait ResultExt<T> {
-    fn with_context(self, operation: &str) -> Result<T, Box<ContextualError>>;
+    /// 附上操作描述(如 "loading config"),便于错误定位。底层错误类型保留在
+    /// [`AppError::Context`] 内,可用 [`AppError::root_cause`] 取回具体变体。
+    fn with_context(self, operation: &str) -> AppResult<T>;
 }
 
 impl<T, E: Into<AppError>> ResultExt<T> for Result<T, E> {
-    fn with_context(self, operation: &str) -> Result<T, Box<ContextualError>> {
-        self.map_err(|e| {
-            Box::new(ContextualError {
-                error: e.into(),
-                context: ErrorContext {
-                    operation: operation.to_string(),
-                    suggestions: Vec::new(),
-                    help_url: None,
-                },
-            })
-        })
-    }
-}
-
-/// 为所有 Result 类型提供 with_context 方法的便利函数
-pub fn with_context<T, E: Into<AppError>>(
-    result: Result<T, E>,
-    operation: &str,
-) -> Result<T, Box<ContextualError>> {
-    result.with_context(operation)
-}
-
-impl From<AppError> for Box<ContextualError> {
-    fn from(error: AppError) -> Self {
-        Box::new(ContextualError::from(error))
-    }
-}
-
-impl<T> From<std::sync::PoisonError<T>> for Box<ContextualError> {
-    fn from(error: std::sync::PoisonError<T>) -> Self {
-        Box::new(ContextualError::from(error))
+    fn with_context(self, operation: &str) -> AppResult<T> {
+        self.map_err(|e| e.into().context(operation))
     }
 }

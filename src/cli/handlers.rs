@@ -14,12 +14,12 @@ fn render_envs(
     items: &[EnvItem],
     env_type: EnvironmentType,
     fmt: OutputFormat,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     match fmt {
         OutputFormat::Text => Ok(format_envs(items)),
         OutputFormat::Json => {
             let json = serde_json::json!({"environment_type": env_type, "environments": items});
-            serde_json::to_string_pretty(&json).map_err(|e| e.to_string())
+            serde_json::to_string_pretty(&json).map_err(AppError::from)
         }
     }
 }
@@ -31,29 +31,23 @@ pub struct CommandHandler {
 
 impl CommandHandler {
     /// 创建新的命令处理器
-    pub fn new() -> Result<Self, String> {
+    pub fn new() -> Result<Self, AppError> {
         // Migrate legacy flat layout to the grouped layout before anything else
         // (SessionManager and managers read from the new paths).
         crate::infrastructure::paths::migrate_layout();
-        let mut switcher = EnvironmentSwitcher::new().map_err(|e| e.to_string())?;
+        let mut switcher = EnvironmentSwitcher::new()?;
 
         // 注册 Java 环境管理器
         let java_manager = crate::environments::java::JavaEnvironmentManager::new();
-        switcher
-            .register_manager(EnvironmentType::Java, Arc::new(Mutex::new(java_manager)))
-            .map_err(|e| e.to_string())?;
+        switcher.register_manager(EnvironmentType::Java, Arc::new(Mutex::new(java_manager)))?;
 
         // 注册 CC 环境管理器
         let cc_manager = crate::environments::cc::CcEnvironmentManager::new();
-        switcher
-            .register_manager(EnvironmentType::Cc, Arc::new(Mutex::new(cc_manager)))
-            .map_err(|e| e.to_string())?;
+        switcher.register_manager(EnvironmentType::Cc, Arc::new(Mutex::new(cc_manager)))?;
 
         // 注册 Maven 环境管理器
         let maven_manager = crate::environments::maven::MavenEnvironmentManager::new();
-        switcher
-            .register_manager(EnvironmentType::Maven, Arc::new(Mutex::new(maven_manager)))
-            .map_err(|e| e.to_string())?;
+        switcher.register_manager(EnvironmentType::Maven, Arc::new(Mutex::new(maven_manager)))?;
 
         Ok(Self { switcher })
     }
@@ -63,7 +57,7 @@ impl CommandHandler {
         name: &str,
         env_type_label: &str,
         json: bool,
-    ) -> Result<(), String> {
+    ) -> Result<(), AppError> {
         if json {
             let output = FORMATTER.format_switch_result(result, OutputFormat::Json)?;
             print!("{output}");
@@ -78,7 +72,9 @@ impl CommandHandler {
                 &format!("Failed to switch {env_type_label} environment"),
                 Some(result.error.as_deref().unwrap_or("Unknown error")),
             );
-            return Err("Environment switch failed".to_string());
+            return Err(AppError::Environment {
+                message: "Environment switch failed".to_string(),
+            });
         }
         Ok(())
     }
@@ -91,7 +87,7 @@ impl CommandHandler {
         shell: Option<String>,
         json: bool,
         env_type_label: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), AppError> {
         if unset {
             let output = self.switcher.clear_default_environment(env_type).await?;
             print!("{output}");
@@ -131,7 +127,7 @@ impl CommandHandler {
     }
 
     /// 处理命令
-    pub async fn handle_command(&mut self, command: Commands) -> Result<(), String> {
+    pub async fn handle_command(&mut self, command: Commands) -> Result<(), AppError> {
         match command {
             Commands::Java { action } => self.handle_java_command(action).await,
             Commands::Cc { action } => self.handle_cc_command(action).await,
@@ -151,11 +147,18 @@ impl CommandHandler {
                 limit,
                 json,
             } => self.handle_history_command(env_type, limit, json).await,
+            Commands::Doctor { network } => {
+                let ok = crate::cli::doctor::run_doctor(network).await?;
+                if !ok {
+                    return Err("doctor: one or more checks failed".to_string().into());
+                }
+                Ok(())
+            }
         }
     }
 
     /// 处理 Java 命令
-    async fn handle_java_command(&mut self, action: JavaCommands) -> Result<(), String> {
+    async fn handle_java_command(&mut self, action: JavaCommands) -> Result<(), AppError> {
         match action {
             JavaCommands::List { json } => {
                 let items = self
@@ -188,7 +191,7 @@ impl CommandHandler {
                     Ok(res) => res,
                     Err(ctx_err) => {
                         // java_home 失效时交互式询问是否从配置中删除该环境
-                        match &ctx_err.error {
+                        match ctx_err.root_cause() {
                             AppError::Validation { field, .. } if field == "java_home" => {
                                 crate::cli::print::warn(&format!(
                                     "The configured Java path for '{}' is invalid or missing.",
@@ -221,7 +224,7 @@ impl CommandHandler {
                             }
                             _ => {}
                         }
-                        return Err(ctx_err.to_string());
+                        return Err(ctx_err);
                     }
                 };
 
@@ -248,16 +251,18 @@ impl CommandHandler {
                     .await?;
                 print!("{output}");
             }
-            JavaCommands::LsRemote { version } => {
-                let output = self.handle_java_ls_remote(version).await?;
+            JavaCommands::LsRemote { version, all } => {
+                let output = self.handle_java_ls_remote(version, all).await?;
                 print!("{output}");
             }
             JavaCommands::Refresh => {
                 use crate::environments::java::downloader::JavaDownloader;
                 use crate::infrastructure::config::Config;
-                let config = Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
+                let config = Config::load().map_err(|e| AppError::Config { message: e })?;
                 let downloader = JavaDownloader::new(config.mirrors.java);
-                downloader.refresh().await.map_err(|e| format!("{e:?}"))?;
+                downloader.refresh().await.map_err(|e| AppError::Network {
+                    message: format!("{e:?}"),
+                })?;
                 crate::cli::print::success("Java version cache refreshed");
             }
             JavaCommands::Install {
@@ -267,15 +272,14 @@ impl CommandHandler {
                 use crate::environments::java::installer::JavaInstaller;
                 use crate::infrastructure::config::Config;
 
-                let mut config =
-                    Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
+                let mut config = Config::load().map_err(|e| AppError::Config { message: e })?;
                 match JavaInstaller::install_java(&version, &mut config, auto_switch).await {
                     Ok(java_home) => {
                         crate::cli::print::success(&format!("java {version} installed"));
                         crate::cli::print::detail("Path", &java_home);
                     }
                     Err(e) => {
-                        return Err(format!("Install failed: {e}"));
+                        return Err(format!("Install failed: {e}").into());
                     }
                 }
             }
@@ -307,8 +311,7 @@ impl CommandHandler {
                 use crate::environments::java::installer::JavaInstaller;
                 use crate::infrastructure::config::Config;
 
-                let mut config =
-                    Config::load().map_err(|e| format!("Failed to load config: {e}"))?;
+                let mut config = Config::load().map_err(|e| AppError::Config { message: e })?;
                 JavaInstaller::uninstall_java(&name, &mut config)?;
             }
             JavaCommands::Default {
@@ -332,7 +335,7 @@ impl CommandHandler {
     }
 
     /// 处理 Maven 命令
-    async fn handle_maven_command(&mut self, action: MavenCommands) -> Result<(), String> {
+    async fn handle_maven_command(&mut self, action: MavenCommands) -> Result<(), AppError> {
         use crate::environments::maven::{MavenInstaller, MirrorDirectoryDiscovery};
         use crate::infrastructure::tool_protocol::VersionDiscovery;
         match action {
@@ -369,7 +372,7 @@ impl CommandHandler {
                 auto_switch,
             } => {
                 let mut config = crate::infrastructure::config::Config::load()
-                    .map_err(|e| format!("Failed to load config: {e}"))?;
+                    .map_err(|e| AppError::Config { message: e })?;
                 MavenInstaller::install_maven(&version, &mut config, auto_switch).await?;
             }
             MavenCommands::Scan { path } => {
@@ -415,29 +418,44 @@ impl CommandHandler {
             }
             MavenCommands::Uninstall { name } => {
                 let mut config = crate::infrastructure::config::Config::load()
-                    .map_err(|e| format!("Failed to load config: {e}"))?;
+                    .map_err(|e| AppError::Config { message: e })?;
                 MavenInstaller::uninstall_maven(&name, &mut config)?;
             }
             MavenCommands::Refresh => {
                 let discovery = MirrorDirectoryDiscovery::new();
-                discovery.refresh().await.map_err(|e| format!("{e:?}"))?;
+                discovery.refresh().await.map_err(|e| AppError::Network {
+                    message: format!("{e:?}"),
+                })?;
                 crate::cli::print::success("Maven version cache refreshed");
             }
-            MavenCommands::LsRemote { version } => {
+            MavenCommands::LsRemote { version, all } => {
                 let discovery = MirrorDirectoryDiscovery::new();
-                let versions = discovery.list().await.map_err(|e| format!("{e:?}"))?;
-                crate::cli::print::step("Status", "Available Maven versions:");
-                let mut shown = 0;
-                for v in versions.iter().take(30) {
-                    if let Some(f) = version.as_deref() {
-                        if !v.version.starts_with(f) {
-                            continue;
-                        }
-                    }
+                let versions = discovery.list().await.map_err(|e| AppError::Network {
+                    message: format!("{e:?}"),
+                })?;
+                // 先过滤再截断:旧的 take(30) 在 filter 之前,导致前 30 个里不匹配
+                // version 前缀的会挤掉后面的匹配项,显示偏少。
+                let filtered: Vec<_> = versions
+                    .iter()
+                    .filter(|v| version.as_deref().is_none_or(|f| v.version.starts_with(f)))
+                    .collect();
+                let total = filtered.len();
+                let limit = if all { usize::MAX } else { 30 };
+                crate::cli::print::step(
+                    "Status",
+                    &format!("Available Maven versions ({total} total):"),
+                );
+                for v in filtered.iter().take(limit) {
                     crate::cli::print::step("version", &v.version);
-                    shown += 1;
                 }
-                crate::cli::print::step("Status", &format!("({shown} versions shown)"));
+                if !all && total > 30 {
+                    crate::cli::print::step(
+                        "Status",
+                        &format!("(30 of {total} shown — pass --all to see everything)"),
+                    );
+                } else {
+                    crate::cli::print::step("Status", &format!("({total} versions shown)"));
+                }
             }
             MavenCommands::Current { json } => {
                 let output = self
@@ -498,15 +516,13 @@ impl CommandHandler {
                     settings.map(Some)
                 };
 
-                manager
-                    .set_env_vars(&name, opts_arg, repo_arg, settings_arg)
-                    .map_err(|e| e.to_string())?;
+                manager.set_env_vars(&name, opts_arg, repo_arg, settings_arg)?;
                 crate::cli::print::success(&format!("Updated Maven environment: {name}"));
             }
             MavenCommands::Show { name } => {
                 use crate::environments::maven::MavenEnvironmentManager;
                 let manager = MavenEnvironmentManager::new();
-                let info = manager.show_env(&name).map_err(|e| e.to_string())?;
+                let info = manager.show_env(&name)?;
                 println!("{info}");
             }
         }
@@ -514,7 +530,7 @@ impl CommandHandler {
     }
 
     /// 处理 CC 命令
-    async fn handle_cc_command(&mut self, action: CcCommands) -> Result<(), String> {
+    async fn handle_cc_command(&mut self, action: CcCommands) -> Result<(), AppError> {
         match action {
             CcCommands::List { json } => {
                 let items = self
@@ -590,10 +606,12 @@ impl CommandHandler {
             } => {
                 let base_url_val = base_url.unwrap_or_default();
                 if base_url_val.is_empty() {
-                    return Err("Missing required argument: --base-url <URL>\n\
-                         Example: fnva cc add --name my-cc \
-                         --base-url https://api.anthropic.com --api-key ${ANTHROPIC_API_KEY}"
-                        .to_string());
+                    return Err(AppError::validation(
+                        "base_url",
+                        "Missing required argument: --base-url <URL>. Example: \
+                         `fnva cc add --name my-cc --base-url https://api.anthropic.com \
+                         --api-key ${ANTHROPIC_API_KEY}`",
+                    ));
                 }
                 let mut json = serde_json::json!({
                     "base_url": base_url_val,
@@ -631,7 +649,7 @@ impl CommandHandler {
     }
 
     /// 处理配置命令
-    async fn handle_config_command(&mut self, action: ConfigCommands) -> Result<(), String> {
+    async fn handle_config_command(&mut self, action: ConfigCommands) -> Result<(), AppError> {
         match action {
             ConfigCommands::Sync => {
                 use crate::infrastructure::config::Config;
@@ -647,38 +665,51 @@ impl CommandHandler {
     }
 
     /// Handle Java remote version listing.
-    async fn handle_java_ls_remote(&self, version: Option<u32>) -> Result<String, String> {
+    async fn handle_java_ls_remote(
+        &self,
+        version: Option<u32>,
+        all: bool,
+    ) -> Result<String, AppError> {
         use crate::environments::java::installer::JavaInstaller;
 
         crate::cli::print::action("Querying available Java versions...");
 
         match JavaInstaller::list_installable_versions().await {
             Ok(versions) => {
-                let mut output = String::new();
-
-                if let Some(major) = version {
-                    let filtered: Vec<String> = versions
+                let filtered: Vec<String> = if let Some(major) = version {
+                    versions
                         .into_iter()
                         .filter(|v| v.contains(&major.to_string()))
-                        .collect();
-                    if filtered.is_empty() {
-                        output.push_str(&format!("No Java {major} versions found\n"));
-                    } else {
-                        output.push_str(&format!("Available Java {major} versions:\n"));
-                        for v in filtered {
-                            output.push_str(&format!("  {v}\n"));
-                        }
-                    }
+                        .collect()
                 } else {
-                    output.push_str("Available Java versions:\n");
-                    for v in versions {
+                    versions
+                };
+                let total = filtered.len();
+                let limit = if all { usize::MAX } else { 30 };
+                let shown: Vec<String> = filtered.into_iter().take(limit).collect();
+
+                let mut output = String::new();
+                let header = match version {
+                    Some(major) => format!("Available Java {major} versions"),
+                    None => "Available Java versions".to_string(),
+                };
+                if shown.is_empty() {
+                    output.push_str(&format!("{header}: none found\n"));
+                } else {
+                    output.push_str(&format!("{header} ({} of {total}):\n", shown.len()));
+                    for v in &shown {
                         output.push_str(&format!("  {v}\n"));
                     }
+                    if !all && total > 30 {
+                        output.push_str(&format!(
+                            "  ... ({} more — pass --all to see everything)\n",
+                            total - shown.len()
+                        ));
+                    }
                 }
-
                 Ok(output)
             }
-            Err(e) => Err(format!("Failed to query versions: {e}")),
+            Err(e) => Err(format!("Failed to query versions: {e}").into()),
         }
     }
 
@@ -687,11 +718,16 @@ impl CommandHandler {
         &self,
         env_type: Option<String>,
         limit: usize,
-        _json: bool,
-    ) -> Result<(), String> {
+        json: bool,
+    ) -> Result<(), AppError> {
         let env_type = env_type.map(|t| parse_environment_type(&t)).transpose()?;
         let items = self.switcher.get_switch_history(env_type, limit).await?;
-        print!("{}", crate::cli::print::format_history(&items));
+        if json {
+            let payload = serde_json::json!({ "history": items, "count": items.len() });
+            print!("{}", serde_json::to_string_pretty(&payload)?);
+        } else {
+            print!("{}", crate::cli::print::format_history(&items));
+        }
         Ok(())
     }
 }

@@ -336,3 +336,64 @@ impl EnvironmentManager for JavaEnvironmentManager {
         self.get(name)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::infrastructure::config::{Config, EnvironmentSource, JavaEnvironment};
+    use crate::testutil::FnvaHomeGuard;
+
+    #[test]
+    fn java_use_env_unknown_is_not_found() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let _g = FnvaHomeGuard::new(tmp.path());
+        let mut m = JavaEnvironmentManager::new();
+        let err = m.use_env("ghost", None).unwrap_err();
+        assert!(matches!(err.root_cause(), AppError::NotFound { .. }));
+    }
+
+    #[test]
+    fn java_use_env_invalid_home_is_validation() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let _g = FnvaHomeGuard::new(tmp.path());
+        {
+            let mut config = Config::new();
+            config
+                .add_java_env(JavaEnvironment {
+                    name: "bad".to_string(),
+                    java_home: "/nonexistent/java".to_string(),
+                    description: String::new(),
+                    source: EnvironmentSource::Manual,
+                })
+                .unwrap();
+            config.save().unwrap();
+        }
+        let mut m = JavaEnvironmentManager::new();
+        let err = m.use_env("bad", None).unwrap_err();
+        assert!(matches!(
+            err.root_cause(),
+            AppError::Validation { field, .. } if field == "java_home"
+        ));
+    }
+
+    #[test]
+    fn java_list_loads_from_config() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let _g = FnvaHomeGuard::new(tmp.path());
+        {
+            let mut config = Config::new();
+            config
+                .add_java_env(JavaEnvironment {
+                    name: "j17".to_string(),
+                    java_home: "/x/java".to_string(),
+                    description: String::new(),
+                    source: EnvironmentSource::Manual,
+                })
+                .unwrap();
+            config.save().unwrap();
+        }
+        let m = JavaEnvironmentManager::new();
+        let list = m.list().unwrap();
+        assert!(list.iter().any(|e| e.name == "j17"));
+    }
+}

@@ -1,7 +1,7 @@
-use crate::error::{AppError, ContextualError, ContextualResult, ErrorContext};
+use crate::error::{AppError, AppResult};
 use std::sync::{Arc, Mutex};
 
-/// 提供安全的 Mutex 操作，避免 unwrap()
+/// 提供安全的 Mutex 操作,避免 unwrap()
 pub struct SafeMutex<T> {
     inner: Arc<Mutex<T>>,
     name: String,
@@ -15,38 +15,18 @@ impl<T> SafeMutex<T> {
         }
     }
 
-    /// 安全地获取锁，如果锁定失败返回错误
-    pub fn lock(&self) -> ContextualResult<std::sync::MutexGuard<'_, T>> {
-        self.inner.lock().map_err(|_| {
-            Box::new(ContextualError {
-                error: AppError::lock_failed(&format!("Failed to lock: {}", self.name)),
-                context: ErrorContext {
-                    operation: format!("Deadlock occurred when acquiring {} lock", self.name),
-                    suggestions: vec![
-                        "Check for potential deadlocks".to_string(),
-                        "Ensure other threads release the lock correctly".to_string(),
-                    ],
-                    help_url: None,
-                },
-            })
-        })
+    /// 安全地获取锁,如果锁定失败返回错误
+    pub fn lock(&self) -> AppResult<std::sync::MutexGuard<'_, T>> {
+        self.inner
+            .lock()
+            .map_err(|_| AppError::lock_failed(&format!("Failed to lock: {}", self.name)))
     }
 
-    /// 尝试获取锁，非阻塞
-    pub fn try_lock(&self) -> ContextualResult<std::sync::MutexGuard<'_, T>> {
-        self.inner.try_lock().map_err(|_| {
-            Box::new(ContextualError {
-                error: AppError::lock_failed(&format!("Unable to acquire lock: {}", self.name)),
-                context: ErrorContext {
-                    operation: format!("Acquiring {} lock failed because it is busy", self.name),
-                    suggestions: vec![
-                        "Try again later".to_string(),
-                        "Check the holder of the lock".to_string(),
-                    ],
-                    help_url: None,
-                },
-            })
-        })
+    /// 尝试获取锁,非阻塞
+    pub fn try_lock(&self) -> AppResult<std::sync::MutexGuard<'_, T>> {
+        self.inner
+            .try_lock()
+            .map_err(|_| AppError::lock_failed(&format!("Unable to acquire lock: {}", self.name)))
     }
 }
 
@@ -59,7 +39,7 @@ impl<T> Clone for SafeMutex<T> {
     }
 }
 
-/// 提供安全的路径转换，避免 unwrap()
+/// 提供安全的路径转换,避免 unwrap()
 pub fn safe_path_to_str(path: &std::path::Path) -> Result<&str, AppError> {
     path.to_str()
         .ok_or_else(|| AppError::path_conversion_failed(&format!("{path:?}")))
@@ -87,30 +67,15 @@ pub fn safe_from_json<T: for<'de> serde::Deserialize<'de>>(json: &str) -> Result
     serde_json::from_str(json).map_err(Into::into)
 }
 
-/// 为Result添加上下文信息的辅助函数（使用app_error模块的版本）
-pub use crate::error::app_error::with_context;
-
-/// 为Option添加上下文信息的辅助函数
-pub fn option_with_context<T>(
-    option: Option<T>,
-    error: AppError,
-    operation: &str,
-) -> ContextualResult<T> {
-    option.ok_or_else(|| {
-        Box::new(ContextualError {
-            error,
-            context: ErrorContext {
-                operation: operation.to_string(),
-                suggestions: Vec::new(),
-                help_url: None,
-            },
-        })
-    })
+/// 为 Option 添加上下文信息:`None` 时把 `error` 包装上 `operation` 描述后返回。
+pub fn option_with_context<T>(option: Option<T>, error: AppError, operation: &str) -> AppResult<T> {
+    option.ok_or_else(|| error.context(operation))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::ResultExt;
 
     #[test]
     fn test_safe_mutex() {
@@ -136,11 +101,22 @@ mod tests {
     }
 
     #[test]
-    fn test_with_context() {
+    fn test_with_context_wraps_error() {
         let result: Result<i32, AppError> = Err(AppError::Internal {
             message: "test error".to_string(),
         });
-        let contextual_result = with_context(result, "test operation");
-        assert!(contextual_result.is_err());
+        let wrapped = result.with_context("test operation");
+        assert!(matches!(wrapped, Err(AppError::Context { .. })));
+        assert!(matches!(
+            wrapped.unwrap_err().root_cause(),
+            AppError::Internal { .. }
+        ));
+    }
+
+    #[test]
+    fn test_root_cause_unwraps_nested_context() {
+        let inner = AppError::not_found("java env");
+        let wrapped = inner.context("switching").context("higher");
+        assert!(matches!(wrapped.root_cause(), AppError::NotFound { .. }));
     }
 }

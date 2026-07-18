@@ -205,3 +205,47 @@ fn update_config_paths() {
         let _ = std::fs::write(&path, updated);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testutil::FnvaHomeGuard;
+
+    #[test]
+    fn migrate_layout_moves_flat_files_to_grouped_dirs() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let _g = FnvaHomeGuard::new(tmp.path());
+        let base = fnva_dir().unwrap();
+        std::fs::create_dir_all(&base).unwrap();
+        // 旧扁平布局:文件直接放在 ~/.fnva 根
+        std::fs::write(base.join("current_envs.toml"), "test = 1\n").unwrap();
+        std::fs::write(base.join("history.toml"), "[[history]]\n").unwrap();
+        std::fs::write(base.join("maven_versions.json"), "[]").unwrap();
+
+        migrate_layout();
+
+        // 迁移到分组目录
+        assert!(current_envs_path().unwrap().exists());
+        assert!(history_path().unwrap().exists());
+        assert!(maven_versions_path().unwrap().exists());
+        // 旧位置文件已移走
+        assert!(!base.join("current_envs.toml").exists());
+        assert!(!base.join("history.toml").exists());
+    }
+
+    #[test]
+    fn migrate_layout_is_idempotent() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let _g = FnvaHomeGuard::new(tmp.path());
+        let base = fnva_dir().unwrap();
+        std::fs::create_dir_all(&base).unwrap();
+        std::fs::write(base.join("history.toml"), "[[history]]\nnew_env = \"x\"\n").unwrap();
+
+        migrate_layout();
+        let after_first = std::fs::read_to_string(history_path().unwrap()).unwrap();
+        // 再跑:目标已存在,move_item 跳过,内容不变
+        migrate_layout();
+        let after_second = std::fs::read_to_string(history_path().unwrap()).unwrap();
+        assert_eq!(after_first, after_second);
+    }
+}
