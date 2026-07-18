@@ -92,6 +92,18 @@ eval "$(fnva env)"
 
 User configuration is stored at `~/.fnva/config.toml` (Windows: `%USERPROFILE%\.fnva\config.toml`).
 
+## Uninstall
+
+`npm uninstall -g fnva` removes the package but does **not** clean up shell integration: npm v7+ removed `postuninstall` lifecycle scripts, so fnva cannot hook uninstall. Remove the profile bootstrap line and any stray launchers explicitly — run this *before* `npm uninstall`, while the script is still on disk:
+
+```sh
+node "$(npm root -g)/fnva/scripts/uninstall-shell-integration.js"
+npm uninstall -g fnva
+rm -rf ~/.fnva   # optional: remove user config/state
+```
+
+For the `curl | sh` / `irm` installer, use `scripts/uninstall.sh` (Unix) or `scripts/uninstall.ps1` (Windows) instead.
+
 ## License
 
 MIT License.

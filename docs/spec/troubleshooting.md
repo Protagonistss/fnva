@@ -102,13 +102,14 @@ type fnva | grep "command fnva"
    Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
    ```
 
-2. **fnva.cmd 不在 PATH 中**: npm 全局安装路径未添加到 PATH。
+2. **fnva 启动器不在 PATH 中**: npm 全局路径未加入 PATH，或 irm 安装的 `~/.fnva/bin` 未加入 PATH。wrapper 通过 `fnva-FindBin` 解析 `fnva.cmd`（npm）或 `fnva.exe`（irm）。
    ```powershell
    Get-Command fnva
-   Get-Command fnva.cmd
+   Get-Command fnva.cmd   # npm 安装
+   Get-Command fnva.exe   # irm 安装
    ```
 
-3. **Wrapper 使用了 fnva 而非 fnva.cmd**: PowerShell wrapper 必须调用 `fnva.cmd`。
+3. **`$fnvaBin` 解析为空**: wrapper 找不到启动器时会上报 `fnva launcher not found on PATH`。检查上述 `Get-Command` 是否能命中其一；若机器上残留旧版错放的 `fnva.ps1`（在 node.exe 目录里 shadow 真正的启动器），先 `npm uninstall -g fnva` 触发清理再重装，或手动 `Remove-Item` 该 `fnva.ps1`。
    ```powershell
    # 查看 wrapper 定义
    Get-Content Function:\fnva

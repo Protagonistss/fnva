@@ -170,9 +170,12 @@ async function checkFirstRun() {
     rl.question('? Do you allow automatic configuration of terminal integration? (Y/n) ', (answer) => {
       const normalized = answer.trim().toLowerCase();
       if (normalized === '' || normalized === 'y' || normalized === 'yes') {
-        if (typeof installer.installPowershellWrapper === 'function') {
-          installer.installPowershellWrapper();
-        }
+        // Only write the shell-integration bootstrap line into the user's profile.
+        // We deliberately do NOT copy or overwrite any npm-generated launcher
+        // (fnva.ps1/fnva.cmd) here — npm's own shims already invoke this JS,
+        // which resolves the native binary deterministically. Copying shims
+        // into a guessed prefix historically broke Windows installs (a stray
+        // fnva.ps1 landed in the node.exe dir and shadowed the real binary).
         const success = installer.installShellIntegration(true);
         if (success) {
           console.log('\n✅ Shell integration has been successfully configured!');
