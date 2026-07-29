@@ -24,7 +24,8 @@ impl OutputFormatter {
                     ))
                 }
             }
-            OutputFormat::Json => Ok(serde_json::to_string_pretty(result).unwrap()),
+            OutputFormat::Json => serde_json::to_string_pretty(result)
+                .map_err(|e| format!("Failed to serialize JSON: {e}")),
         }
     }
 }

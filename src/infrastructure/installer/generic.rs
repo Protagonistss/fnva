@@ -86,7 +86,10 @@ fn install_archive(
     let install_dir = fnva_dir.join(env_name);
     fs::create_dir_all(&install_dir).map_err(|e| format!("Failed to create version dir: {e}"))?;
 
-    if archive_path.to_str().unwrap().ends_with(".zip") {
+    if archive_path
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("zip"))
+    {
         extract_zip(archive_path, &install_dir)?;
     } else {
         extract_tar_gz(archive_path, &install_dir)?;
